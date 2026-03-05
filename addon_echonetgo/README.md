@@ -22,7 +22,8 @@ The add-on maps `config` as read-write, so use a directory under `/config` (e.g.
 
 ## Network
 
-Port **9191** is exposed. Other add-ons or the host can reach the API at `http://<addon-host>:9191` (e.g. `http://localhost:9191` when accessing from the same host).
+This add-on runs with **host networking** so ECHONET Lite UDP traffic can reliably reach devices on LAN/IoT subnets.  
+The API listens on port **9191** of the Home Assistant host and can be reached at `http://<home-assistant-host>:9191`.
 
 ## Documentation
 

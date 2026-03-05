@@ -78,9 +78,9 @@ Environment overrides: `ECHONET_CONFIG`, `ECHONET_LISTEN_ADDR`, `ECHONET_SCRAPE_
 
 The **addon_echonetgo/** directory contains the files needed to run EchonetGO as a Home Assistant add-on:
 
-- **config.yaml** — Add-on metadata, options (config_path, devices_path, log_level), and port 9191.
+- **config.yaml** — Add-on metadata, options (config_path, devices_path, log_level), and host networking for LAN UDP access.
 - **Dockerfile** — Multi-stage build: clone the repository, compile the Go binary, then copy it and built-in specs into the add-on image. Local build example: `docker build -f addon_echonetgo/Dockerfile addon_echonetgo`
-- **rootfs/run.sh** — Entrypoint that reads add-on options (via bashio), sets `ECHONET_*` env vars, and runs the binary.
+- **rootfs/run.sh** — Entrypoint that reads add-on options from `/data/options.json`, sets `ECHONET_*` env vars, and runs the binary.
 - **README.md**, **DOCS.md**, **CHANGELOG.md** — Add-on docs and changelog.
 
 To use it as a custom add-on repository in Home Assistant: add this repo URL in **Settings → Add-ons → Add-on store → Repositories**, then install the **EchonetGO** add-on. Create your config and device list under `/config/echonetgo/` (or the path you set in the add-on options) and set **config_path** accordingly. See **addon_echonetgo/README.md** and **addon_echonetgo/DOCS.md** for details.
