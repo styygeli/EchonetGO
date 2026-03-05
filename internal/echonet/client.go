@@ -3,6 +3,7 @@ package echonet
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/styygeli/echonetgo/internal/logging"
@@ -92,11 +94,44 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		host = net.JoinHostPort(addr, fmt.Sprint(echonetPort))
 	}
+	resp, err := c.sendGetFromPort(host, req, tid, hostKey, echonetPort)
+	if err == nil {
+		return resp, nil
+	}
+	// Match pychonet behavior first (source UDP 3610). If unavailable, gracefully
+	// fall back to ephemeral source ports to avoid hard failure.
+	if !isPortBindFailure(err) {
+		return nil, err
+	}
+	clientLog.Warnf("failed to bind local UDP port %d for %s; falling back to ephemeral source port: %v",
+		echonetPort, hostKey, err)
+	return c.sendGetEphemeral(host, req, tid, hostKey)
+}
+
+func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
+	remoteAddr, err := net.ResolveUDPAddr("udp", host)
+	if err != nil {
+		return nil, err
+	}
+	localAddr := &net.UDPAddr{IP: net.IPv4zero, Port: localPort}
+	conn, err := net.DialUDP("udp", localAddr, remoteAddr)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return c.writeAndRead(conn, req, tid, hostKey)
+}
+
+func (c *Client) sendGetEphemeral(host string, req []byte, tid uint16, hostKey string) ([]byte, error) {
 	conn, err := net.DialTimeout("udp", host, c.timeout)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
+	return c.writeAndRead(conn, req, tid, hostKey)
+}
+
+func (c *Client) writeAndRead(conn net.Conn, req []byte, tid uint16, hostKey string) ([]byte, error) {
 	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
 		return nil, err
 	}
@@ -119,6 +154,14 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 		}
 		clientLog.Debugf("ignoring stale UDP frame from %s: expected tid=0x%04x got=0x%04x", hostKey, tid, respTID)
 	}
+}
+
+func isPortBindFailure(err error) bool {
+	if errors.Is(err, syscall.EADDRINUSE) || errors.Is(err, syscall.EACCES) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "address already in use") || strings.Contains(msg, "permission denied")
 }
 
 func normalizeHost(addr string) string {

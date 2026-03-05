@@ -17,6 +17,14 @@ var pollerLog = logging.New("poller")
 // that is cancelled on shutdown.
 func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec) {
 	client := echonet.NewClient(cfg.ScrapeTimeoutSec)
+	probeTimeoutSec := cfg.ScrapeTimeoutSec
+	if probeTimeoutSec > 3 {
+		probeTimeoutSec = 3
+	}
+	if probeTimeoutSec < 1 {
+		probeTimeoutSec = 1
+	}
+	probeClient := echonet.NewClient(probeTimeoutSec)
 
 	for _, dev := range cfg.Devices {
 		spec, ok := deviceSpecs[dev.Class]
@@ -24,10 +32,11 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 			pollerLog.Errorf("unknown class %q for device %s, skipping", dev.Class, dev.Name)
 			continue
 		}
-		go c.runDeviceInfoRefresher(ctx, client, dev, spec.EOJ)
+		activeEOJ := resolveEOJInstance(probeClient, dev, spec.EOJ)
+		go c.runDeviceInfoRefresher(ctx, client, dev, activeEOJ)
 
 		activeMetrics := spec.Metrics
-		readable, err := client.GetReadablePropertyMap(dev.IP, spec.EOJ)
+		readable, err := client.GetReadablePropertyMap(dev.IP, activeEOJ)
 		if err != nil {
 			pollerLog.Warnf("device %s (%s): failed to read GETMAP (0x9F), using configured EPCs: %v", dev.Name, dev.IP, err)
 		} else {
@@ -73,9 +82,36 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 			if initialDelay > interval/2 {
 				initialDelay = interval / 2
 			}
-			go c.runScraper(ctx, client, dev, spec, metrics, groupID, interval, initialDelay)
+			go c.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
 		}
 	}
+}
+
+func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3]byte) [3]byte {
+	if probeEOJ(client, dev.IP, configured) {
+		return configured
+	}
+	for inst := byte(0x01); inst <= 0x0F; inst++ {
+		if inst == configured[2] {
+			continue
+		}
+		candidate := configured
+		candidate[2] = inst
+		if !probeEOJ(client, dev.IP, candidate) {
+			continue
+		}
+		pollerLog.Warnf("device %s (%s): configured EOJ instance 0x%02x not responsive, using discovered instance 0x%02x",
+			dev.Name, dev.IP, configured[2], inst)
+		return candidate
+	}
+	pollerLog.Warnf("device %s (%s): no responsive EOJ instance found for class 0x%02x%02x; keeping configured instance 0x%02x",
+		dev.Name, dev.IP, configured[0], configured[1], configured[2])
+	return configured
+}
+
+func probeEOJ(client *echonet.Client, ip string, eoj [3]byte) bool {
+	props, err := client.GetProps(ip, eoj, []byte{0x80})
+	return err == nil && len(props) > 0
 }
 
 func filterMetricsByReadableMap(metrics []specs.MetricSpec, readable map[byte]struct{}) ([]specs.MetricSpec, []byte) {
@@ -114,7 +150,7 @@ func (c *Cache) refreshDeviceInfo(client *echonet.Client, dev config.Device, eoj
 	c.UpdateInfo(dev, info)
 }
 
-func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev config.Device, spec *specs.DeviceSpec, metrics []specs.MetricSpec, groupID string, interval, initialDelay time.Duration) {
+func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval, initialDelay time.Duration) {
 	if initialDelay > 0 {
 		select {
 		case <-ctx.Done():
@@ -122,7 +158,7 @@ func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev conf
 		case <-time.After(initialDelay):
 		}
 	}
-	c.scrapeOnce(client, dev, spec, metrics, groupID, interval)
+	c.scrapeOnce(client, dev, eoj, metrics, groupID, interval)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -130,18 +166,18 @@ func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev conf
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.scrapeOnce(client, dev, spec, metrics, groupID, interval)
+			c.scrapeOnce(client, dev, eoj, metrics, groupID, interval)
 		}
 	}
 }
 
-func (c *Cache) scrapeOnce(client *echonet.Client, dev config.Device, spec *specs.DeviceSpec, metrics []specs.MetricSpec, groupID string, interval time.Duration) {
+func (c *Cache) scrapeOnce(client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval time.Duration) {
 	epcs := make([]byte, 0, len(metrics))
 	for _, m := range metrics {
 		epcs = append(epcs, m.EPC)
 	}
 	start := time.Now()
-	props, err := client.GetProps(dev.IP, spec.EOJ, epcs)
+	props, err := client.GetProps(dev.IP, eoj, epcs)
 	durationSec := time.Since(start).Seconds()
 	if err != nil {
 		pollerLog.Errorf("scrape %s (%s): %v", dev.Name, dev.IP, err)

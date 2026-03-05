@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Align transport behavior with `pychonet`: prefer local UDP source port `3610` for ECHONET requests (fallback to ephemeral if bind is unavailable).
+- Add EOJ instance auto-probe (0x01..0x0F) when configured instance is not responsive, improving compatibility with devices that use non-`0x01` instance IDs.
+
 ## 0.1.2
 
 - Enable `host_network` for reliable ECHONET Lite UDP communication with LAN/IoT devices.
