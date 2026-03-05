@@ -6,9 +6,11 @@ ARG BUILD_FROM=ghcr.io/hassio-addons/app-base:20.0.1
 FROM golang:1.26-alpine AS builder
 ARG ECHONETGO_REPO=https://github.com/styygeli/EchonetGO.git
 ARG ECHONETGO_REF=main
+ARG BUILD_VERSION=dev
 RUN apk add --no-cache git ca-certificates
 WORKDIR /src
-RUN git clone --depth=1 --branch "${ECHONETGO_REF}" "${ECHONETGO_REPO}" /src
+RUN echo "Building EchonetGO source for addon version: ${BUILD_VERSION}" && \
+    git clone --depth=1 --branch "${ECHONETGO_REF}" "${ECHONETGO_REPO}" /src
 RUN go mod download
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /echonetgo ./cmd/echonetgo
 
