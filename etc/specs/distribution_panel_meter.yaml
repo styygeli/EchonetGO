@@ -1,0 +1,58 @@
+# Auto-generated from pychonet class DistributionPanelMeter.
+eoj: [0x02, 0x87, 0x01]
+description: "Distribution panel metering"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xb0
+    name: master_rated_capacity
+    help: "Master rated capacity"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xb1
+    name: number_of_measurement_channels_simplex
+    help: "Number of measurement channels (simplex)"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xb8
+    name: number_of_measurement_channels_duplex
+    help: "Number of measurement channels (duplex)"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc0
+    name: measured_cumulative_amount_of_electric_energy_normal_direction
+    help: "Measured cumulative amount of electric energy (normal direction)"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc1
+    name: measured_cumulative_amount_of_electric_energy_reverse_direction
+    help: "Measured cumulative amount of electric energy (reverse direction)"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc5
+    name: day_for_which_the_historical_data_of_measured_cumulative_amounts_of_electric_energy_is_to_be_retrieved
+    help: "Day for which the historical data of measured cumulative amounts of electric energy is to be retrieved"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc6
+    name: measured_instantaneous_amount_of_electric_energy
+    help: "Measured instantaneous amount of electric energy"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge

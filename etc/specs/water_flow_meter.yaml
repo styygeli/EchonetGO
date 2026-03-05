@@ -1,0 +1,49 @@
+# Auto-generated from pychonet class WaterFlowMeter.
+eoj: [0x02, 0x81, 0x01]
+description: "Water flow meter"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xd0
+    name: flowing_water_classification
+    help: "Flowing water classification"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: running_water
+      0x31: recycled_water
+      0x32: sewage_water
+      0x33: other_water
+  - epc: 0xd1
+    name: owner_classification
+    help: "Owner classification"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: not_specified
+      0x31: public_waterworks_company
+      0x32: private_sector_company
+      0x33: individual
+  - epc: 0xe0
+    name: measured_cumulative_amount_of_flowing_water
+    help: "Measured cumulative amount of flowing water"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe1
+    name: unit_for_measured_cumulative_amounts_of_flowing_water
+    help: "Unit for measured cumulative amounts of flowing water"
+    size: 0
+    scale: 1
+    type: gauge

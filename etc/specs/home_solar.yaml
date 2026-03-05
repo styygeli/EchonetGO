@@ -1,0 +1,18 @@
+# Home Solar Power Generation (EP Cube inverter, etc.) - ECHONET Object 0x027901
+eoj: [0x02, 0x79, 0x01]
+description: "Home solar power generation"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0xE0
+    name: instantaneous_generation_watts
+    help: "Measured instantaneous power generation in W."
+    size: 2
+    scale: 1
+    type: gauge
+  - epc: 0xE1
+    name: cumulative_generation_kwh
+    help: "Measured cumulative electricity generated in kWh."
+    size: 4
+    scale: 0.001
+    type: counter

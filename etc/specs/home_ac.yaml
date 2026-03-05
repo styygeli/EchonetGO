@@ -1,0 +1,41 @@
+# Home Air Conditioner (Daikin, Mitsubishi, etc.) - ECHONET Object 0x013001
+eoj: [0x01, 0x30, 0x01]
+description: "Home air conditioner"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status: 0x30=ON, 0x31=OFF."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xBB
+    name: indoor_temperature_celsius
+    help: "Indoor temperature in °C."
+    size: 2
+    scale: 0.1
+    invalid: 0x7FFF
+    type: gauge
+  - epc: 0xB3
+    name: set_temperature_celsius
+    help: "Target temperature in °C."
+    size: 1
+    scale: 1
+    type: gauge
+  - epc: 0xB0
+    name: operation_mode
+    help: "Operation mode code (ECHONET EPC 0xB0): 0x41=auto, 0x42=cool, 0x43=heat, 0x44=dry, 0x45=fan_only, 0x40=other."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x40: other
+      0x41: auto
+      0x42: cool
+      0x43: heat
+      0x44: dry
+      0x45: fan_only

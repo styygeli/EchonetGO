@@ -1,0 +1,171 @@
+package specs
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"gopkg.in/yaml.v3"
+)
+
+const defaultScrapeInterval = time.Minute
+
+// Load reads device specs from the given directory. Each .yaml file is one
+// device class; the filename (without .yaml) is the class id.
+// If specsDir is empty, "etc/specs" is used.
+func Load(specsDir string) (map[string]*DeviceSpec, error) {
+	if specsDir == "" {
+		specsDir = "etc/specs"
+	}
+	return loadFromDir(specsDir)
+}
+
+func loadFromDir(dir string) (map[string]*DeviceSpec, error) {
+	out := make(map[string]*DeviceSpec)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("read specs dir %s: %w", dir, err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
+			continue
+		}
+		class := strings.TrimSuffix(e.Name(), ".yaml")
+		path := filepath.Join(dir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", path, err)
+		}
+		spec, err := parseDeviceYAML(data)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", path, err)
+		}
+		out[class] = spec
+	}
+	return out, nil
+}
+
+type deviceYAML struct {
+	EOJ                   []int        `yaml:"eoj"`
+	Description           string       `yaml:"description"`
+	DefaultScrapeInterval string       `yaml:"default_scrape_interval"`
+	Metrics               []metricYAML `yaml:"metrics"`
+}
+
+type metricYAML struct {
+	EPC            int            `yaml:"epc"`
+	Name           string         `yaml:"name"`
+	Help           string         `yaml:"help"`
+	Size           int            `yaml:"size"`
+	Scale          float64        `yaml:"scale"`
+	Signed         bool           `yaml:"signed"`
+	Invalid        *int           `yaml:"invalid"`
+	Type           string         `yaml:"type"`
+	Enum           map[int]string `yaml:"enum"`
+	ScrapeInterval string         `yaml:"scrape_interval"`
+}
+
+func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
+	var raw deviceYAML
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+	if len(raw.EOJ) != 3 {
+		return nil, fmt.Errorf("eoj must have exactly 3 bytes, got %d", len(raw.EOJ))
+	}
+	devInterval := defaultScrapeInterval
+	if raw.DefaultScrapeInterval != "" {
+		d, err := time.ParseDuration(raw.DefaultScrapeInterval)
+		if err != nil {
+			return nil, fmt.Errorf("default_scrape_interval %q: %w", raw.DefaultScrapeInterval, err)
+		}
+		if d <= 0 {
+			return nil, fmt.Errorf("default_scrape_interval must be positive, got %v", d)
+		}
+		devInterval = d
+	}
+	spec := &DeviceSpec{
+		Description:           raw.Description,
+		DefaultScrapeInterval: devInterval,
+		Metrics:               make([]MetricSpec, 0, len(raw.Metrics)),
+	}
+	for i, v := range raw.EOJ {
+		if v < 0 || v > 0xFF {
+			return nil, fmt.Errorf("eoj[%d] must be in range 0..255, got %d", i, v)
+		}
+		spec.EOJ[i] = byte(v)
+	}
+	for _, m := range raw.Metrics {
+		if m.Size != 0 && m.Size != 1 && m.Size != 2 && m.Size != 4 {
+			return nil, fmt.Errorf("metric %s: size must be 0 (auto), 1, 2, or 4", m.Name)
+		}
+		if m.Type != "gauge" && m.Type != "counter" {
+			return nil, fmt.Errorf("metric %s: type must be gauge or counter", m.Name)
+		}
+		if m.EPC < 0 || m.EPC > 0xFF {
+			return nil, fmt.Errorf("metric %s: epc must be in range 0..255, got %d", m.Name, m.EPC)
+		}
+		scale := m.Scale
+		if scale == 0 {
+			scale = 1
+		}
+		var enum map[int]string
+		if len(m.Enum) > 0 {
+			if scale != 1 {
+				return nil, fmt.Errorf("metric %s: enum mapping requires scale=1, got %v", m.Name, scale)
+			}
+			enum = make(map[int]string, len(m.Enum))
+			for rawValue, label := range m.Enum {
+				if label == "" {
+					return nil, fmt.Errorf("metric %s: enum label must not be empty for value %d", m.Name, rawValue)
+				}
+				// size=0 means auto-sized payloads, so enum fit cannot be statically checked.
+				if m.Size != 0 && !enumValueFits(rawValue, m.Size, m.Signed) {
+					return nil, fmt.Errorf("metric %s: enum value %d doesn't fit size=%d signed=%t", m.Name, rawValue, m.Size, m.Signed)
+				}
+				enum[rawValue] = label
+			}
+		}
+		help := m.Help
+		if help == "" {
+			help = LookupEPCName(spec.EOJ, byte(m.EPC))
+		}
+		interval := devInterval
+		if m.ScrapeInterval != "" {
+			d, err := time.ParseDuration(m.ScrapeInterval)
+			if err != nil {
+				return nil, fmt.Errorf("metric %s scrape_interval %q: %w", m.Name, m.ScrapeInterval, err)
+			}
+			if d <= 0 {
+				return nil, fmt.Errorf("metric %s scrape_interval must be positive", m.Name)
+			}
+			interval = d
+		}
+		spec.Metrics = append(spec.Metrics, MetricSpec{
+			EPC:            byte(m.EPC),
+			Name:           m.Name,
+			Help:           help,
+			Size:           m.Size,
+			Scale:          scale,
+			Signed:         m.Signed,
+			Invalid:        m.Invalid,
+			Type:           m.Type,
+			Enum:           enum,
+			ScrapeInterval: interval,
+		})
+	}
+	return spec, nil
+}
+
+func enumValueFits(v int, size int, signed bool) bool {
+	bits := size * 8
+	if signed {
+		min := -(1 << (bits - 1))
+		max := (1 << (bits - 1)) - 1
+		return v >= min && v <= max
+	}
+	max := (1 << bits) - 1
+	return v >= 0 && v <= max
+}

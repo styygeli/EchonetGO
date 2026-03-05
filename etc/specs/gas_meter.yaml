@@ -1,0 +1,21 @@
+# Auto-generated from pychonet class GasMeter.
+eoj: [0x02, 0x82, 0x01]
+description: "Gas meter"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xe0
+    name: cumulative_amount_of_gas_consumption_measurement_value
+    help: "Cumulative amount of gas consumption measurement value"
+    size: 0
+    scale: 1
+    type: gauge

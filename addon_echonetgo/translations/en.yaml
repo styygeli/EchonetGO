@@ -1,0 +1,12 @@
+name: EchonetGO
+description: ECHONET Lite polling service in Go. Polls devices from YAML config and exposes state over HTTP.
+config:
+  config_path:
+    name: Config file path
+    description: Full path to the main EchonetGO config file (YAML), e.g. /config/echonetgo/config.yaml
+  devices_path:
+    name: Devices file path
+    description: Optional path to a devices YAML/JSON file. Leave empty if devices are in the main config.
+  log_level:
+    name: Log level
+    description: Log verbosity (debug, info, warn, error)

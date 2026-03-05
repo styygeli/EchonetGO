@@ -1,0 +1,36 @@
+# Auto-generated from pychonet class CurrentSensor.
+eoj: [0x00, 0x23, 0x01]
+description: "Current value sensor"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xe0
+    name: measured_current_value_1
+    help: "Measured current value 1"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe1
+    name: rated_voltage_to_be_measured
+    help: "Rated voltage to be measured"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xe2
+    name: measured_current_value_2
+    help: "Measured current  value 2"
+    size: 0
+    scale: 1
+    type: gauge

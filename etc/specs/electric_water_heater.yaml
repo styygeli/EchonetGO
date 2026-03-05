@@ -1,0 +1,322 @@
+# Auto-generated from pychonet class ElectricWaterHeater.
+eoj: [0x02, 0x6b, 0x01]
+description: "Electric water heater"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0x90
+    name: on_timer_reservation_setting
+    help: "ON timer reservation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xb0
+    name: automatic_water_heating_setting
+    help: "Automatic water heating setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: automatic
+      0x42: manual
+      0x43: stop
+  - epc: 0xb1
+    name: automatic_water_temperature_control_setting
+    help: "Automatic water temperature control setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xb2
+    name: water_heater_status
+    help: "Water heater status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: heating
+      0x42: not_heating
+  - epc: 0xb3
+    name: water_heating_temperature_setting
+    help: "Water heating temperature setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xb4
+    name: manual_water_heating_stop_days_setting
+    help: "Manual water heating stop days setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xb6
+    name: tank_operation_mode_setting
+    help: "Tank operation mode setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: standard
+      0x42: saving
+      0x43: extra
+  - epc: 0xc0
+    name: daytime_reheating_permission_setting
+    help: "Daytime reheating permission setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: permitted
+      0x42: not_permitted
+  - epc: 0xc1
+    name: measured_temperature_of_water_in_water_heater
+    help: "Measured temperature of water in water heater"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc3
+    name: hot_water_supply_status
+    help: "Hot water supply status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: supplying_hot_water
+      0x42: stopped
+  - epc: 0xc7
+    name: participation_in_energyshift
+    help: "Participation in energyshift"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x00: no
+      0x01: yes
+  - epc: 0xc8
+    name: standard_time_to_startheating
+    help: "Standard time to startheating"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x01: v_01_00
+      0x14: v_20_00
+      0x15: v_21_00
+      0x16: v_22_00
+      0x17: v_23_00
+      0x18: v_24_00
+  - epc: 0xc9
+    name: number_of_energy_shifts
+    help: "Number of energy shifts"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xca
+    name: daytime_heating_shifttime_1
+    help: "Daytime heating shifttime 1"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x00: cleared
+      0x09: v_9_00
+      0x0a: v_10_00
+      0x0b: v_11_00
+      0x0c: v_12_00
+      0x0d: v_13_00
+      0x0e: v_14_00
+      0x0f: v_15_00
+      0x10: v_16_00
+      0x11: v_17_00
+  - epc: 0xcd
+    name: daytime_heating_shifttime_2
+    help: "Daytime heating shifttime 2"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x00: cleared
+      0x0a: v_10_00
+      0x0b: v_11_00
+      0x0c: v_12_00
+      0x0d: v_13_00
+      0x0e: v_14_00
+      0x0f: v_15_00
+      0x10: v_16_00
+      0x11: v_17_00
+  - epc: 0xd1
+    name: temperature_of_supplied_water_setting
+    help: "Temperature of supplied water setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd3
+    name: bath_water_temperature_setting
+    help: "Bath water temperature setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd4
+    name: bath_water_volume_setting_4
+    help: "Bath water volume setting 4"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd5
+    name: bath_water_volume_setting_4_maximum_settable_level
+    help: "Bath water volume setting 4-Maximum settable level"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd6
+    name: volume_setting
+    help: "Volume setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd7
+    name: mute_setting
+    help: "Mute setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xd8
+    name: remaining_hot_water_volume
+    help: "Remaining hot water volume"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xdb
+    name: rated_power_consumption_of_h_p_unit_in_wintertime
+    help: "Rated power consumption of H/P unit in wintertime"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xdc
+    name: rated_power_consumption_of_h_p_unit_in_in_between_seasons
+    help: "Rated power consumption of H/P unit in in-between seasons"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xdd
+    name: rated_power_consumption_of_h_p_unit_in_summertime
+    help: "Rated power consumption of H/P unit in summertime"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe0
+    name: bath_water_volume_setting
+    help: "Bath water volume setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe1
+    name: measured_amount_of_water_remaining_in_tank
+    help: "Measured amount of water remaining in tank"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: tank_capacity
+    help: "Tank capacity"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe3
+    name: automatic_bath_water_heating_mode_setting
+    help: "Automatic bath water heating mode setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe4
+    name: manual_bath_reheating_operation_setting
+    help: "Manual bath reheating operation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe5
+    name: manual_bath_hot_water_addition_function_setting
+    help: "Manual bath hot water addition function setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe6
+    name: manual_slight_bath_water_temperature_lowering_function_setting
+    help: "Manual slight bath water temperature lowering function setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe7
+    name: bath_water_volume_setting_1
+    help: "Bath water volume setting 1"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe8
+    name: bath_water_volume_setting_2
+    help: "Bath water volume setting 2"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x31: level_1
+      0x32: level_2
+      0x33: level_3
+      0x34: level_4
+      0x35: level_5
+      0x36: level_6
+      0x37: level_7
+      0x38: level_8
+  - epc: 0xe9
+    name: bathroom_priority_setting
+    help: "Bathroom priority setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xea
+    name: bath_operation_status_monitor
+    help: "Bath operation status monitor"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: filling_hot_water
+      0x42: stopped
+      0x43: keeping_temperature
+  - epc: 0xee
+    name: bath_water_volume_setting_3
+    help: "Bath water volume setting 3"
+    size: 0
+    scale: 1
+    type: gauge

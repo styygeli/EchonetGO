@@ -1,0 +1,14 @@
+# Device list for EchonetGO (editable YAML).
+# Class names must match a file in etc/specs (e.g. home_ac.yaml -> class: home_ac).
+
+devices:
+  # - name: epcube_battery
+  #   ip: 192.168.1.10
+  #   class: storage_battery
+  #   scrape_interval: 2m
+  # - name: epcube_solar
+  #   ip: 192.168.1.10
+  #   class: home_solar
+  # - name: living_ac
+  #   ip: 192.168.1.20
+  #   class: home_ac

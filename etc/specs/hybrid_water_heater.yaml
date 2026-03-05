@@ -1,0 +1,84 @@
+# Auto-generated from pychonet class HybridWaterHeater.
+eoj: [0x02, 0xa6, 0x01]
+description: "Hybrid Water Heater"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0xb0
+    name: automatic_water_heating_setting
+    help: "Automatic water heating setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: automatic_water_heating
+      0x42: manual_water_heating
+      0x43: water_heating_manual_stop
+  - epc: 0xb2
+    name: water_heating_status
+    help: "Water heating status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: heating
+      0x42: not_heating
+  - epc: 0xb3
+    name: heater_status
+    help: "Heater status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: heating
+      0x42: not_heating
+  - epc: 0xb6
+    name: hot_water_supply_mode_setting_for_auxiliary_heat_source_machine
+    help: "Hot water supply mode setting for auxiliary heat source machine"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: set
+      0x42: no_setting
+  - epc: 0xb7
+    name: heater_mode_setting_for_auxiliary_heat_source_machine
+    help: "Heater mode setting for auxiliary heat source machine"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: set
+      0x42: no_setting
+  - epc: 0xb8
+    name: linkage_mode_setting_for_solar_power_generation
+    help: "Linkage mode setting for solar power generation"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: mode_off
+      0x42: household_consumption
+      0x43: prioritizing_electricity_sales
+      0x44: economic_efficiency
+  - epc: 0xc3
+    name: hot_water_supply_status
+    help: "Hot water supply status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: supplying_hot_water
+      0x42: stopped
+  - epc: 0xe1
+    name: measured_amount_of_hot_water_remaining_in_tank
+    help: "Measured amount of hot water remaining in tank"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: tank_capacity
+    help: "Tank Capacity"
+    size: 0
+    scale: 1
+    type: gauge

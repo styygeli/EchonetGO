@@ -1,0 +1,39 @@
+# Auto-generated from pychonet class CigaretteSensor.
+eoj: [0x00, 0x05, 0x01]
+description: "Earthquake sensor"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xb0
+    name: detection_threshold_level
+    help: "Detection threshold level"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x31: level_1
+      0x32: level_2
+      0x33: level_3
+      0x34: level_4
+      0x35: level_5
+      0x36: level_6
+      0x37: level_7
+      0x38: level_8
+  - epc: 0xb1
+    name: earthquake_occurrence_status
+    help: "Earthquake occurrence status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: smoke_cigarette_detection_status_found
+      0x42: smoke_cigarette_detection_status_not_found

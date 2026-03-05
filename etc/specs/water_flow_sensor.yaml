@@ -1,0 +1,27 @@
+# Auto-generated from pychonet class WaterFlowSensor.
+eoj: [0x00, 0x25, 0x01]
+description: "Water flow rate sensor"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xe0
+    name: cumulative_flow_rate
+    help: "Cumulative flow rate"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: flow_rate
+    help: "Flow rate"
+    size: 0
+    scale: 1
+    type: gauge

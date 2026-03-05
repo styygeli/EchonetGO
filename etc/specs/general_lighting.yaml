@@ -1,0 +1,33 @@
+# Auto-generated from pychonet class GeneralLighting.
+eoj: [0x02, 0x90, 0x01]
+description: "General lighting"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xb0
+    name: illuminance_level
+    help: "Illuminance level"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xb1
+    name: light_color_setting
+    help: "Light color setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x40: other
+      0x41: incandescent_lamp_color
+      0x42: white
+      0x43: daylight_white
+      0x44: daylight_color
