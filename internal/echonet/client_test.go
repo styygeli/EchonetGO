@@ -1,12 +1,19 @@
 package echonet
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/styygeli/echonetgo/internal/model"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
+
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string   { return "timeout" }
+func (timeoutErr) Timeout() bool   { return true }
+func (timeoutErr) Temporary() bool { return true }
 
 func TestParseInteger(t *testing.T) {
 	t.Run("unsigned", func(t *testing.T) {
@@ -43,6 +50,20 @@ func TestParseInteger(t *testing.T) {
 		_, err := parseInteger(nil, false)
 		if err == nil {
 			t.Fatalf("parseInteger() expected error, got nil")
+		}
+	})
+}
+
+func TestIsTimeoutError(t *testing.T) {
+	t.Run("net timeout error", func(t *testing.T) {
+		if !isTimeoutError(timeoutErr{}) {
+			t.Fatalf("expected timeoutErr to be detected as timeout")
+		}
+	})
+
+	t.Run("non timeout error", func(t *testing.T) {
+		if isTimeoutError(errors.New("permission denied")) {
+			t.Fatalf("did not expect non-timeout error to be detected as timeout")
 		}
 	})
 }
