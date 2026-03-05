@@ -105,7 +105,12 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 	}
 	clientLog.Warnf("failed to bind local UDP port %d for %s; falling back to ephemeral source port: %v",
 		echonetPort, hostKey, err)
-	return c.sendGetEphemeral(host, req, tid, hostKey)
+	resp, fallbackErr := c.sendGetEphemeral(host, req, tid, hostKey)
+	if fallbackErr != nil {
+		return nil, fmt.Errorf("failed local UDP source port %d (%v), ephemeral fallback also failed: %w",
+			echonetPort, err, fallbackErr)
+	}
+	return resp, nil
 }
 
 func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {

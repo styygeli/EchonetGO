@@ -33,6 +33,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 			continue
 		}
 		activeEOJ := resolveEOJInstance(probeClient, dev, spec.EOJ)
+		pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
 		go c.runDeviceInfoRefresher(ctx, client, dev, activeEOJ)
 
 		activeMetrics := spec.Metrics
