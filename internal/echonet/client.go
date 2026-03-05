@@ -109,12 +109,22 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 }
 
 func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
-	remoteAddr, err := net.ResolveUDPAddr("udp", host)
-	if err != nil {
-		return nil, err
-	}
 	localAddr := &net.UDPAddr{IP: net.IPv4zero, Port: localPort}
-	conn, err := net.DialUDP("udp", localAddr, remoteAddr)
+	dialer := &net.Dialer{
+		Timeout:   c.timeout,
+		LocalAddr: localAddr,
+		Control: func(network, address string, rawConn syscall.RawConn) error {
+			var sockErr error
+			if err := rawConn.Control(func(fd uintptr) {
+				// Match pychonet's UDP socket behavior to improve compatibility.
+				sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			}); err != nil {
+				return err
+			}
+			return sockErr
+		},
+	}
+	conn, err := dialer.Dial("udp", host)
 	if err != nil {
 		return nil, err
 	}

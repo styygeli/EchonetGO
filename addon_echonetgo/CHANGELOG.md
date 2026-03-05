@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+- Improve fixed UDP port (`3610`) compatibility by enabling `SO_REUSEADDR` on the local ECHONET socket (closer to `pychonet` behavior).
+
 ## 0.1.3
 
 - Align transport behavior with `pychonet`: prefer local UDP source port `3610` for ECHONET requests (fallback to ephemeral if bind is unavailable).
