@@ -18,7 +18,7 @@ var pollerLog = logging.New("poller")
 // Start begins background scrapers for all configured devices. Call with a context
 // that is cancelled on shutdown.
 func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec) {
-	client := echonet.NewClient(cfg.ScrapeTimeoutSec)
+	client := echonet.NewClient(cfg.ScrapeTimeoutSec, cfg.StrictSourcePort3610)
 	probeTimeoutSec := cfg.ScrapeTimeoutSec
 	if probeTimeoutSec > 3 {
 		probeTimeoutSec = 3
@@ -26,7 +26,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	if probeTimeoutSec < 1 {
 		probeTimeoutSec = 1
 	}
-	probeClient := echonet.NewClient(probeTimeoutSec)
+	probeClient := echonet.NewClient(probeTimeoutSec, cfg.StrictSourcePort3610)
 
 	for _, dev := range cfg.Devices {
 		spec, ok := deviceSpecs[dev.Class]

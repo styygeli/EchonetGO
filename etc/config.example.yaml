@@ -3,10 +3,15 @@
 #
 # Environment variables override file values:
 #   ECHONET_LISTEN_ADDR, ECHONET_SCRAPE_TIMEOUT_SEC,
+#   ECHONET_STRICT_SOURCE_PORT_3610,
 #   ECHONET_DEVICES_PATH, ECHONET_SPECS_DIR, ECHONET_DEVICES (JSON)
 
 listen_addr: ":9191"
 scrape_timeout_sec: 15
+
+# Keep source UDP port fixed to 3610 (recommended for devices that only reply
+# to requests sourced from port 3610).
+strict_source_port_3610: true
 
 # Path to devices list (YAML or JSON). Optional if devices are listed below or in ECHONET_DEVICES.
 devices_path: "etc/devices.yaml"

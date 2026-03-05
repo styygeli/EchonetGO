@@ -12,12 +12,13 @@ import (
 
 // Config holds EchonetGO configuration (from etc/ YAML and/or environment).
 type Config struct {
-	ListenAddr       string   `yaml:"listen_addr" json:"listen_addr"`
-	ScrapeTimeoutSec int      `yaml:"scrape_timeout_sec" json:"scrape_timeout_sec"`
-	ConfigPath       string   `yaml:"-" json:"-"` // path to etc config file
-	DevicesPath      string   `yaml:"devices_path" json:"devices_path"`
-	SpecsDir         string   `yaml:"specs_dir" json:"specs_dir"`
-	Devices          []Device `yaml:"devices" json:"devices"`
+	ListenAddr           string   `yaml:"listen_addr" json:"listen_addr"`
+	ScrapeTimeoutSec     int      `yaml:"scrape_timeout_sec" json:"scrape_timeout_sec"`
+	StrictSourcePort3610 bool     `yaml:"strict_source_port_3610" json:"strict_source_port_3610"`
+	ConfigPath           string   `yaml:"-" json:"-"` // path to etc config file
+	DevicesPath          string   `yaml:"devices_path" json:"devices_path"`
+	SpecsDir             string   `yaml:"specs_dir" json:"specs_dir"`
+	Devices              []Device `yaml:"devices" json:"devices"`
 }
 
 // Device is a single ECHONET device to poll.
@@ -31,11 +32,12 @@ type Device struct {
 
 // fileConfig is the on-disk shape for the main config file.
 type fileConfig struct {
-	ListenAddr       string   `yaml:"listen_addr"`
-	ScrapeTimeoutSec int      `yaml:"scrape_timeout_sec"`
-	DevicesPath      string   `yaml:"devices_path"`
-	SpecsDir         string   `yaml:"specs_dir"`
-	Devices          []Device `yaml:"devices"`
+	ListenAddr           string   `yaml:"listen_addr"`
+	ScrapeTimeoutSec     int      `yaml:"scrape_timeout_sec"`
+	StrictSourcePort3610 *bool    `yaml:"strict_source_port_3610"`
+	DevicesPath          string   `yaml:"devices_path"`
+	SpecsDir             string   `yaml:"specs_dir"`
+	Devices              []Device `yaml:"devices"`
 }
 
 // Load reads configuration: optional etc config file, then env overrides.
@@ -43,8 +45,9 @@ type fileConfig struct {
 // Devices can come from config file, from devices_path (YAML/JSON), or from ECHONET_DEVICES JSON env.
 func Load() (*Config, error) {
 	cfg := &Config{
-		ListenAddr:       ":9191",
-		ScrapeTimeoutSec: 15,
+		ListenAddr:           ":9191",
+		ScrapeTimeoutSec:     15,
+		StrictSourcePort3610: true,
 	}
 
 	configPath := os.Getenv("ECHONET_CONFIG")
@@ -65,6 +68,9 @@ func Load() (*Config, error) {
 		if fc.ScrapeTimeoutSec > 0 {
 			cfg.ScrapeTimeoutSec = fc.ScrapeTimeoutSec
 		}
+		if fc.StrictSourcePort3610 != nil {
+			cfg.StrictSourcePort3610 = *fc.StrictSourcePort3610
+		}
 		if fc.DevicesPath != "" {
 			cfg.DevicesPath = fc.DevicesPath
 		}
@@ -84,6 +90,13 @@ func Load() (*Config, error) {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			cfg.ScrapeTimeoutSec = n
 		}
+	}
+	if v := os.Getenv("ECHONET_STRICT_SOURCE_PORT_3610"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("ECHONET_STRICT_SOURCE_PORT_3610: %w", err)
+		}
+		cfg.StrictSourcePort3610 = b
 	}
 	if v := os.Getenv("ECHONET_DEVICES_PATH"); v != "" {
 		cfg.DevicesPath = v
