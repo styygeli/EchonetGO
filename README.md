@@ -68,11 +68,12 @@ Contributors can add device classes and metrics by editing YAML under `etc/specs
 
 - `listen_addr` — HTTP listen address (default `:9191`).
 - `scrape_timeout_sec` — UDP timeout for ECHONET requests (default 15).
+- `strict_source_port_3610` — Use local UDP source port `3610` only (default `true`). Set to `false` only if you explicitly need ephemeral-port fallback.
 - `devices_path` — Optional path to a YAML/JSON file with a `devices` list.
 - `specs_dir` — Directory of device class YAMLs (default `etc/specs`).
 - `devices` — Inline list of `{ name, ip, class, scrape_interval? }`.
 
-Environment overrides: `ECHONET_CONFIG`, `ECHONET_LISTEN_ADDR`, `ECHONET_SCRAPE_TIMEOUT_SEC`, `ECHONET_DEVICES_PATH`, `ECHONET_SPECS_DIR`, `ECHONET_DEVICES` (JSON array), `ECHONET_LOG_LEVEL` (debug/info/warn/error).
+Environment overrides: `ECHONET_CONFIG`, `ECHONET_LISTEN_ADDR`, `ECHONET_SCRAPE_TIMEOUT_SEC`, `ECHONET_STRICT_SOURCE_PORT_3610`, `ECHONET_DEVICES_PATH`, `ECHONET_SPECS_DIR`, `ECHONET_DEVICES` (JSON array), `ECHONET_LOG_LEVEL` (debug/info/warn/error).
 
 ## Home Assistant add-on
 

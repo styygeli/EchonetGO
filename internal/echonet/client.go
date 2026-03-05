@@ -41,7 +41,8 @@ var (
 
 // Client sends ECHONET Lite Get requests over UDP and parses Get_Res.
 type Client struct {
-	timeout time.Duration
+	timeout              time.Duration
+	strictSourcePort3610 bool
 }
 
 // DeviceInfo represents generic identity properties of a device.
@@ -58,9 +59,10 @@ type MetricValue struct {
 }
 
 // NewClient creates a client with the given scrape timeout in seconds.
-func NewClient(timeoutSec int) *Client {
+func NewClient(timeoutSec int, strictSourcePort3610 bool) *Client {
 	return &Client{
-		timeout: time.Duration(timeoutSec) * time.Second,
+		timeout:              time.Duration(timeoutSec) * time.Second,
+		strictSourcePort3610: strictSourcePort3610,
 	}
 }
 
@@ -99,6 +101,10 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 	resp, err := c.sendGetFromPort(host, req, tid, hostKey, echonetPort)
 	if err == nil {
 		return resp, nil
+	}
+	if c.strictSourcePort3610 {
+		return nil, fmt.Errorf("failed to send request from required local UDP source port %d to %s: %w",
+			echonetPort, hostKey, err)
 	}
 	// Match pychonet behavior first (source UDP 3610). If unavailable, gracefully
 	// fall back to ephemeral source ports to avoid hard failure.
