@@ -2,7 +2,9 @@ package poller
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/styygeli/echonetgo/internal/config"
@@ -89,6 +91,9 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 }
 
 func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3]byte) [3]byte {
+	if eoj, ok := resolveEOJFromNodeProfile(client, dev, configured); ok {
+		return eoj
+	}
 	if probeEOJ(client, dev.IP, configured) {
 		return configured
 	}
@@ -108,6 +113,67 @@ func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3
 	pollerLog.Warnf("device %s (%s): no responsive EOJ instance found for class 0x%02x%02x; keeping configured instance 0x%02x",
 		dev.Name, dev.IP, configured[0], configured[1], configured[2])
 	return configured
+}
+
+func resolveEOJFromNodeProfile(client *echonet.Client, dev config.Device, configured [3]byte) ([3]byte, bool) {
+	props, err := client.GetProps(dev.IP, [3]byte{0x0E, 0xF0, 0x01}, []byte{0xD6})
+	if err != nil {
+		pollerLog.Warnf("device %s (%s): node profile probe (0x0EF001/D6) failed: %v", dev.Name, dev.IP, err)
+		return configured, false
+	}
+	var instances [][3]byte
+	for _, p := range props {
+		if p.EPC != 0xD6 || len(p.EDT) == 0 {
+			continue
+		}
+		instances = decodeInstanceList(p.EDT)
+		break
+	}
+	if len(instances) == 0 {
+		pollerLog.Warnf("device %s (%s): node profile instance list (D6) missing/empty", dev.Name, dev.IP)
+		return configured, false
+	}
+	pollerLog.Infof("device %s (%s): discovered EOJs from node profile: %s", dev.Name, dev.IP, formatEOJList(instances))
+	for _, inst := range instances {
+		if inst[0] != configured[0] || inst[1] != configured[1] {
+			continue
+		}
+		if inst[2] != configured[2] {
+			pollerLog.Warnf("device %s (%s): configured EOJ instance 0x%02x replaced by node-profile instance 0x%02x",
+				dev.Name, dev.IP, configured[2], inst[2])
+		}
+		return inst, true
+	}
+	pollerLog.Warnf("device %s (%s): configured class 0x%02x%02x not present in node profile list", dev.Name, dev.IP, configured[0], configured[1])
+	return configured, false
+}
+
+func decodeInstanceList(edt []byte) [][3]byte {
+	if len(edt) < 1 {
+		return nil
+	}
+	count := int(edt[0])
+	maxCount := (len(edt) - 1) / 3
+	if count > maxCount {
+		count = maxCount
+	}
+	out := make([][3]byte, 0, count)
+	for i := 0; i < count; i++ {
+		base := 1 + i*3
+		out = append(out, [3]byte{edt[base], edt[base+1], edt[base+2]})
+	}
+	return out
+}
+
+func formatEOJList(eojs [][3]byte) string {
+	if len(eojs) == 0 {
+		return "[]"
+	}
+	parts := make([]string, 0, len(eojs))
+	for _, e := range eojs {
+		parts = append(parts, fmt.Sprintf("0x%02x%02x%02x", e[0], e[1], e[2]))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
 }
 
 func probeEOJ(client *echonet.Client, ip string, eoj [3]byte) bool {
