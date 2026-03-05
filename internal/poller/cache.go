@@ -27,6 +27,8 @@ type groupStatus struct {
 	durationSec float64
 	lastAttempt time.Time
 	lastSuccess time.Time
+	lastError   string
+	failures    int
 }
 
 // DeviceKey returns a unique key for a configured device.
@@ -89,7 +91,7 @@ func (c *Cache) GetInfo(dev config.Device) echonet.DeviceInfo {
 }
 
 // Update merges a scrape result into the cache for a device/group.
-func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration, success bool, durationSec float64, metrics map[string]echonet.MetricValue) {
+func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration, success bool, durationSec float64, metrics map[string]echonet.MetricValue, errMsg string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := DeviceKey(dev)
@@ -108,9 +110,17 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 	gs.lastAttempt = now
 	if success {
 		gs.lastSuccess = now
+		gs.lastError = ""
+		gs.failures = 0
 		for k, v := range metrics {
 			dc.metrics[k] = v
 		}
+	} else {
+		gs.failures++
+		if errMsg == "" {
+			errMsg = "scrape failed"
+		}
+		gs.lastError = errMsg
 	}
 	dc.groups[groupID] = gs
 	c.metrics[key] = dc
@@ -143,6 +153,9 @@ func (c *Cache) StateForAPI(cfg *config.Config) map[string]interface{} {
 			continue
 		}
 		success := false
+		lastError := ""
+		consecutiveFailures := 0
+		lastErrorAt := time.Time{}
 		for _, gs := range dc.groups {
 			if gs.success {
 				ttl := gs.interval * 2
@@ -154,6 +167,13 @@ func (c *Cache) StateForAPI(cfg *config.Config) map[string]interface{} {
 					break
 				}
 			}
+			if gs.failures > consecutiveFailures {
+				consecutiveFailures = gs.failures
+			}
+			if gs.lastError != "" && gs.lastAttempt.After(lastErrorAt) {
+				lastErrorAt = gs.lastAttempt
+				lastError = gs.lastError
+			}
 		}
 		metrics := make(map[string]interface{})
 		for k, v := range dc.metrics {
@@ -163,7 +183,9 @@ func (c *Cache) StateForAPI(cfg *config.Config) map[string]interface{} {
 			"name": dev.Name, "ip": dev.IP, "class": dev.Class,
 			"success":      success,
 			"manufacturer": dc.info.Manufacturer, "product_code": dc.info.ProductCode, "uid": dc.info.UID,
-			"metrics": metrics,
+			"metrics":              metrics,
+			"last_error":           lastError,
+			"consecutive_failures": consecutiveFailures,
 		})
 	}
 	sort.Slice(devices, func(i, j int) bool {

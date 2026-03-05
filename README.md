@@ -22,7 +22,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 
 - `GET /` — brief info
 - `GET /health` — liveness
-- `GET /state` — JSON snapshot of cached device metrics and identity (manufacturer, product code, UID)
+- `GET /state` — JSON snapshot of cached device metrics and identity (manufacturer, product code, UID), plus scrape diagnostics (`success`, `last_error`, `consecutive_failures`)
 
 ## File layout
 
