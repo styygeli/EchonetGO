@@ -27,6 +27,12 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 		probeTimeoutSec = 1
 	}
 	probeClient := echonet.NewClient(probeTimeoutSec, cfg.StrictSourcePort3610)
+	hostEOJCache := make(map[string][][3]byte)
+	infoRefresherStarted := make(map[string]bool)
+	devicesByHost := make(map[string][]config.Device)
+	for _, dev := range cfg.Devices {
+		devicesByHost[dev.IP] = append(devicesByHost[dev.IP], dev)
+	}
 
 	for _, dev := range cfg.Devices {
 		spec, ok := deviceSpecs[dev.Class]
@@ -34,9 +40,12 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 			pollerLog.Errorf("unknown class %q for device %s, skipping", dev.Class, dev.Name)
 			continue
 		}
-		activeEOJ := resolveEOJInstance(probeClient, dev, spec.EOJ)
+		activeEOJ := resolveEOJInstance(probeClient, dev, spec.EOJ, hostEOJCache)
 		pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
-		go c.runDeviceInfoRefresher(ctx, client, dev, activeEOJ)
+		if !infoRefresherStarted[dev.IP] {
+			infoRefresherStarted[dev.IP] = true
+			go c.runDeviceInfoRefresher(ctx, client, devicesByHost[dev.IP], activeEOJ)
+		}
 
 		activeMetrics := spec.Metrics
 		readable, err := client.GetReadablePropertyMap(dev.IP, activeEOJ)
@@ -90,8 +99,8 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	}
 }
 
-func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3]byte) [3]byte {
-	if eoj, ok := resolveEOJFromNodeProfile(client, dev, configured); ok {
+func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3]byte, hostEOJCache map[string][][3]byte) [3]byte {
+	if eoj, ok := resolveEOJFromNodeProfile(client, dev, configured, hostEOJCache); ok {
 		return eoj
 	}
 	if probeEOJ(client, dev.IP, configured) {
@@ -115,7 +124,10 @@ func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3
 	return configured
 }
 
-func resolveEOJFromNodeProfile(client *echonet.Client, dev config.Device, configured [3]byte) ([3]byte, bool) {
+func resolveEOJFromNodeProfile(client *echonet.Client, dev config.Device, configured [3]byte, hostEOJCache map[string][][3]byte) ([3]byte, bool) {
+	if instances, ok := hostEOJCache[dev.IP]; ok && len(instances) > 0 {
+		return selectEOJFromInstances(dev, configured, instances)
+	}
 	props, err := client.GetProps(dev.IP, [3]byte{0x0E, 0xF0, 0x01}, []byte{0xD6})
 	if err != nil {
 		pollerLog.Warnf("device %s (%s): node profile probe (0x0EF001/D6) failed: %v", dev.Name, dev.IP, err)
@@ -133,7 +145,12 @@ func resolveEOJFromNodeProfile(client *echonet.Client, dev config.Device, config
 		pollerLog.Warnf("device %s (%s): node profile instance list (D6) missing/empty", dev.Name, dev.IP)
 		return configured, false
 	}
+	hostEOJCache[dev.IP] = instances
 	pollerLog.Infof("device %s (%s): discovered EOJs from node profile: %s", dev.Name, dev.IP, formatEOJList(instances))
+	return selectEOJFromInstances(dev, configured, instances)
+}
+
+func selectEOJFromInstances(dev config.Device, configured [3]byte, instances [][3]byte) ([3]byte, bool) {
 	for _, inst := range instances {
 		if inst[0] != configured[0] || inst[1] != configured[1] {
 			continue
@@ -194,8 +211,8 @@ func filterMetricsByReadableMap(metrics []specs.MetricSpec, readable map[byte]st
 	return filtered, unsupported
 }
 
-func (c *Cache) runDeviceInfoRefresher(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte) {
-	c.refreshDeviceInfo(client, dev, eoj)
+func (c *Cache) runDeviceInfoRefresher(ctx context.Context, client *echonet.Client, devices []config.Device, eoj [3]byte) {
+	c.refreshDeviceInfo(client, devices, eoj)
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -203,18 +220,24 @@ func (c *Cache) runDeviceInfoRefresher(ctx context.Context, client *echonet.Clie
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.refreshDeviceInfo(client, dev, eoj)
+			c.refreshDeviceInfo(client, devices, eoj)
 		}
 	}
 }
 
-func (c *Cache) refreshDeviceInfo(client *echonet.Client, dev config.Device, eoj [3]byte) {
-	info, err := client.GetDeviceInfo(dev.IP, eoj)
-	if err != nil {
-		pollerLog.Warnf("device %s (%s): device info read failed: %v", dev.Name, dev.IP, err)
+func (c *Cache) refreshDeviceInfo(client *echonet.Client, devices []config.Device, eoj [3]byte) {
+	if len(devices) == 0 {
 		return
 	}
-	c.UpdateInfo(dev, info)
+	primary := devices[0]
+	info, err := client.GetDeviceInfo(primary.IP, eoj)
+	if err != nil {
+		pollerLog.Warnf("device %s (%s): device info read failed: %v", primary.Name, primary.IP, err)
+		return
+	}
+	for _, dev := range devices {
+		c.UpdateInfo(dev, info)
+	}
 }
 
 func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval, initialDelay time.Duration) {
