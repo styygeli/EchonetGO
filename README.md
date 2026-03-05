@@ -85,6 +85,21 @@ The **addon_echonetgo/** directory contains the files needed to run EchonetGO as
 
 To use it as a custom add-on repository in Home Assistant: add this repo URL in **Settings → Add-ons → Add-on store → Repositories**, then install the **EchonetGO** add-on. Create your config and device list under `/config/echonetgo/` (or the path you set in the add-on options) and set **config_path** accordingly. See **addon_echonetgo/README.md** and **addon_echonetgo/DOCS.md** for details.
 
+## Local network probe
+
+When troubleshooting LAN/VLAN reachability or device responsiveness, run a direct probe from your local machine:
+
+```bash
+python3 tools/echonet_probe.py 192.168.3.86 --mode both --timeout 3
+```
+
+The probe sends standard ECHONET `Get` requests to:
+
+- Node profile (`0x0EF001`): EPC `0xD6`, `0x9F`, and identity (`0x83`, `0x8A`, `0x8C`)
+- Home AC (`0x0130xx`): EPC `0x80` and `0x9F`
+
+It tests both source-port modes (`ephemeral` and `3610`) and exits with non-zero status if all probes time out, which is useful for quick before/after checks while adjusting network, routing, or ACL/firewall settings.
+
 ## Build and test
 
 ```bash
