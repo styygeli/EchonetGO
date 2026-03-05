@@ -34,11 +34,14 @@ const (
 
 var clientLog = logging.New("echonet-client")
 
+var (
+	sharedHostLockMu sync.Mutex
+	sharedHostLocks  = make(map[string]*sync.Mutex)
+)
+
 // Client sends ECHONET Lite Get requests over UDP and parses Get_Res.
 type Client struct {
-	timeout   time.Duration
-	lockMu    sync.Mutex
-	hostLocks map[string]*sync.Mutex
+	timeout time.Duration
 }
 
 // DeviceInfo represents generic identity properties of a device.
@@ -57,8 +60,7 @@ type MetricValue struct {
 // NewClient creates a client with the given scrape timeout in seconds.
 func NewClient(timeoutSec int) *Client {
 	return &Client{
-		timeout:   time.Duration(timeoutSec) * time.Second,
-		hostLocks: make(map[string]*sync.Mutex),
+		timeout: time.Duration(timeoutSec) * time.Second,
 	}
 }
 
@@ -84,7 +86,7 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 		return nil, fmt.Errorf("no EPCs")
 	}
 	hostKey := normalizeHost(addr)
-	hostLock := c.lockForHost(hostKey)
+	hostLock := lockForHost(hostKey)
 	hostLock.Lock()
 	defer hostLock.Unlock()
 
@@ -187,14 +189,14 @@ func normalizeHost(addr string) string {
 	return addr
 }
 
-func (c *Client) lockForHost(host string) *sync.Mutex {
-	c.lockMu.Lock()
-	defer c.lockMu.Unlock()
-	if m, ok := c.hostLocks[host]; ok {
+func lockForHost(host string) *sync.Mutex {
+	sharedHostLockMu.Lock()
+	defer sharedHostLockMu.Unlock()
+	if m, ok := sharedHostLocks[host]; ok {
 		return m
 	}
 	m := &sync.Mutex{}
-	c.hostLocks[host] = m
+	sharedHostLocks[host] = m
 	return m
 }
 
@@ -308,9 +310,23 @@ func (c *Client) GetReadablePropertyMap(addr string, eoj [3]byte) (map[byte]stru
 
 // GetDeviceInfo reads generic identity properties.
 func (c *Client) GetDeviceInfo(addr string, eoj [3]byte) (DeviceInfo, error) {
+	nodeProfileEOJ := [3]byte{0x0E, 0xF0, 0x01}
 	props, err := c.GetProps(addr, eoj, []byte{0x83, 0x8A, 0x8C})
 	if err != nil {
-		return DeviceInfo{}, err
+		// Some devices reject identity properties on their class EOJ (Get_SNA / ESV 0x52)
+		// but expose them on the node profile object instead.
+		if isGetSNA(err) && eoj != nodeProfileEOJ {
+			clientLog.Debugf("device %s eoj=%s: identity Get returned Get_SNA; retrying via node profile",
+				normalizeHost(addr), formatEOJ(eoj))
+			props, err = c.GetProps(addr, nodeProfileEOJ, []byte{0x83, 0x8A, 0x8C})
+		}
+		if err != nil {
+			if isGetSNA(err) {
+				clientLog.Debugf("device %s eoj=%s: identity properties not supported (Get_SNA)", normalizeHost(addr), formatEOJ(eoj))
+				return DeviceInfo{}, nil
+			}
+			return DeviceInfo{}, err
+		}
 	}
 	info := DeviceInfo{}
 	for _, p := range props {
@@ -328,6 +344,13 @@ func (c *Client) GetDeviceInfo(addr string, eoj [3]byte) (DeviceInfo, error) {
 			normalizeHost(addr), formatEOJ(eoj), info.UID, info.Manufacturer, info.ProductCode)
 	}
 	return info, nil
+}
+
+func isGetSNA(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "ESV=52")
 }
 
 var manufacturerNames = map[uint32]string{
