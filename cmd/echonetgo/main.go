@@ -32,7 +32,8 @@ func main() {
 	cache := poller.NewCache()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	cache.Start(ctx, cfg, deviceSpecs)
+	// Start polling in background so the API listener comes up immediately.
+	go cache.Start(ctx, cfg, deviceSpecs)
 
 	srv := &api.Server{
 		ListenAddr: cfg.ListenAddr,
@@ -40,18 +41,25 @@ func main() {
 	}
 
 	server := &http.Server{Addr: cfg.ListenAddr, Handler: srv.Handler()}
-
+	errCh := make(chan error, 1)
 	go func() {
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errCh <- err
+		}
+	}()
+	log.Infof("Listening on %s", cfg.ListenAddr)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
+	select {
+	case <-sigCh:
 		log.Infof("Shutting down...")
 		cancel()
-		_ = server.Shutdown(context.Background())
-	}()
-
-	log.Infof("Listening on %s", cfg.ListenAddr)
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := server.Shutdown(context.Background()); err != nil {
+			log.Warnf("HTTP shutdown: %v", err)
+		}
+	case err := <-errCh:
 		log.Fatalf("HTTP server: %v", err)
 	}
 }
