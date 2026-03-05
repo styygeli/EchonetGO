@@ -1,13 +1,13 @@
 # EchonetGO
 
-A Go service for ECHONET Lite devices: polling, caching, and a minimal HTTP API. It is designed to be extended toward feature parity with the Python [echonetlite_homeassistant](https://github.com/home-assistant-libs/echonetlite_homeassistant) integration and [pychonet](https://github.com/home-assistant-libs/pychonet), while keeping device and metric definitions in editable YAML/JSON so non-Go contributors can add devices and specs.
+A Go service for ECHONET Lite devices: polling, caching, and a minimal HTTP API. It is designed to be extended toward feature parity with the Python [echonetlite_homeassistant](https://github.com/scottyphillips/echonetlite_homeassistant) integration and [pychonet](https://github.com/scottyphillips/pychonet), while keeping device and metric definitions in editable YAML/JSON so non-Go contributors can add devices and specs.
 
 ## Attribution
 
 This project builds on ideas and protocol behavior from the following projects and standards:
 
-- **[echonetlite_homeassistant](https://github.com/home-assistant-libs/echonetlite_homeassistant)** — Home Assistant integration for ECHONET Lite (MIT, Copyright © 2019 Scott Phillips). Device support, entity mapping, and integration patterns inspired this reimplementation.
-- **[pychonet](https://github.com/home-assistant-libs/pychonet)** — Python ECHONET Lite library used by the integration (MIT/GPL, Copyright © 2018 Scott Phillips). Protocol semantics and EPC handling reference pychonet’s implementation.
+- **[echonetlite_homeassistant](https://github.com/scottyphillips/echonetlite_homeassistant)** — Home Assistant integration for ECHONET Lite (MIT, Copyright © 2019 Scott Phillips). Device support, entity mapping, and integration patterns inspired this reimplementation.
+- **[pychonet](https://github.com/scottyphillips/pychonet)** — Python ECHONET Lite library used by the integration (MIT/GPL, Copyright © 2018 Scott Phillips). Protocol semantics and EPC handling reference pychonet’s implementation.
 - **[echonet-exporter](https://github.com/styygeli/echonet-exporter)** — Prometheus/VictoriaMetrics exporter for ECHONET Lite. Detached scraping, GETMAP filtering, adaptive split retries, and YAML device/spec layout were adapted from this codebase.
 - **ECHONET Lite** — [ECHONET Consortium](https://echonet.jp/) specification; implementation follows the published ECHONET Lite standard for UDP frames and property codes.
 
