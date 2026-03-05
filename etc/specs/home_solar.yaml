@@ -4,6 +4,101 @@ description: "Home solar power generation"
 default_scrape_interval: 1m
 
 metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status (0x30=ON, 0x31=OFF)."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0x88
+    name: fault_status
+    help: "Fault status."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x41: fault
+      0x42: no_fault
+  - epc: 0xA0
+    name: output_power_control_setting_1
+    help: "Output power control setting 1."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xA1
+    name: output_power_control_setting_2
+    help: "Output power control setting 2."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xA2
+    name: surplus_purchase_control_setting
+    help: "Function to control purchase surplus electricity setting."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xB2
+    name: surplus_purchase_type_setting
+    help: "Function to control the type of surplus electricity purchase."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xB4
+    name: upper_limit_clip_setting
+    help: "Upper limit clip setting value."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xC1
+    name: fit_contract_type
+    help: "FIT contract type."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xC2
+    name: self_consumption_type
+    help: "Self-consumption type."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xC3
+    name: approved_equipment_capacity
+    help: "Capacity approved by equipment."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xC4
+    name: conversion_coefficient
+    help: "Conversion coefficient."
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xD0
+    name: system_interconnected_type
+    help: "System-interconnected type."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x00: reverse_power_flow_acceptable
+      0x01: independent
+      0x02: reverse_power_flow_not_acceptable
+      0x03: unknown
+  - epc: 0xD1
+    name: output_power_restraint_status
+    help: "Output power restraint status."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x41: ongoing_restraint_output_power_control
+      0x42: ongoing_restraint_other
+      0x43: ongoing_restraint_unknown_reason
+      0x44: not_restraining
+      0x45: unknown
   - epc: 0xE0
     name: instantaneous_generation_watts
     help: "Measured instantaneous power generation in W."
@@ -16,3 +111,9 @@ metrics:
     size: 4
     scale: 0.001
     type: counter
+  - epc: 0xE8
+    name: rated_generation_output_watts
+    help: "Rated power generation output (system-interconnected)."
+    size: 0
+    scale: 1
+    type: gauge
