@@ -103,7 +103,13 @@ func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3
 	if eoj, ok := resolveEOJFromNodeProfile(client, dev, configured, hostEOJCache); ok {
 		return eoj
 	}
-	if probeEOJ(client, dev.IP, configured) {
+	ok, probeErr := probeEOJ(client, dev.IP, configured)
+	if ok {
+		return configured
+	}
+	if isProbeTimeout(probeErr) {
+		pollerLog.Warnf("device %s (%s): configured EOJ probe timed out; skipping instance sweep and keeping instance 0x%02x",
+			dev.Name, dev.IP, configured[2])
 		return configured
 	}
 	for inst := byte(0x01); inst <= 0x0F; inst++ {
@@ -112,7 +118,13 @@ func resolveEOJInstance(client *echonet.Client, dev config.Device, configured [3
 		}
 		candidate := configured
 		candidate[2] = inst
-		if !probeEOJ(client, dev.IP, candidate) {
+		ok, err := probeEOJ(client, dev.IP, candidate)
+		if !ok {
+			if isProbeTimeout(err) {
+				pollerLog.Warnf("device %s (%s): EOJ instance sweep timed out at instance 0x%02x; keeping configured instance 0x%02x",
+					dev.Name, dev.IP, inst, configured[2])
+				return configured
+			}
 			continue
 		}
 		pollerLog.Warnf("device %s (%s): configured EOJ instance 0x%02x not responsive, using discovered instance 0x%02x",
@@ -193,9 +205,20 @@ func formatEOJList(eojs [][3]byte) string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
-func probeEOJ(client *echonet.Client, ip string, eoj [3]byte) bool {
+func probeEOJ(client *echonet.Client, ip string, eoj [3]byte) (bool, error) {
 	props, err := client.GetProps(ip, eoj, []byte{0x80})
-	return err == nil && len(props) > 0
+	if err != nil {
+		return false, err
+	}
+	return len(props) > 0, nil
+}
+
+func isProbeTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "i/o timeout") || strings.Contains(msg, "timeout")
 }
 
 func filterMetricsByReadableMap(metrics []specs.MetricSpec, readable map[byte]struct{}) ([]specs.MetricSpec, []byte) {
