@@ -271,7 +271,7 @@ func (c *Cache) scrapeOnce(client *echonet.Client, dev config.Device, eoj [3]byt
 	durationSec := time.Since(start).Seconds()
 	if err != nil {
 		pollerLog.Errorf("scrape %s (%s): %v", dev.Name, dev.IP, err)
-		c.Update(dev, groupID, interval, false, durationSec, nil)
+		c.Update(dev, groupID, interval, false, durationSec, nil, err.Error())
 		return
 	}
 	out := echonet.ParsePropsToMetrics(props, metrics)
@@ -279,7 +279,7 @@ func (c *Cache) scrapeOnce(client *echonet.Client, dev config.Device, eoj [3]byt
 		pollerLog.Warnf("device %s (%s): parsed %d/%d metrics for group %s; missing=%v",
 			dev.Name, dev.IP, len(out), len(metrics), groupID, missingMetricNames(metrics, out))
 	}
-	c.Update(dev, groupID, interval, true, durationSec, out)
+	c.Update(dev, groupID, interval, true, durationSec, out, "")
 }
 
 func missingMetricNames(metrics []specs.MetricSpec, out map[string]echonet.MetricValue) []string {
