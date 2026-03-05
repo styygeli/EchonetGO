@@ -90,12 +90,14 @@ metrics:
     size: 0
     scale: 1
     type: gauge
+    scrape_interval: 10m
   - epc: 0xA7
     name: discharge_lower_limit_setting
     help: "AC discharge lower limit setting."
     size: 0
     scale: 1
     type: gauge
+    scrape_interval: 10m
   - epc: 0xA8
     name: cumulative_charge_wh
     help: "Cumulative AC charge amount in Wh."
@@ -116,6 +118,7 @@ metrics:
     size: 0
     scale: 1
     type: gauge
+    scrape_interval: 10m
   - epc: 0xAB
     name: discharge_amount_setting_value
     help: "AC discharge amount setting value."
@@ -128,6 +131,7 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
     enum:
       0x00: other
       0x01: maximum
@@ -140,6 +144,7 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
     enum:
       0x00: other
       0x01: maximum
@@ -152,6 +157,7 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
     enum:
       0x40: other
       0x41: rapid_charging
@@ -168,6 +174,7 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
     enum:
       0x40: other
       0x41: rapid_charging
@@ -184,6 +191,7 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
     enum:
       0x00: reverse_power_flow_acceptable
       0x01: independent
@@ -200,6 +208,7 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
     enum:
       0x00: unknown
       0x01: lead
