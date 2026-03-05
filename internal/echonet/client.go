@@ -30,6 +30,7 @@ const (
 	seojInstance          = 0x01
 	minResponseLen        = 12
 	maxAdaptiveSplitDepth = 8
+	maxSendAttempts       = 2
 )
 
 var clientLog = logging.New("echonet-client")
@@ -98,7 +99,7 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		host = net.JoinHostPort(addr, fmt.Sprint(echonetPort))
 	}
-	resp, err := c.sendGetFromPort(host, req, tid, hostKey, echonetPort)
+	resp, err := c.sendGetWithFixedPort(host, req, tid, hostKey, echonetPort)
 	if err == nil {
 		return resp, nil
 	}
@@ -119,6 +120,23 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 			echonetPort, err, fallbackErr)
 	}
 	return resp, nil
+}
+
+func (c *Client) sendGetWithFixedPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
+	var lastErr error
+	for attempt := 1; attempt <= maxSendAttempts; attempt++ {
+		resp, err := c.sendGetFromPort(host, req, tid, hostKey, localPort)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		if !isTimeoutError(err) || attempt == maxSendAttempts {
+			return nil, err
+		}
+		clientLog.Warnf("timeout waiting for response from %s via local UDP port %d (attempt %d/%d), retrying",
+			hostKey, localPort, attempt, maxSendAttempts)
+	}
+	return nil, lastErr
 }
 
 func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
@@ -185,6 +203,17 @@ func isPortBindFailure(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "address already in use") || strings.Contains(msg, "permission denied")
+}
+
+func isTimeoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "i/o timeout")
 }
 
 func normalizeHost(addr string) string {
