@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- Enable `host_network` for reliable ECHONET Lite UDP communication with LAN/IoT devices.
+- Remove explicit port mapping and rely on host networking.
+
 ## 0.1.1
 
 - Fix Home Assistant add-on build context compatibility.
