@@ -1,0 +1,199 @@
+# Auto-generated from pychonet class HotWaterGenerator.
+eoj: [0x02, 0x72, 0x01]
+description: "Hot water generator"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0x90
+    name: on_timer_reservation_setting
+    help: "ON timer reservation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xd0
+    name: hot_water_heating_status
+    help: "Hot water heating status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: heating
+      0x42: not_heating
+  - epc: 0xd1
+    name: set_value_of_hot_water_temperature
+    help: "Set value of hot water temperature"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd2
+    name: hot_water_warmer_setting
+    help: "Hot water warmer setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: hot_water_warmer_operation
+      0x42: hot_water_warmer_operation_resetting
+  - epc: 0xd4
+    name: bath_hot_water_volume_setting_4
+    help: "Bath hot water volume setting 4"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd5
+    name: bath_hot_water_volume_setting_4_maximum_settable_level
+    help: "Bath hot water volume setting 4 - Maximum settable level"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd6
+    name: volume_setting
+    help: "Volume setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd7
+    name: mute_setting
+    help: "Mute setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xe1
+    name: set_value_of_bath_temperature
+    help: "Set value of bath temperature"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: bath_water_heater_status
+    help: "Bath water heater status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: heating
+      0x42: not_heating
+  - epc: 0xe3
+    name: bath_auto_mode_setting
+    help: "Bath auto mode setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe4
+    name: bath_additional_boil_up_operation_setting
+    help: "Bath additional boil-up operation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe5
+    name: bath_hot_water_adding_operation_setting
+    help: "Bath hot water adding operation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe6
+    name: bath_water_temperature_lowering_operation_setting
+    help: "Bath water temperature lowering operation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe7
+    name: bath_hot_water_volume_setting_1
+    help: "Bath hot water volume setting 1"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe8
+    name: bath_hot_water_volume_setting_2
+    help: "Bath hot water volume setting 2"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x31: level_1
+      0x32: level_2
+      0x33: level_3
+      0x34: level_4
+      0x35: level_5
+      0x36: level_6
+      0x37: level_7
+      0x38: level_8
+  - epc: 0xe9
+    name: bathroom_priority_setting
+    help: "Bathroom priority setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xea
+    name: shower_hot_water_supply_status
+    help: "Shower hot water supply status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xeb
+    name: kitchen_hot_water_supply_status
+    help: "Kitchen hot water supply status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xec
+    name: hot_water_warmer_on_timer_reservation_setting
+    help: "Hot water warmer ON timer reservation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xee
+    name: bath_hot_water_volume_setting_3
+    help: "Bath hot water volume setting 3"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xef
+    name: bath_operation_status_monitor
+    help: "Bath operation status monitor"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: supplying_hot_water
+      0x42: stopped
+      0x43: keeping_bath_temperature

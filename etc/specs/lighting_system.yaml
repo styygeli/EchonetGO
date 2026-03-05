@@ -1,0 +1,33 @@
+# Auto-generated from pychonet class LightingSystem.
+eoj: [0x02, 0xa3, 0x01]
+description: "Lighting system"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xb0
+    name: illuminance_level_setting
+    help: "Illuminance level setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc0
+    name: scene_control_setting
+    help: "Scene control setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc1
+    name: max_scene_control_setting
+    help: "Max scene control setting"
+    size: 0
+    scale: 1
+    type: gauge

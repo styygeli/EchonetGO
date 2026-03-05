@@ -1,0 +1,161 @@
+# Auto-generated from pychonet class ElectricCurtain.
+eoj: [0x02, 0x62, 0x01]
+description: "Electrically operated curtain"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: epc_80
+    help: "EPC 0x80"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xc2
+    name: epc_c2
+    help: "EPC 0xC2"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: yes
+      0x42: no
+  - epc: 0xc3
+    name: epc_c3
+    help: "EPC 0xC3"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: yes
+      0x42: no
+  - epc: 0xd0
+    name: epc_d0
+    help: "EPC 0xD0"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xd1
+    name: epc_d1
+    help: "EPC 0xD1"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xd2
+    name: epc_d2
+    help: "EPC 0xD2"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd4
+    name: epc_d4
+    help: "EPC 0xD4"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe0
+    name: epc_e0
+    help: "EPC 0xE0"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe1
+    name: epc_e1
+    help: "EPC 0xE1"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: epc_e2
+    help: "EPC 0xE2"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe3
+    name: epc_e3
+    help: "EPC 0xE3"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xe5
+    name: epc_e5
+    help: "EPC 0xE5"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: locked
+      0x42: unlocked
+  - epc: 0xe8
+    name: epc_e8
+    help: "EPC 0xE8"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe9
+    name: epc_e9
+    help: "EPC 0xE9"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: degree_of_setting_position_open
+      0x42: operation_time_setting_value_open
+      0x43: operation_time_setting_value_close
+      0x44: local_setting_position
+      0x45: user_setting_1
+      0x46: user_setting_2
+      0x47: user_setting_3
+      0x48: user_setting_4
+      0x49: user_setting_5
+      0x4a: user_setting_6
+      0x4b: user_setting_7
+      0x4c: user_setting_8
+      0x4d: user_setting_9
+      0x4e: user_setting_10
+  - epc: 0xea
+    name: epc_ea
+    help: "EPC 0xEA"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xee
+    name: epc_ee
+    help: "EPC 0xEE"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xef
+    name: epc_ef
+    help: "EPC 0xEF"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high

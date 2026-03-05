@@ -1,0 +1,45 @@
+# Auto-generated from pychonet class ActivityAmountSensor.
+eoj: [0x00, 0x1d, 0x01]
+description: "VOC sensor"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xb0
+    name: detection_threshold_level
+    help: "Detection threshold level"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x31: level_1
+      0x32: level_2
+      0x33: level_3
+      0x34: level_4
+      0x35: level_5
+      0x36: level_6
+      0x37: level_7
+      0x38: level_8
+  - epc: 0xb1
+    name: voc_detection_status
+    help: "VOC detection status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: active
+      0x42: inactive
+  - epc: 0xe0
+    name: measured_value_of_voc_concentration
+    help: "Measured value of VOC concentration"
+    size: 0
+    scale: 1
+    type: gauge

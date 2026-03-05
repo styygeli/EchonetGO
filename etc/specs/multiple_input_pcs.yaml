@@ -1,0 +1,35 @@
+# Auto-generated from pychonet class MultipleInputPCS.
+eoj: [0x02, 0xa5, 0x01]
+description: "Multiple Input PCS"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0xd0
+    name: grid_connection_status
+    help: "Grid connection status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x00: system_interconnected_reverse_power_flow_acceptable
+      0x01: output_during_a_power_outage
+      0x02: system_interconnected_reverse_power_flow_not_acceptable
+  - epc: 0xe0
+    name: measured_cumulative_amount_of_electric_energy_normal_direction
+    help: "Measured cumulative amount of electric energy (normal direction)"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe3
+    name: measured_cumulative_amount_of_electric_energy_reverse_direction
+    help: "Measured cumulative amount of electric energy (reverse direction)"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe7
+    name: measured_instantaneous_amount_of_electricity
+    help: "Measured instantaneous amount of electricity"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge

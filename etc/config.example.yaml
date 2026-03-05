@@ -1,0 +1,25 @@
+# EchonetGO configuration example.
+# Copy to etc/config.yaml or set ECHONET_CONFIG to your file path.
+#
+# Environment variables override file values:
+#   ECHONET_LISTEN_ADDR, ECHONET_SCRAPE_TIMEOUT_SEC,
+#   ECHONET_DEVICES_PATH, ECHONET_SPECS_DIR, ECHONET_DEVICES (JSON)
+
+listen_addr: ":9191"
+scrape_timeout_sec: 15
+
+# Path to devices list (YAML or JSON). Optional if devices are listed below or in ECHONET_DEVICES.
+devices_path: "etc/devices.yaml"
+
+# Directory of device class specs (one .yaml per class). Default: etc/specs
+specs_dir: "etc/specs"
+
+# Optional: define devices inline instead of devices_path
+# devices:
+#   - name: epcube_battery
+#     ip: 192.168.1.10
+#     class: storage_battery
+#     scrape_interval: 2m
+#   - name: living_ac
+#     ip: 192.168.1.20
+#     class: home_ac

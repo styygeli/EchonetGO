@@ -1,0 +1,161 @@
+# Auto-generated from pychonet class ElectricRainSlidingDoor.
+eoj: [0x02, 0x63, 0x01]
+description: "Electrically operated rain sliding door/shutter"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xc2
+    name: epc_c2
+    help: "EPC 0xC2"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: yes
+      0x42: no
+  - epc: 0xc3
+    name: epc_c3
+    help: "EPC 0xC3"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: yes
+      0x42: no
+  - epc: 0xd0
+    name: opening_speed_setting
+    help: "Opening speed setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xd1
+    name: closing_speed_setting
+    help: "Closing speed setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xd2
+    name: operation_time
+    help: "Operation time"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd4
+    name: epc_d4
+    help: "EPC 0xD4"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe0
+    name: open_close_operation_setting
+    help: "Open/close operation setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe1
+    name: degree_of_opening_setting
+    help: "Degree-of-opening setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: blind_angle_setting
+    help: "Blind angle setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe3
+    name: opening_closing
+    help: "Opening/closing"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xe5
+    name: electric_lock_setting
+    help: "Electric lock setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: locked
+      0x42: unlocked
+  - epc: 0xe8
+    name: remote_operation_setting_status
+    help: "Remote operation setting status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe9
+    name: selective_degree_of_opening_setting
+    help: "Selective degree-of-opening setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: degree_of_setting_position_open
+      0x42: operation_time_setting_value_open
+      0x43: operation_time_setting_value_close
+      0x44: local_setting_position
+      0x45: user_setting_1
+      0x46: user_setting_2
+      0x47: user_setting_3
+      0x48: user_setting_4
+      0x49: user_setting_5
+      0x4a: user_setting_6
+      0x4b: user_setting_7
+      0x4c: user_setting_8
+      0x4d: user_setting_9
+      0x4e: user_setting_10
+  - epc: 0xea
+    name: open_closed_status
+    help: "Open/closed status"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xee
+    name: one_time_opening_speed_setting
+    help: "One-time opening speed setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high
+  - epc: 0xef
+    name: one_time_closing_speed_setting
+    help: "One-time closing speed setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: low
+      0x42: medium
+      0x43: high

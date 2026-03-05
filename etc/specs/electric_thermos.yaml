@@ -1,0 +1,76 @@
+# Auto-generated from pychonet class ElectricThermos.
+eoj: [0x03, 0xb2, 0x01]
+description: "Electric hot water pot (Electric thermos)"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xb0
+    name: cover_open_close_status
+    help: "Cover open/close status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: cover_open
+      0x42: cover_closed
+  - epc: 0xb1
+    name: no_water_warning
+    help: "No-water warning"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x40: no_water_condition_not_found
+      0x41: no_water_condition_found
+  - epc: 0xb2
+    name: boil_up_setting
+    help: "Boil-up setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: boil_up_start
+      0x42: boil_up_stop_warmer
+  - epc: 0xe0
+    name: boil_up_warmer_mode_setting
+    help: "Boil-up/warmer mode setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: citric_acid_cleaning
+      0x42: normal_warmer
+      0x43: power_saving_warmer
+  - epc: 0xe1
+    name: set_value_of_warmer_temperature
+    help: "Set value of warmer temperature"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: hot_water_discharge_status
+    help: "Hot water discharge status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: hot_water_discharged
+      0x42: hot_water_not_discharged
+  - epc: 0xe3
+    name: lock_status
+    help: "Lock status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: locked
+      0x42: unlocked

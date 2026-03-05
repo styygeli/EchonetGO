@@ -1,0 +1,47 @@
+# Auto-generated from pychonet class FlameSensor.
+eoj: [0x00, 0x21, 0x01]
+description: "Flame sensor"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xb0
+    name: detection_threshold_level
+    help: "Detection threshold level"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x31: level_1
+      0x32: level_2
+      0x33: level_3
+      0x34: level_4
+      0x35: level_5
+      0x36: level_6
+      0x37: level_7
+      0x38: level_8
+  - epc: 0xb1
+    name: flame_detection_status
+    help: "Flame detection status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: found
+      0x42: not_found
+  - epc: 0xbf
+    name: flame_detection_status_resetting
+    help: "Flame detection status resetting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x00: reset

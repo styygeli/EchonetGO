@@ -1,0 +1,116 @@
+# Auto-generated from pychonet class FloorHeater.
+eoj: [0x02, 0x7b, 0x01]
+description: "Floor heater"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0x84
+    name: measured_instantaneous_power_consumption
+    help: "Measured instantaneous power consumption"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0x85
+    name: measured_cumulative_electric_energy_consumption
+    help: "Measured cumulative electric energy consumption"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0x90
+    name: on_timer_reservation_setting
+    help: "ON timer reservation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0x94
+    name: off_timer_reservation_setting
+    help: "OFF timer reservation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xd1
+    name: temperature_setting_2_maximum_settable_level
+    help: "Temperature setting 2 – Maximum settable level"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe0
+    name: temperature_setting_1
+    help: "Temperature setting 1"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe1
+    name: temperature_setting_2
+    help: "Temperature setting 2"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: measured_room_temperature
+    help: "Measured room temperature"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xe3
+    name: measured_floor_temperature
+    help: "Measured floor temperature"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xe5
+    name: special_operation_setting
+    help: "Special operation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: normal
+      0x42: modest
+      0x43: high_power
+  - epc: 0xe6
+    name: daily_timer_setting
+    help: "Daily timer setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x40: timer_off
+      0x41: timer_1
+      0x42: timer_2
+  - epc: 0xe9
+    name: rated_power_consumption
+    help: "Rated power consumption"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xea
+    name: power_consumption_measurement_method
+    help: "Power consumption measurement method"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: node_unit
+      0x42: class_unit
+      0x43: instance_unit

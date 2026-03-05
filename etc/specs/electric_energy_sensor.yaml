@@ -1,0 +1,51 @@
+# Auto-generated from pychonet class ElectricEnergySensor.
+eoj: [0x00, 0x22, 0x01]
+description: "Electric energy sensor"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xe0
+    name: cumulative_amounts_of_electric_energy
+    help: "Cumulative amounts of electric energy"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe1
+    name: medium_capacity_sensor_instantaneous_electric_energy
+    help: "Medium-capacity sensor instantaneous electric energy"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: small_capacity_sensor_instantaneous_electric_energy
+    help: "Small-capacity sensor instantaneous electric energy"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe3
+    name: large_capacity_sensor_instantaneous_electric_energy
+    help: "Large-capacity sensor instantaneous electric energy"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe4
+    name: cumulative_amounts_of_electric_energy_measurement_log
+    help: "Cumulative amounts of electric energy measurement log"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe5
+    name: effective_voltage_value
+    help: "Effective voltage value"
+    size: 0
+    scale: 1
+    type: gauge

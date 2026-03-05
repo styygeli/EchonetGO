@@ -1,0 +1,159 @@
+# Auto-generated from pychonet class ElectricVehicleCharger.
+eoj: [0x02, 0xa1, 0x01]
+description: "ElectricVehicleCharger"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: epc_80
+    help: "EPC 0x80"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xc5
+    name: epc_c5
+    help: "EPC 0xC5"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xc7
+    name: epc_c7
+    help: "EPC 0xC7"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: vehicle_not_connected
+      0x40: connected_to_vehicle_not_chargeable
+      0x41: connected_to_vehicle_chargeable
+      0x44: connected_to_vehicle_chargeable_status_unknown
+      0xff: undetermined
+  - epc: 0xc8
+    name: epc_c8
+    help: "EPC 0xC8"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xca
+    name: epc_ca
+    help: "EPC 0xCA"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xcc
+    name: epc_cc
+    help: "EPC 0xCC"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x10: ac_no_communication
+      0x11: ac_cplt
+      0x12: ac_hlc_charging_only
+      0x21: dc_type_aa_charging_only
+      0x31: dc_type_bb_charging_only
+      0x41: dc_type_ee_charging_only
+      0x51: dc_type_ff_charging_only
+  - epc: 0xcd
+    name: epc_cd
+    help: "EPC 0xCD"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x10: connection_confirmation
+  - epc: 0xce
+    name: epc_ce
+    help: "EPC 0xCE"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xcf
+    name: epc_cf
+    help: "EPC 0xCF"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd0
+    name: epc_d0
+    help: "EPC 0xD0"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd2
+    name: epc_d2
+    help: "EPC 0xD2"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd3
+    name: epc_d3
+    help: "EPC 0xD3"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xd8
+    name: epc_d8
+    help: "EPC 0xD8"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xd9
+    name: epc_d9
+    help: "EPC 0xD9"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x00: reset
+  - epc: 0xda
+    name: epc_da
+    help: "EPC 0xDA"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x40: other
+      0x42: charging
+      0x44: standby
+      0x47: idle
+  - epc: 0xe2
+    name: epc_e2
+    help: "EPC 0xE2"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe4
+    name: epc_e4
+    help: "EPC 0xE4"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe6
+    name: epc_e6
+    help: "EPC 0xE6"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe7
+    name: epc_e7
+    help: "EPC 0xE7"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xeb
+    name: epc_eb
+    help: "EPC 0xEB"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xed
+    name: epc_ed
+    help: "EPC 0xED"
+    size: 0
+    scale: 1
+    type: gauge

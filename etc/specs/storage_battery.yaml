@@ -1,0 +1,67 @@
+# Storage Battery (EP Cube, etc.) - ECHONET Object 0x027D01
+eoj: [0x02, 0x7D, 0x01]
+description: "EP Cube / storage battery"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0xE4
+    name: state_of_capacity_percent
+    help: "Battery state of charge (0-100%)."
+    size: 1
+    scale: 1
+    type: gauge
+  - epc: 0xE7
+    name: charge_discharge_power_watts
+    help: "Instantaneous charge (+) or discharge (-) power in watts."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE2
+    name: remaining_capacity_wh
+    help: "Remaining stored electricity in Wh."
+    size: 4
+    scale: 1
+    type: gauge
+  - epc: 0xA2
+    name: chargeable_capacity_wh
+    help: "AC chargeable capacity in Wh."
+    size: 4
+    scale: 1
+    type: gauge
+  - epc: 0xA3
+    name: dischargeable_capacity_wh
+    help: "AC dischargeable capacity in Wh."
+    size: 4
+    scale: 1
+    type: gauge
+  - epc: 0xA8
+    name: cumulative_charge_wh
+    help: "Cumulative AC charge amount in Wh."
+    size: 4
+    scale: 1
+    type: counter
+    scrape_interval: 5m
+  - epc: 0xA9
+    name: cumulative_discharge_wh
+    help: "Cumulative AC discharge amount in Wh."
+    size: 4
+    scale: 1
+    type: counter
+    scrape_interval: 5m
+  - epc: 0xCF
+    name: working_operation_state
+    help: "Working operation: 0x42=Charging, 0x43=Discharging, 0x44=Standby."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x40: other
+      0x41: rapid_charging
+      0x42: charging
+      0x43: discharging
+      0x44: standby
+      0x45: test
+      0x46: auto
+      0x48: restart
+      0x49: capacity_recalculation

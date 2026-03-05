@@ -1,0 +1,67 @@
+# Auto-generated from pychonet class HomeAirCleaner.
+eoj: [0x01, 0x35, 0x01]
+description: "Air cleaner"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xa0
+    name: air_flow_rate_setting
+    help: "Air flow rate setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x31: minimum
+      0x32: low
+      0x33: medium_low
+      0x34: medium
+      0x35: medium_high
+      0x36: high
+      0x37: very_high
+      0x38: max
+      0x41: auto
+  - epc: 0xc0
+    name: air_pollution_detection_status
+    help: "Air pollution detection status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: pollution
+      0x42: fresh
+  - epc: 0xc1
+    name: smoke_cigarette_detection_status
+    help: "Smoke (cigarette) detection status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: yes
+      0x42: no
+  - epc: 0xc2
+    name: optical_catalyst_operation_setting
+    help: "Optical catalyst operation setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xe1
+    name: filter_change_notice
+    help: "Filter change notice"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: yes
+      0x42: no

@@ -1,0 +1,265 @@
+# Auto-generated from pychonet class Refrigerator.
+eoj: [0x03, 0xb7, 0x01]
+description: "Refrigerator"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xa0
+    name: quick_freeze_function_setting
+    help: "Quick freeze function setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: normal
+      0x42: quick
+      0x43: standby
+  - epc: 0xa1
+    name: quick_refrigeration_function_setting
+    help: "Quick refrigeration function setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: normal
+      0x42: quick
+      0x43: standby
+  - epc: 0xa4
+    name: icemaker_setting
+    help: "Icemaker setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: enabled
+      0x42: disabled
+      0x43: temporarily_disabled
+  - epc: 0xa5
+    name: icemaker_operation_status
+    help: "Icemaker operation status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: enabled
+      0x42: disabled
+  - epc: 0xa6
+    name: icemaker_tank_status
+    help: "Icemaker tank status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: not_empty
+      0x42: empty
+  - epc: 0xa8
+    name: refrigerator_compartment_humidification_function_setting
+    help: "Refrigerator compartment humidification function setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xa9
+    name: vegetable_compartment_humidification_function_setting
+    help: "Vegetable compartment humidification function setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xad
+    name: deodorization_function_setting
+    help: "Deodorization function setting"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: on
+      0x42: off
+  - epc: 0xb0
+    name: door_open_close_status
+    help: "Door open/close status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: open
+      0x42: closed
+  - epc: 0xb1
+    name: door_open_warning
+    help: "Door open warning"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: yes
+      0x42: no
+  - epc: 0xb2
+    name: refrigerator_compartment_door_status
+    help: "Refrigerator compartment door status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: open
+      0x42: closed
+  - epc: 0xb3
+    name: freezer_compartment_door_status
+    help: "Freezer compartment door status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: open
+      0x42: closed
+  - epc: 0xb4
+    name: ice_compartment_door_status
+    help: "Ice compartment door status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: open
+      0x42: closed
+  - epc: 0xb5
+    name: vegetable_compartment_door_status
+    help: "Vegetable compartment door status"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: open
+      0x42: closed
+  - epc: 0xb6
+    name: multi_refrigera_ting_mode_compartment_door
+    help: "Multi-refrigera-ting mode compartment door"
+    size: 0
+    scale: 1
+    type: gauge
+    enum:
+      0x41: open
+      0x42: closed
+  - epc: 0xd1
+    name: measured_refrigerator_compartment_temperature
+    help: "Measured refrigerator compartment temperature"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xd2
+    name: measured_freezer_compartment_temperature
+    help: "Measured freezer compartment temperature"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xd3
+    name: measured_subzero_fresh_compartment_temperature
+    help: "Measured subzero-fresh compartment temperature"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xd4
+    name: measured_vegetable_compartment_temperature
+    help: "Measured vegetable compartment temperature"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xd5
+    name: measured_multi_refrigeratin_g_mode_compartment_temperature
+    help: "Measured multi-refrigeratin g mode compartment temperature"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xda
+    name: measured_electric_current_consumption
+    help: "Measured electric current consumption"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xdc
+    name: rated_power_consumption
+    help: "Rated power consumption"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xe2
+    name: refrigerator_compartment_temperature_setting
+    help: "Refrigerator compartment temperature setting"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xe3
+    name: freezer_compartment_temperature_setting
+    help: "Freezer compartment temperature setting"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xe4
+    name: ice_temperature_setting
+    help: "Ice temperature setting"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xe5
+    name: vegetable_compartment_temperature_setting
+    help: "Vegetable compartment temperature setting"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xe6
+    name: multi_refrigera_ting_mode_compartment_temperature_setting
+    help: "Multi-refrigera-ting mode compartment temperature setting"
+    size: 0
+    scale: 1
+    signed: true
+    type: gauge
+  - epc: 0xe9
+    name: refrigerator_compartment_temperature_level_setting
+    help: "Refrigerator compartment temperature level setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xea
+    name: freezer_compartment_temperature_level_setting
+    help: "Freezer compartment temperature level setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xeb
+    name: ice_compartment_temperature_level_setting
+    help: "ice compartment temperature level setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xec
+    name: vegetable_compartment_temperature_level_setting
+    help: "Vegetable compartment temperature level setting"
+    size: 0
+    scale: 1
+    type: gauge
+  - epc: 0xed
+    name: multi_refrigera_ting_mode_compartment_temperature_level_setting
+    help: "Multi-refrigera-ting mode compartment temperature level setting"
+    size: 0
+    scale: 1
+    type: gauge
