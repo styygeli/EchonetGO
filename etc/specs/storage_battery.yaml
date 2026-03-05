@@ -28,13 +28,6 @@ metrics:
     size: 1
     scale: 1
     type: gauge
-  - epc: 0xE7
-    name: charge_discharge_power_watts
-    help: "Instantaneous charge (+) or discharge (-) power in watts."
-    size: 4
-    signed: true
-    scale: 1
-    type: gauge
   - epc: 0xD3
     name: measured_instantaneous_charge_discharge_raw
     help: "Measured instantaneous charging/discharging value (signed)."
@@ -63,41 +56,27 @@ metrics:
   - epc: 0xA0
     name: effective_capacity_charging_wh
     help: "AC effective capacity while charging."
-    size: 0
+    size: 4
     scale: 1
     type: gauge
   - epc: 0xA1
     name: effective_capacity_discharging_wh
     help: "AC effective capacity while discharging."
-    size: 0
+    size: 4
     scale: 1
     type: gauge
   - epc: 0xA4
-    name: chargeable_energy_wh
-    help: "AC chargeable electric energy."
-    size: 0
+    name: chargeable_amount_wh
+    help: "AC chargeable amount."
+    size: 4
     scale: 1
     type: gauge
   - epc: 0xA5
-    name: dischargeable_energy_wh
-    help: "AC dischargeable electric energy."
-    size: 0
+    name: dischargeable_amount_wh
+    help: "AC dischargeable amount."
+    size: 4
     scale: 1
     type: gauge
-  - epc: 0xA6
-    name: charge_upper_limit_setting
-    help: "AC charge upper limit setting."
-    size: 0
-    scale: 1
-    type: gauge
-    scrape_interval: 10m
-  - epc: 0xA7
-    name: discharge_lower_limit_setting
-    help: "AC discharge lower limit setting."
-    size: 0
-    scale: 1
-    type: gauge
-    scrape_interval: 10m
   - epc: 0xA8
     name: cumulative_charge_wh
     help: "Cumulative AC charge amount in Wh."
@@ -115,14 +94,14 @@ metrics:
   - epc: 0xAA
     name: charge_amount_setting_value
     help: "AC charge amount setting value."
-    size: 0
+    size: 4
     scale: 1
     type: gauge
     scrape_interval: 10m
   - epc: 0xAB
     name: discharge_amount_setting_value
     help: "AC discharge amount setting value."
-    size: 0
+    size: 4
     scale: 1
     type: gauge
   - epc: 0xC1
@@ -193,14 +172,14 @@ metrics:
     type: gauge
     scrape_interval: 10m
     enum:
-      0x00: reverse_power_flow_acceptable
+      0x00: connected
       0x01: independent
-      0x02: reverse_power_flow_not_acceptable
+      0x02: reverse_flow_not_accepted
   - epc: 0xE3
-    name: remaining_capacity_wh_alt
-    help: "Remaining stored electricity (alternate field)."
-    size: 0
-    scale: 1
+    name: remaining_capacity_ah
+    help: "Remaining stored electricity2 (unit: 0.1 Ah)."
+    size: 2
+    scale: 0.1
     type: gauge
   - epc: 0xE6
     name: battery_type
