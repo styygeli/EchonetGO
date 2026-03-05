@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Fix Home Assistant add-on build context compatibility.
+- Build the EchonetGO binary and bundled specs from the Git repository in Docker build stage.
+- Remove bashio dependency from `run.sh` and read `/data/options.json` with `jq`.
+
 ## 0.1.0 (initial)
 
 - Initial add-on release.

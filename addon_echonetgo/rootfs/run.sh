@@ -2,9 +2,19 @@
 # EchonetGO add-on entrypoint. Reads options from /data/options.json and runs the binary.
 set -e
 
-CONFIG_PATH=$(bashio::config "config_path")
-DEVICES_PATH=$(bashio::config "devices_path")
-LOG_LEVEL=$(bashio::config "log_level")
+# Defaults; may be overridden via /data/options.json.
+CONFIG_PATH="/config/echonetgo/config.yaml"
+DEVICES_PATH=""
+LOG_LEVEL="info"
+
+if [ -f /data/options.json ]; then
+  CONFIG_PATH=$(jq -r '.config_path // empty' /data/options.json 2>/dev/null || true)
+  DEVICES_PATH=$(jq -r '.devices_path // empty' /data/options.json 2>/dev/null || true)
+  LOG_LEVEL=$(jq -r '.log_level // "info"' /data/options.json 2>/dev/null || echo "info")
+fi
+
+[ -n "${CONFIG_PATH}" ] || CONFIG_PATH="/config/echonetgo/config.yaml"
+[ -n "${LOG_LEVEL}" ] || LOG_LEVEL="info"
 
 export ECHONET_CONFIG="${CONFIG_PATH}"
 export ECHONET_LOG_LEVEL="${LOG_LEVEL:-info}"
