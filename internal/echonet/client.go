@@ -166,7 +166,7 @@ func (c *Client) sendGetWithFixedPort(ctx context.Context, host string, req []by
 }
 
 func (c *Client) sendGetFromPort(ctx context.Context, host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
-	remoteAddr, err := net.ResolveUDPAddr("udp", host)
+	remoteAddr, err := net.ResolveUDPAddr("udp4", host)
 	if err != nil {
 		return nil, err
 	}
