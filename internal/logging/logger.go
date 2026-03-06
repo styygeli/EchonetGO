@@ -25,7 +25,6 @@ var globalLevel atomic.Int32
 
 func init() {
 	globalLevel.Store(int32(LevelInfo))
-	SetLevelFromEnv()
 }
 
 // Logger is a leveled logger for a component.

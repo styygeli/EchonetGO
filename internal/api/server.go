@@ -26,13 +26,6 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// ListenAndServe starts the HTTP server. It blocks until the server is shut down.
-func (s *Server) ListenAndServe() error {
-	srv := &http.Server{Addr: s.ListenAddr, Handler: s.Handler()}
-	log.Infof("API listening on %s", s.ListenAddr)
-	return srv.ListenAndServe()
-}
-
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.WriteHeader(http.StatusMethodNotAllowed)

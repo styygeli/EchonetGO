@@ -57,6 +57,9 @@ func Load() (*Config, error) {
 	cfg.ConfigPath = configPath
 
 	data, err := os.ReadFile(configPath)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, fmt.Errorf("read config %s: %w", configPath, err)
+	}
 	if err == nil {
 		var fc fileConfig
 		if err := yaml.Unmarshal(data, &fc); err != nil {

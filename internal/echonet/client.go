@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -37,6 +38,7 @@ const (
 var clientLog = logging.New("echonet-client")
 
 var (
+	tidCounter        atomic.Uint32
 	sharedHostLockMu  sync.Mutex
 	sharedHostLocks   = make(map[string]*sync.Mutex)
 	sharedFixedConnMu sync.Mutex
@@ -44,6 +46,10 @@ var (
 	sharedWaitersMu   sync.Mutex
 	sharedWaiters     = make(map[string]chan udpFrame)
 )
+
+func nextTID() uint16 {
+	return uint16(tidCounter.Add(1))
+}
 
 // Client sends ECHONET Lite Get requests over UDP and parses Get_Res.
 type Client struct {
@@ -54,6 +60,15 @@ type Client struct {
 type udpFrame struct {
 	from *net.UDPAddr
 	data []byte
+}
+
+// ESVError is returned when a response carries an unexpected service code.
+type ESVError struct {
+	ESV byte
+}
+
+func (e *ESVError) Error() string {
+	return fmt.Sprintf("not Get_Res: ESV=0x%02x", e.ESV)
 }
 
 // DeviceInfo represents generic identity properties of a device.
@@ -94,7 +109,7 @@ func GetRequest(tid uint16, eoj [3]byte, epcs []byte) []byte {
 }
 
 // SendGet sends a Get request to addr and returns the raw response.
-func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) {
+func (c *Client) SendGet(ctx context.Context, addr string, eoj [3]byte, epcs []byte) ([]byte, error) {
 	if len(epcs) == 0 {
 		return nil, fmt.Errorf("no EPCs")
 	}
@@ -103,13 +118,13 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 	hostLock.Lock()
 	defer hostLock.Unlock()
 
-	tid := uint16(time.Now().UnixNano() & 0xFFFF)
+	tid := nextTID()
 	req := GetRequest(tid, eoj, epcs)
 	host := addr
 	if _, _, err := net.SplitHostPort(addr); err != nil {
 		host = net.JoinHostPort(addr, fmt.Sprint(echonetPort))
 	}
-	resp, err := c.sendGetWithFixedPort(host, req, tid, hostKey, echonetPort)
+	resp, err := c.sendGetWithFixedPort(ctx, host, req, tid, hostKey, echonetPort)
 	if err == nil {
 		return resp, nil
 	}
@@ -117,14 +132,12 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 		return nil, fmt.Errorf("failed to send request from required local UDP source port %d to %s: %w",
 			echonetPort, hostKey, err)
 	}
-	// Match pychonet behavior first (source UDP 3610). If unavailable, gracefully
-	// fall back to ephemeral source ports to avoid hard failure.
 	if !isPortBindFailure(err) {
 		return nil, err
 	}
 	clientLog.Warnf("failed to bind local UDP port %d for %s; falling back to ephemeral source port: %v",
 		echonetPort, hostKey, err)
-	resp, fallbackErr := c.sendGetEphemeral(host, req, tid, hostKey)
+	resp, fallbackErr := c.sendGetEphemeral(ctx, host, req, tid, hostKey)
 	if fallbackErr != nil {
 		return nil, fmt.Errorf("failed local UDP source port %d (%v), ephemeral fallback also failed: %w",
 			echonetPort, err, fallbackErr)
@@ -132,10 +145,13 @@ func (c *Client) SendGet(addr string, eoj [3]byte, epcs []byte) ([]byte, error) 
 	return resp, nil
 }
 
-func (c *Client) sendGetWithFixedPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
+func (c *Client) sendGetWithFixedPort(ctx context.Context, host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
 	var lastErr error
 	for attempt := 1; attempt <= maxSendAttempts; attempt++ {
-		resp, err := c.sendGetFromPort(host, req, tid, hostKey, localPort)
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		resp, err := c.sendGetFromPort(ctx, host, req, tid, hostKey, localPort)
 		if err == nil {
 			return resp, nil
 		}
@@ -149,28 +165,32 @@ func (c *Client) sendGetWithFixedPort(host string, req []byte, tid uint16, hostK
 	return nil, lastErr
 }
 
-func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
+func (c *Client) sendGetFromPort(ctx context.Context, host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
 	remoteAddr, err := net.ResolveUDPAddr("udp", host)
 	if err != nil {
 		return nil, err
 	}
 	if localPort == echonetPort {
-		return c.sendGetViaSharedFixedPort(remoteAddr, req, tid, hostKey)
+		return sendGetViaSharedFixedPort(ctx, remoteAddr, req, tid, hostKey, c.timeout)
 	}
-	conn, err := c.openUDPConn(localPort)
+	conn, err := openUDPConn(localPort)
 	if err != nil {
 		return nil, err
 	}
 	defer conn.Close()
-	return c.writeAndRead(conn, remoteAddr, req, tid, hostKey)
+	return writeAndRead(ctx, conn, remoteAddr, req, tid, hostKey, c.timeout)
 }
 
-func (c *Client) sendGetEphemeral(host string, req []byte, tid uint16, hostKey string) ([]byte, error) {
-	return c.sendGetFromPort(host, req, tid, hostKey, 0)
+func (c *Client) sendGetEphemeral(ctx context.Context, host string, req []byte, tid uint16, hostKey string) ([]byte, error) {
+	return c.sendGetFromPort(ctx, host, req, tid, hostKey, 0)
 }
 
-func (c *Client) writeAndRead(conn *net.UDPConn, remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string) ([]byte, error) {
-	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
+func writeAndRead(ctx context.Context, conn *net.UDPConn, remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string, timeout time.Duration) ([]byte, error) {
+	deadline := time.Now().Add(timeout)
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
 		return nil, err
 	}
 	if _, err := conn.WriteToUDP(req, remoteAddr); err != nil {
@@ -178,6 +198,9 @@ func (c *Client) writeAndRead(conn *net.UDPConn, remoteAddr *net.UDPAddr, req []
 	}
 	buf := make([]byte, 1024)
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			return nil, err
@@ -201,21 +224,32 @@ func (c *Client) writeAndRead(conn *net.UDPConn, remoteAddr *net.UDPAddr, req []
 	}
 }
 
-func (c *Client) sendGetViaSharedFixedPort(remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string) ([]byte, error) {
-	conn, err := c.getOrCreateFixedConn()
+func sendGetViaSharedFixedPort(ctx context.Context, remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string, timeout time.Duration) ([]byte, error) {
+	conn, err := getOrCreateFixedConn()
 	if err != nil {
 		return nil, err
 	}
 	key := waiterKey(remoteAddr.IP.String(), tid)
 	respCh := make(chan udpFrame, 1)
-	c.addWaiter(key, respCh)
-	defer c.removeWaiter(key)
+	addWaiter(key, respCh)
+	defer removeWaiter(key)
 
-	if _, err := conn.WriteToUDP(req, remoteAddr); err != nil {
-		return nil, err
+	_, writeErr := conn.WriteToUDP(req, remoteAddr)
+	if writeErr != nil {
+		if !errors.Is(writeErr, net.ErrClosed) {
+			return nil, writeErr
+		}
+		resetFixedConn(conn)
+		conn, err = getOrCreateFixedConn()
+		if err != nil {
+			return nil, err
+		}
+		if _, writeErr = conn.WriteToUDP(req, remoteAddr); writeErr != nil {
+			return nil, writeErr
+		}
 	}
 
-	timer := time.NewTimer(c.timeout)
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case frame := <-respCh:
@@ -225,25 +259,27 @@ func (c *Client) sendGetViaSharedFixedPort(remoteAddr *net.UDPAddr, req []byte, 
 		return frame.data, nil
 	case <-timer.C:
 		return nil, fmt.Errorf("read udp %s->%s:%d: i/o timeout", conn.LocalAddr().String(), remoteAddr.IP.String(), remoteAddr.Port)
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
-func (c *Client) getOrCreateFixedConn() (*net.UDPConn, error) {
+func getOrCreateFixedConn() (*net.UDPConn, error) {
 	sharedFixedConnMu.Lock()
 	defer sharedFixedConnMu.Unlock()
 	if sharedFixedConn != nil {
 		return sharedFixedConn, nil
 	}
-	conn, err := c.openUDPConn(echonetPort)
+	conn, err := openUDPConn(echonetPort)
 	if err != nil {
 		return nil, err
 	}
 	sharedFixedConn = conn
-	go c.startFixedConnReceiver(conn)
+	go startFixedConnReceiver(conn)
 	return conn, nil
 }
 
-func (c *Client) startFixedConnReceiver(conn *net.UDPConn) {
+func startFixedConnReceiver(conn *net.UDPConn) {
 	buf := make([]byte, 2048)
 	for {
 		n, addr, err := conn.ReadFromUDP(buf)
@@ -282,17 +318,15 @@ func (c *Client) startFixedConnReceiver(conn *net.UDPConn) {
 		select {
 		case ch <- frame:
 		default:
-			// A timeout may have already happened; dropping is safe.
 		}
 	}
 }
 
-func (c *Client) openUDPConn(localPort int) (*net.UDPConn, error) {
+func openUDPConn(localPort int) (*net.UDPConn, error) {
 	lc := net.ListenConfig{
 		Control: func(network, address string, rawConn syscall.RawConn) error {
 			var sockErr error
 			if err := rawConn.Control(func(fd uintptr) {
-				// Match pychonet's UDP socket behavior to improve compatibility.
 				sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
 			}); err != nil {
 				return err
@@ -312,13 +346,22 @@ func (c *Client) openUDPConn(localPort int) (*net.UDPConn, error) {
 	return udpConn, nil
 }
 
-func (*Client) addWaiter(key string, ch chan udpFrame) {
+func resetFixedConn(old *net.UDPConn) {
+	sharedFixedConnMu.Lock()
+	defer sharedFixedConnMu.Unlock()
+	if sharedFixedConn == old {
+		_ = old.Close()
+		sharedFixedConn = nil
+	}
+}
+
+func addWaiter(key string, ch chan udpFrame) {
 	sharedWaitersMu.Lock()
 	sharedWaiters[key] = ch
 	sharedWaitersMu.Unlock()
 }
 
-func (*Client) removeWaiter(key string) {
+func removeWaiter(key string) {
 	sharedWaitersMu.Lock()
 	delete(sharedWaiters, key)
 	sharedWaitersMu.Unlock()
@@ -377,7 +420,7 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 	tid = binary.BigEndian.Uint16(data[2:4])
 	esv := data[10]
 	if esv != esvGetRes {
-		return 0, nil, fmt.Errorf("not Get_Res: ESV=%02x", esv)
+		return 0, nil, &ESVError{ESV: esv}
 	}
 	opc := int(data[11])
 	pos := 12
@@ -408,12 +451,12 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 }
 
 // GetProps fetches requested EPCs and adaptively splits when devices return partial responses.
-func (c *Client) GetProps(addr string, eoj [3]byte, epcs []byte) ([]model.GetResProperty, error) {
-	return c.getPropsAdaptive(addr, eoj, epcs, 0)
+func (c *Client) GetProps(ctx context.Context, addr string, eoj [3]byte, epcs []byte) ([]model.GetResProperty, error) {
+	return c.getPropsAdaptive(ctx, addr, eoj, epcs, 0)
 }
 
-func (c *Client) getPropsAdaptive(addr string, eoj [3]byte, epcs []byte, depth int) ([]model.GetResProperty, error) {
-	raw, err := c.SendGet(addr, eoj, epcs)
+func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte, epcs []byte, depth int) ([]model.GetResProperty, error) {
+	raw, err := c.SendGet(ctx, addr, eoj, epcs)
 	if err != nil {
 		return nil, err
 	}
@@ -441,7 +484,7 @@ func (c *Client) getPropsAdaptive(addr string, eoj [3]byte, epcs []byte, depth i
 		if len(part) == 0 || !containsAny(part, missing) {
 			continue
 		}
-		partProps, err := c.getPropsAdaptive(addr, eoj, part, depth+1)
+		partProps, err := c.getPropsAdaptive(ctx, addr, eoj, part, depth+1)
 		if err != nil {
 			clientLog.Warnf("split batch request failed for %s eoj=%s epcs=%s: %v", normalizeHost(addr), formatEOJ(eoj), formatEPCList(part), err)
 			continue
@@ -460,8 +503,8 @@ func (c *Client) getPropsAdaptive(addr string, eoj [3]byte, epcs []byte, depth i
 }
 
 // GetReadablePropertyMap reads EPC 0x9F and decodes readable properties.
-func (c *Client) GetReadablePropertyMap(addr string, eoj [3]byte) (map[byte]struct{}, error) {
-	props, err := c.GetProps(addr, eoj, []byte{0x9F})
+func (c *Client) GetReadablePropertyMap(ctx context.Context, addr string, eoj [3]byte) (map[byte]struct{}, error) {
+	props, err := c.GetProps(ctx, addr, eoj, []byte{0x9F})
 	if err != nil {
 		return nil, err
 	}
@@ -475,16 +518,14 @@ func (c *Client) GetReadablePropertyMap(addr string, eoj [3]byte) (map[byte]stru
 }
 
 // GetDeviceInfo reads generic identity properties.
-func (c *Client) GetDeviceInfo(addr string, eoj [3]byte) (DeviceInfo, error) {
+func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte) (DeviceInfo, error) {
 	nodeProfileEOJ := [3]byte{0x0E, 0xF0, 0x01}
-	props, err := c.GetProps(addr, eoj, []byte{0x83, 0x8A, 0x8C})
+	props, err := c.GetProps(ctx, addr, eoj, []byte{0x83, 0x8A, 0x8C})
 	if err != nil {
-		// Some devices reject identity properties on their class EOJ (Get_SNA / ESV 0x52)
-		// but expose them on the node profile object instead.
 		if isGetSNA(err) && eoj != nodeProfileEOJ {
 			clientLog.Debugf("device %s eoj=%s: identity Get returned Get_SNA; retrying via node profile",
 				normalizeHost(addr), formatEOJ(eoj))
-			props, err = c.GetProps(addr, nodeProfileEOJ, []byte{0x83, 0x8A, 0x8C})
+			props, err = c.GetProps(ctx, addr, nodeProfileEOJ, []byte{0x83, 0x8A, 0x8C})
 		}
 		if err != nil {
 			if isGetSNA(err) {
@@ -513,10 +554,8 @@ func (c *Client) GetDeviceInfo(addr string, eoj [3]byte) (DeviceInfo, error) {
 }
 
 func isGetSNA(err error) bool {
-	if err == nil {
-		return false
-	}
-	return strings.Contains(err.Error(), "ESV=52")
+	var esvErr *ESVError
+	return errors.As(err, &esvErr) && esvErr.ESV == 0x52
 }
 
 var manufacturerNames = map[uint32]string{
@@ -712,7 +751,6 @@ func parseInteger(raw []byte, signed bool) (*big.Int, error) {
 	if !signed {
 		return value, nil
 	}
-	// Two's-complement sign extension for arbitrary payload widths.
 	if raw[0]&0x80 == 0 {
 		return value, nil
 	}
