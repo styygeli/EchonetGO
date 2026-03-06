@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/styygeli/echonetgo/internal/config"
@@ -21,7 +22,7 @@ type deviceWithEOJ struct {
 }
 
 // Start begins background scrapers for all configured devices. Call with a context
-// that is cancelled on shutdown.
+// that is cancelled on shutdown. Init (probe + GETMAP) runs in parallel per host IP.
 func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec) {
 	client := echonet.NewClient(cfg.ScrapeTimeoutSec, cfg.StrictSourcePort3610)
 	probeTimeoutSec := cfg.ScrapeTimeoutSec
@@ -34,67 +35,87 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	probeClient := echonet.NewClient(probeTimeoutSec, cfg.StrictSourcePort3610)
 	hostEOJCache := make(map[string][][3]byte)
 	hostDevicePairs := make(map[string][]deviceWithEOJ)
+	var hostDevicePairsMu sync.Mutex
 
+	devicesByIP := make(map[string][]config.Device)
 	for _, dev := range cfg.Devices {
 		spec, ok := deviceSpecs[dev.Class]
 		if !ok || spec == nil {
 			pollerLog.Errorf("unknown class %q for device %s, skipping", dev.Class, dev.Name)
 			continue
 		}
-		activeEOJ := resolveEOJInstance(ctx, probeClient, dev, spec.EOJ, hostEOJCache)
-		pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
-		hostDevicePairs[dev.IP] = append(hostDevicePairs[dev.IP], deviceWithEOJ{dev: dev, eoj: activeEOJ})
-
-		activeMetrics := spec.Metrics
-		readable, err := client.GetReadablePropertyMap(ctx, dev.IP, activeEOJ)
-		if err != nil {
-			pollerLog.Warnf("device %s (%s): failed to read GETMAP (0x9F), using configured EPCs: %v", dev.Name, dev.IP, err)
-		} else {
-			var unsupported []byte
-			activeMetrics, unsupported = filterMetricsByReadableMap(spec.Metrics, readable)
-			if len(unsupported) > 0 {
-				pollerLog.Warnf("device %s (%s): skipping unsupported EPCs from GETMAP: %v", dev.Name, dev.IP, unsupported)
-			}
-		}
-		if len(activeMetrics) == 0 {
-			pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
-			continue
-		}
-
-		devDefaultInterval := spec.DefaultScrapeInterval
-		if dev.ScrapeInterval != "" {
-			d, err := time.ParseDuration(dev.ScrapeInterval)
-			if err != nil {
-				pollerLog.Warnf("device %s invalid scrape_interval %q: %v", dev.Name, dev.ScrapeInterval, err)
-			} else if d > 0 {
-				devDefaultInterval = d
-			}
-		}
-
-		byInterval := make(map[time.Duration][]specs.MetricSpec)
-		for _, m := range activeMetrics {
-			iv := m.ScrapeInterval
-			if iv <= 0 {
-				iv = devDefaultInterval
-			}
-			byInterval[iv] = append(byInterval[iv], m)
-		}
-		intervals := make([]time.Duration, 0, len(byInterval))
-		for iv := range byInterval {
-			intervals = append(intervals, iv)
-		}
-		sort.Slice(intervals, func(i, j int) bool { return intervals[i] < intervals[j] })
-
-		for i, interval := range intervals {
-			metrics := byInterval[interval]
-			groupID := interval.String()
-			initialDelay := time.Duration(i) * 500 * time.Millisecond
-			if initialDelay > interval/2 {
-				initialDelay = interval / 2
-			}
-			go c.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
-		}
+		devicesByIP[dev.IP] = append(devicesByIP[dev.IP], dev)
 	}
+
+	var wg sync.WaitGroup
+	for ip, devices := range devicesByIP {
+		ip, devices := ip, devices
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			var pairs []deviceWithEOJ
+			for _, dev := range devices {
+				spec := deviceSpecs[dev.Class]
+				activeEOJ := resolveEOJInstance(ctx, probeClient, dev, spec.EOJ, hostEOJCache)
+				pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
+				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
+
+				activeMetrics := spec.Metrics
+				readable, err := client.GetReadablePropertyMap(ctx, dev.IP, activeEOJ)
+				if err != nil {
+					pollerLog.Warnf("device %s (%s): failed to read GETMAP (0x9F), using configured EPCs: %v", dev.Name, dev.IP, err)
+				} else {
+					var unsupported []byte
+					activeMetrics, unsupported = filterMetricsByReadableMap(spec.Metrics, readable)
+					if len(unsupported) > 0 {
+						pollerLog.Warnf("device %s (%s): skipping unsupported EPCs from GETMAP: %v", dev.Name, dev.IP, unsupported)
+					}
+				}
+				if len(activeMetrics) == 0 {
+					pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
+					continue
+				}
+
+				devDefaultInterval := spec.DefaultScrapeInterval
+				if dev.ScrapeInterval != "" {
+					d, err := time.ParseDuration(dev.ScrapeInterval)
+					if err != nil {
+						pollerLog.Warnf("device %s invalid scrape_interval %q: %v", dev.Name, dev.ScrapeInterval, err)
+					} else if d > 0 {
+						devDefaultInterval = d
+					}
+				}
+
+				byInterval := make(map[time.Duration][]specs.MetricSpec)
+				for _, m := range activeMetrics {
+					iv := m.ScrapeInterval
+					if iv <= 0 {
+						iv = devDefaultInterval
+					}
+					byInterval[iv] = append(byInterval[iv], m)
+				}
+				intervals := make([]time.Duration, 0, len(byInterval))
+				for iv := range byInterval {
+					intervals = append(intervals, iv)
+				}
+				sort.Slice(intervals, func(i, j int) bool { return intervals[i] < intervals[j] })
+
+				for i, interval := range intervals {
+					metrics := byInterval[interval]
+					groupID := interval.String()
+					initialDelay := time.Duration(i) * 500 * time.Millisecond
+					if initialDelay > interval/2 {
+						initialDelay = interval / 2
+					}
+					go c.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
+				}
+			}
+			hostDevicePairsMu.Lock()
+			hostDevicePairs[ip] = pairs
+			hostDevicePairsMu.Unlock()
+		}()
+	}
+	wg.Wait()
 
 	for _, pairs := range hostDevicePairs {
 		go c.runDeviceInfoRefresher(ctx, client, pairs)
