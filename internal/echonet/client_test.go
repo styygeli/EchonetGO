@@ -2,6 +2,7 @@ package echonet
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -145,7 +146,7 @@ func TestParseGetRes(t *testing.T) {
 		}
 	})
 
-	t.Run("wrong esv", func(t *testing.T) {
+	t.Run("wrong esv returns ESVError", func(t *testing.T) {
 		frame := []byte{
 			0x10, 0x81,
 			0x00, 0x01,
@@ -158,8 +159,15 @@ func TestParseGetRes(t *testing.T) {
 		if err == nil {
 			t.Fatalf("ParseGetRes() expected error, got nil")
 		}
+		var esvErr *ESVError
+		if !errors.As(err, &esvErr) {
+			t.Fatalf("error type = %T, want *ESVError", err)
+		}
+		if esvErr.ESV != 0x71 {
+			t.Fatalf("ESV = 0x%02x, want 0x71", esvErr.ESV)
+		}
 		if !strings.Contains(err.Error(), "not Get_Res") {
-			t.Fatalf("error = %q, want not Get_Res", err)
+			t.Fatalf("error = %q, want 'not Get_Res' substring", err)
 		}
 	})
 }
@@ -208,5 +216,49 @@ func TestParsePropsToMetrics(t *testing.T) {
 	}
 	if _, exists := out["missing_metric"]; exists {
 		t.Fatalf("did not expect missing_metric in output")
+	}
+}
+
+func TestIsGetSNA(t *testing.T) {
+	t.Run("ESV 0x52 is Get_SNA", func(t *testing.T) {
+		err := &ESVError{ESV: 0x52}
+		if !isGetSNA(err) {
+			t.Fatal("expected isGetSNA to return true for ESV 0x52")
+		}
+	})
+
+	t.Run("other ESV is not Get_SNA", func(t *testing.T) {
+		err := &ESVError{ESV: 0x71}
+		if isGetSNA(err) {
+			t.Fatal("expected isGetSNA to return false for ESV 0x71")
+		}
+	})
+
+	t.Run("non-ESVError is not Get_SNA", func(t *testing.T) {
+		if isGetSNA(errors.New("some other error")) {
+			t.Fatal("expected isGetSNA to return false for non-ESVError")
+		}
+	})
+
+	t.Run("wrapped ESVError is detected", func(t *testing.T) {
+		inner := &ESVError{ESV: 0x52}
+		err := fmt.Errorf("wrapped: %w", inner)
+		if !isGetSNA(err) {
+			t.Fatal("expected isGetSNA to return true for wrapped ESV 0x52")
+		}
+	})
+
+	t.Run("nil error", func(t *testing.T) {
+		if isGetSNA(nil) {
+			t.Fatal("expected isGetSNA to return false for nil")
+		}
+	})
+}
+
+func TestNextTIDIsMonotonic(t *testing.T) {
+	a := nextTID()
+	b := nextTID()
+	if b != a+1 {
+		t.Fatalf("expected sequential TIDs: got %d then %d", a, b)
 	}
 }
