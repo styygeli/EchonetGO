@@ -37,14 +37,23 @@ const (
 var clientLog = logging.New("echonet-client")
 
 var (
-	sharedHostLockMu sync.Mutex
-	sharedHostLocks  = make(map[string]*sync.Mutex)
+	sharedHostLockMu  sync.Mutex
+	sharedHostLocks   = make(map[string]*sync.Mutex)
+	sharedFixedConnMu sync.Mutex
+	sharedFixedConn   *net.UDPConn
+	sharedWaitersMu   sync.Mutex
+	sharedWaiters     = make(map[string]chan udpFrame)
 )
 
 // Client sends ECHONET Lite Get requests over UDP and parses Get_Res.
 type Client struct {
 	timeout              time.Duration
 	strictSourcePort3610 bool
+}
+
+type udpFrame struct {
+	from *net.UDPAddr
+	data []byte
 }
 
 // DeviceInfo represents generic identity properties of a device.
@@ -141,56 +150,23 @@ func (c *Client) sendGetWithFixedPort(host string, req []byte, tid uint16, hostK
 }
 
 func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
-	localAddr := &net.UDPAddr{IP: net.IPv4zero, Port: localPort}
-	lc := net.ListenConfig{
-		Control: func(network, address string, rawConn syscall.RawConn) error {
-			var sockErr error
-			if err := rawConn.Control(func(fd uintptr) {
-				// Match pychonet's UDP socket behavior to improve compatibility.
-				sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-			}); err != nil {
-				return err
-			}
-			return sockErr
-		},
-	}
-	packetConn, err := lc.ListenPacket(context.Background(), "udp", localAddr.String())
-	if err != nil {
-		return nil, err
-	}
-	defer packetConn.Close()
-
-	udpConn, ok := packetConn.(*net.UDPConn)
-	if !ok {
-		return nil, fmt.Errorf("not a UDP connection")
-	}
-
 	remoteAddr, err := net.ResolveUDPAddr("udp", host)
 	if err != nil {
 		return nil, err
 	}
-
-	return c.writeAndRead(udpConn, remoteAddr, req, tid, hostKey)
+	if localPort == echonetPort {
+		return c.sendGetViaSharedFixedPort(remoteAddr, req, tid, hostKey)
+	}
+	conn, err := c.openUDPConn(localPort)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return c.writeAndRead(conn, remoteAddr, req, tid, hostKey)
 }
 
 func (c *Client) sendGetEphemeral(host string, req []byte, tid uint16, hostKey string) ([]byte, error) {
-	packetConn, err := net.ListenPacket("udp", ":0")
-	if err != nil {
-		return nil, err
-	}
-	defer packetConn.Close()
-
-	udpConn, ok := packetConn.(*net.UDPConn)
-	if !ok {
-		return nil, fmt.Errorf("not a UDP connection")
-	}
-
-	remoteAddr, err := net.ResolveUDPAddr("udp", host)
-	if err != nil {
-		return nil, err
-	}
-
-	return c.writeAndRead(udpConn, remoteAddr, req, tid, hostKey)
+	return c.sendGetFromPort(host, req, tid, hostKey, 0)
 }
 
 func (c *Client) writeAndRead(conn *net.UDPConn, remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string) ([]byte, error) {
@@ -207,19 +183,149 @@ func (c *Client) writeAndRead(conn *net.UDPConn, remoteAddr *net.UDPAddr, req []
 			return nil, err
 		}
 		if addr.IP == nil || remoteAddr.IP == nil || !addr.IP.Equal(remoteAddr.IP) {
-			clientLog.Debugf("ignoring frame from unexpected IP: %v", addr.IP)
+			clientLog.Debugf("ignoring frame from unexpected IP while waiting for %s: %v", hostKey, addr.IP)
 			continue
 		}
 		if n < minResponseLen {
-			clientLog.Warnf("short UDP frame from %s: got=%d expected>=%d", hostKey, n, minResponseLen)
+			clientLog.Warnf("short UDP frame from %s:%d: got=%d expected>=%d", hostKey, addr.Port, n, minResponseLen)
 			continue
 		}
 		respTID := binary.BigEndian.Uint16(buf[2:4])
 		if respTID == tid {
+			if addr.Port != echonetPort {
+				clientLog.Debugf("accepted response from %s with non-standard source UDP port %d", hostKey, addr.Port)
+			}
 			return append([]byte(nil), buf[:n]...), nil
 		}
-		clientLog.Debugf("ignoring stale UDP frame from %s: expected tid=0x%04x got=0x%04x", hostKey, tid, respTID)
+		clientLog.Debugf("ignoring stale UDP frame from %s:%d: expected tid=0x%04x got=0x%04x", hostKey, addr.Port, tid, respTID)
 	}
+}
+
+func (c *Client) sendGetViaSharedFixedPort(remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string) ([]byte, error) {
+	conn, err := c.getOrCreateFixedConn()
+	if err != nil {
+		return nil, err
+	}
+	key := waiterKey(remoteAddr.IP.String(), tid)
+	respCh := make(chan udpFrame, 1)
+	c.addWaiter(key, respCh)
+	defer c.removeWaiter(key)
+
+	if _, err := conn.WriteToUDP(req, remoteAddr); err != nil {
+		return nil, err
+	}
+
+	timer := time.NewTimer(c.timeout)
+	defer timer.Stop()
+	select {
+	case frame := <-respCh:
+		if frame.from != nil && frame.from.Port != echonetPort {
+			clientLog.Debugf("accepted response from %s with non-standard source UDP port %d", hostKey, frame.from.Port)
+		}
+		return frame.data, nil
+	case <-timer.C:
+		return nil, fmt.Errorf("read udp %s->%s:%d: i/o timeout", conn.LocalAddr().String(), remoteAddr.IP.String(), remoteAddr.Port)
+	}
+}
+
+func (c *Client) getOrCreateFixedConn() (*net.UDPConn, error) {
+	sharedFixedConnMu.Lock()
+	defer sharedFixedConnMu.Unlock()
+	if sharedFixedConn != nil {
+		return sharedFixedConn, nil
+	}
+	conn, err := c.openUDPConn(echonetPort)
+	if err != nil {
+		return nil, err
+	}
+	sharedFixedConn = conn
+	go c.startFixedConnReceiver(conn)
+	return conn, nil
+}
+
+func (c *Client) startFixedConnReceiver(conn *net.UDPConn) {
+	buf := make([]byte, 2048)
+	for {
+		n, addr, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				sharedFixedConnMu.Lock()
+				if sharedFixedConn == conn {
+					sharedFixedConn = nil
+				}
+				sharedFixedConnMu.Unlock()
+				return
+			}
+			clientLog.Warnf("fixed source-port UDP receiver error: %v", err)
+			continue
+		}
+		if addr == nil || addr.IP == nil {
+			continue
+		}
+		if n < minResponseLen {
+			clientLog.Warnf("short UDP frame from %s:%d: got=%d expected>=%d", addr.IP.String(), addr.Port, n, minResponseLen)
+			continue
+		}
+		tid := binary.BigEndian.Uint16(buf[2:4])
+		key := waiterKey(addr.IP.String(), tid)
+		sharedWaitersMu.Lock()
+		ch := sharedWaiters[key]
+		sharedWaitersMu.Unlock()
+		if ch == nil {
+			clientLog.Debugf("ignoring stale UDP frame from %s:%d: tid=0x%04x has no waiter", addr.IP.String(), addr.Port, tid)
+			continue
+		}
+		frame := udpFrame{
+			from: addr,
+			data: append([]byte(nil), buf[:n]...),
+		}
+		select {
+		case ch <- frame:
+		default:
+			// A timeout may have already happened; dropping is safe.
+		}
+	}
+}
+
+func (c *Client) openUDPConn(localPort int) (*net.UDPConn, error) {
+	lc := net.ListenConfig{
+		Control: func(network, address string, rawConn syscall.RawConn) error {
+			var sockErr error
+			if err := rawConn.Control(func(fd uintptr) {
+				// Match pychonet's UDP socket behavior to improve compatibility.
+				sockErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
+			}); err != nil {
+				return err
+			}
+			return sockErr
+		},
+	}
+	packetConn, err := lc.ListenPacket(context.Background(), "udp", net.JoinHostPort("0.0.0.0", fmt.Sprint(localPort)))
+	if err != nil {
+		return nil, err
+	}
+	udpConn, ok := packetConn.(*net.UDPConn)
+	if !ok {
+		_ = packetConn.Close()
+		return nil, fmt.Errorf("not a UDP connection")
+	}
+	return udpConn, nil
+}
+
+func (*Client) addWaiter(key string, ch chan udpFrame) {
+	sharedWaitersMu.Lock()
+	sharedWaiters[key] = ch
+	sharedWaitersMu.Unlock()
+}
+
+func (*Client) removeWaiter(key string) {
+	sharedWaitersMu.Lock()
+	delete(sharedWaiters, key)
+	sharedWaitersMu.Unlock()
+}
+
+func waiterKey(host string, tid uint16) string {
+	return host + "|" + fmt.Sprintf("%04x", tid)
 }
 
 func isPortBindFailure(err error) bool {
