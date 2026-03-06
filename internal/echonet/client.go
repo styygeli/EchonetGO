@@ -334,7 +334,7 @@ func openUDPConn(localPort int) (*net.UDPConn, error) {
 			return sockErr
 		},
 	}
-	packetConn, err := lc.ListenPacket(context.Background(), "udp", net.JoinHostPort("0.0.0.0", fmt.Sprint(localPort)))
+	packetConn, err := lc.ListenPacket(context.Background(), "udp4", net.JoinHostPort("0.0.0.0", fmt.Sprint(localPort)))
 	if err != nil {
 		return nil, err
 	}
