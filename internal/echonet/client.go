@@ -1,6 +1,7 @@
 package echonet
 
 import (
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -141,9 +142,7 @@ func (c *Client) sendGetWithFixedPort(host string, req []byte, tid uint16, hostK
 
 func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey string, localPort int) ([]byte, error) {
 	localAddr := &net.UDPAddr{IP: net.IPv4zero, Port: localPort}
-	dialer := &net.Dialer{
-		Timeout:   c.timeout,
-		LocalAddr: localAddr,
+	lc := net.ListenConfig{
 		Control: func(network, address string, rawConn syscall.RawConn) error {
 			var sockErr error
 			if err := rawConn.Control(func(fd uintptr) {
@@ -155,35 +154,61 @@ func (c *Client) sendGetFromPort(host string, req []byte, tid uint16, hostKey st
 			return sockErr
 		},
 	}
-	conn, err := dialer.Dial("udp", host)
+	packetConn, err := lc.ListenPacket(context.Background(), "udp", localAddr.String())
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-	return c.writeAndRead(conn, req, tid, hostKey)
+	defer packetConn.Close()
+
+	udpConn, ok := packetConn.(*net.UDPConn)
+	if !ok {
+		return nil, fmt.Errorf("not a UDP connection")
+	}
+
+	remoteAddr, err := net.ResolveUDPAddr("udp", host)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.writeAndRead(udpConn, remoteAddr, req, tid, hostKey)
 }
 
 func (c *Client) sendGetEphemeral(host string, req []byte, tid uint16, hostKey string) ([]byte, error) {
-	conn, err := net.DialTimeout("udp", host, c.timeout)
+	packetConn, err := net.ListenPacket("udp", ":0")
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
-	return c.writeAndRead(conn, req, tid, hostKey)
+	defer packetConn.Close()
+
+	udpConn, ok := packetConn.(*net.UDPConn)
+	if !ok {
+		return nil, fmt.Errorf("not a UDP connection")
+	}
+
+	remoteAddr, err := net.ResolveUDPAddr("udp", host)
+	if err != nil {
+		return nil, err
+	}
+
+	return c.writeAndRead(udpConn, remoteAddr, req, tid, hostKey)
 }
 
-func (c *Client) writeAndRead(conn net.Conn, req []byte, tid uint16, hostKey string) ([]byte, error) {
+func (c *Client) writeAndRead(conn *net.UDPConn, remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string) ([]byte, error) {
 	if err := conn.SetDeadline(time.Now().Add(c.timeout)); err != nil {
 		return nil, err
 	}
-	if _, err := conn.Write(req); err != nil {
+	if _, err := conn.WriteToUDP(req, remoteAddr); err != nil {
 		return nil, err
 	}
 	buf := make([]byte, 1024)
 	for {
-		n, err := conn.Read(buf)
+		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
 			return nil, err
+		}
+		if addr.IP == nil || remoteAddr.IP == nil || !addr.IP.Equal(remoteAddr.IP) {
+			clientLog.Debugf("ignoring frame from unexpected IP: %v", addr.IP)
+			continue
 		}
 		if n < minResponseLen {
 			clientLog.Warnf("short UDP frame from %s: got=%d expected>=%d", hostKey, n, minResponseLen)
@@ -191,7 +216,7 @@ func (c *Client) writeAndRead(conn net.Conn, req []byte, tid uint16, hostKey str
 		}
 		respTID := binary.BigEndian.Uint16(buf[2:4])
 		if respTID == tid {
-			return buf[:n], nil
+			return append([]byte(nil), buf[:n]...), nil
 		}
 		clientLog.Debugf("ignoring stale UDP frame from %s: expected tid=0x%04x got=0x%04x", hostKey, tid, respTID)
 	}
