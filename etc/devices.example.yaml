@@ -1,13 +1,11 @@
 # Device list for EchonetGO (editable YAML).
+# Copy to etc/devices.yaml and update IP addresses for your network.
 # Class names must match a file in etc/specs (e.g. home_ac.yaml -> class: home_ac).
 
 devices:
-  - name: mitsubishi_mac900if_01
-    ip: 192.168.3.86
+  - name: my_aircon_living
+    ip: 192.168.1.10
     class: home_ac
-  - name: mitsubishi_mac900if_02
-    ip: 192.168.3.134
-    class: home_ac
-  - name: daikin_01
-    ip: 192.168.0.249
+  - name: my_aircon_bedroom
+    ip: 192.168.1.11
     class: home_ac

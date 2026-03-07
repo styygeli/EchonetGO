@@ -126,6 +126,18 @@ func Load() (*Config, error) {
 		cfg.Devices = devices
 	}
 
+	for i, d := range cfg.Devices {
+		if d.Name == "" {
+			return nil, fmt.Errorf("device[%d]: name is required", i)
+		}
+		if d.IP == "" {
+			return nil, fmt.Errorf("device %q: ip is required", d.Name)
+		}
+		if d.Class == "" {
+			return nil, fmt.Errorf("device %q: class is required", d.Name)
+		}
+	}
+
 	return cfg, nil
 }
 

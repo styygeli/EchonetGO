@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/styygeli/echonetgo/internal/api"
 	"github.com/styygeli/echonetgo/internal/config"
@@ -37,10 +38,16 @@ func main() {
 
 	srv := &api.Server{
 		ListenAddr: cfg.ListenAddr,
-		GetState:   func() interface{} { return cache.StateForAPI(cfg) },
+		GetState:   func() any { return cache.StateForAPI(cfg) },
 	}
 
-	server := &http.Server{Addr: cfg.ListenAddr, Handler: srv.Handler()}
+	server := &http.Server{
+		Addr:         cfg.ListenAddr,
+		Handler:      srv.Handler(),
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
 	errCh := make(chan error, 1)
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

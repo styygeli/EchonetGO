@@ -1,20 +1,21 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 
 	"github.com/styygeli/echonetgo/internal/logging"
 )
 
-var log = logging.New("api")
+var apiLog = logging.New("api")
 
 // Server provides HTTP endpoints for health and cached state.
 type Server struct {
 	ListenAddr string
 	// GetState is called to return current cached state for API responses.
 	// Can be nil; then /state returns {}.
-	GetState func() interface{}
+	GetState func() any
 }
 
 // Handler returns an http.Handler for the API routes.
@@ -41,15 +42,21 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	var state interface{} = map[string]interface{}{}
+	var state any = struct{}{}
 	if s.GetState != nil {
 		state = s.GetState()
 	}
 	if state == nil {
-		state = map[string]interface{}{}
+		state = struct{}{}
 	}
-	_ = json.NewEncoder(w).Encode(state)
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(state); err != nil {
+		apiLog.Errorf("JSON encode /state: %v", err)
+		http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(buf.Bytes())
 }
 
 func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
