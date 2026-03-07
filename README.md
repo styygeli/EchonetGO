@@ -22,7 +22,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 
 - `GET /` — brief info
 - `GET /health` — liveness
-- `GET /state` — JSON snapshot of cached device metrics and identity (manufacturer, product code, UID), plus scrape diagnostics (`success`, `last_error`, `consecutive_failures`)
+- `GET /state` — JSON snapshot of cached device metrics and identity (manufacturer, product code, UID), plus scrape diagnostics (`success`, `last_error`, `max_group_failures`)
 
 ## File layout
 
@@ -37,7 +37,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `internal/api/` | HTTP mux: `/health`, `/state`, `/` |
 | `internal/logging/` | Leveled logger (`ECHONET_LOG_LEVEL`) |
 | `etc/config.example.yaml` | Example config (listen_addr, devices_path, specs_dir, devices) |
-| `etc/devices.yaml` | Optional device list (name, ip, class, scrape_interval) |
+| `etc/devices.example.yaml` | Example device list — copy to `etc/devices.yaml` and set your IPs |
 | `etc/specs/*.yaml` | One file per device class (e.g. `home_ac`, `storage_battery`), including generated first-pass coverage for most classes from pychonet/echonetlite_homeassistant |
 
 ## Architecture
@@ -62,7 +62,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | Discovery (multicast, etc.) | pychonet discovery | **Planned**: discovery flow and quirk overlays |
 | Home Assistant add-on | HA add-on repo | **Planned**: add-on packaging once core runtime is stable |
 
-Contributors can add device classes and metrics by editing YAML under `etc/specs/` and listing devices in config or `etc/devices.yaml` without changing Go code. The shipped `etc/specs/` set is now committed as permanent baseline data (including broad class coverage imported from pychonet at migration time), so runtime/build does not depend on external projects.
+Contributors can add device classes and metrics by editing YAML under `etc/specs/` and listing devices in config or a `devices.yaml` file (see `etc/devices.example.yaml`) without changing Go code. The shipped `etc/specs/` set is now committed as permanent baseline data (including broad class coverage imported from pychonet at migration time), so runtime/build does not depend on external projects.
 
 ## Configuration
 

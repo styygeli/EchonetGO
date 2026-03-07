@@ -398,6 +398,8 @@ func normalizeHost(addr string) string {
 	return addr
 }
 
+// lockForHost returns a per-host mutex. Entries are never evicted; this is safe
+// because the set of hosts is bounded by the static device configuration.
 func lockForHost(host string) *sync.Mutex {
 	sharedHostLockMu.Lock()
 	defer sharedHostLockMu.Unlock()

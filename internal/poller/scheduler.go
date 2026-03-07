@@ -33,6 +33,9 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 		probeTimeoutSec = 1
 	}
 	probeClient := echonet.NewClient(probeTimeoutSec, cfg.StrictSourcePort3610)
+	// hostEOJCache is written per-IP inside a single goroutine per IP (the go func
+	// below groups devices by IP), so concurrent access across IPs is safe. If devices
+	// sharing an IP are ever split into separate goroutines, a mutex will be needed.
 	hostEOJCache := make(map[string][][3]byte)
 	hostDevicePairs := make(map[string][]deviceWithEOJ)
 	var hostDevicePairsMu sync.Mutex
