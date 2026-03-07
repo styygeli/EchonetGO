@@ -25,6 +25,8 @@ specs_dir: "etc/specs"
 #   - name: epcube_battery
 #     ip: 192.168.1.10
 #     class: storage_battery
+#     manufacturer: "Eternalplanet"     # fallback if device doesn't report EPC 0x8A
+#     model: "EP Cube"                  # fallback if device doesn't report EPC 0x8C
 #     scrape_interval: 2m
 #   - name: living_ac
 #     ip: 192.168.1.20

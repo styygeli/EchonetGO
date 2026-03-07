@@ -190,7 +190,14 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 }
 
 // UpdateInfo stores generic device identity properties.
+// Falls back to config-level manufacturer/model if the device doesn't report them.
 func (c *Cache) UpdateInfo(dev config.Device, info echonet.DeviceInfo) {
+	if info.Manufacturer == "" && dev.Manufacturer != "" {
+		info.Manufacturer = dev.Manufacturer
+	}
+	if info.ProductCode == "" && dev.Model != "" {
+		info.ProductCode = dev.Model
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := DeviceKey(dev)
