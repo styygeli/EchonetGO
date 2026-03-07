@@ -214,8 +214,43 @@ func TestParsePropsToMetrics(t *testing.T) {
 	if got.Value != 10 {
 		t.Fatalf("generated_power = %v, want 10", got.Value)
 	}
+	if got.EnumLabel != "" {
+		t.Fatalf("non-enum metric EnumLabel = %q, want empty", got.EnumLabel)
+	}
 	if _, exists := out["missing_metric"]; exists {
 		t.Fatalf("did not expect missing_metric in output")
+	}
+}
+
+func TestParsePropsToMetrics_EnumLabel(t *testing.T) {
+	props := []model.GetResProperty{
+		{EPC: 0x80, PDC: 1, EDT: []byte{0x30}}, // 0x30 = ON
+		{EPC: 0xB0, PDC: 1, EDT: []byte{0x42}}, // 0x42 = cool
+	}
+	metrics := []specs.MetricSpec{
+		{
+			EPC: 0x80, Name: "operation_status", Size: 1, Scale: 1, Type: "gauge",
+			Enum: map[int]string{0x30: "on", 0x31: "off"},
+		},
+		{
+			EPC: 0xB0, Name: "operation_mode", Size: 1, Scale: 1, Type: "gauge",
+			Enum: map[int]string{0x41: "auto", 0x42: "cool", 0x43: "heat"},
+		},
+	}
+
+	out := ParsePropsToMetrics(props, metrics)
+	if len(out) != 2 {
+		t.Fatalf("len(out) = %d, want 2", len(out))
+	}
+	if got := out["operation_status"].EnumLabel; got != "on" {
+		t.Fatalf("operation_status EnumLabel = %q, want on", got)
+	}
+	if got := out["operation_mode"].EnumLabel; got != "cool" {
+		t.Fatalf("operation_mode EnumLabel = %q, want cool", got)
+	}
+	// Value is still the raw number
+	if out["operation_status"].Value != 0x30 {
+		t.Fatalf("operation_status Value = %v, want 48 (0x30)", out["operation_status"].Value)
 	}
 }
 

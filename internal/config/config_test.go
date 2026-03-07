@@ -12,6 +12,7 @@ func clearEnv(t *testing.T) {
 		"ECHONET_CONFIG", "ECHONET_LISTEN_ADDR", "ECHONET_SCRAPE_TIMEOUT_SEC",
 		"ECHONET_STRICT_SOURCE_PORT_3610", "ECHONET_DEVICES_PATH",
 		"ECHONET_SPECS_DIR", "ECHONET_DEVICES",
+		"MQTT_BROKER", "MQTT_USER", "MQTT_PASS", "MQTT_TOPIC_PREFIX", "MQTT_DISCOVERY_PREFIX",
 	} {
 		t.Setenv(key, "")
 	}
@@ -207,5 +208,127 @@ func TestLoad_RejectsDeviceMissingClass(t *testing.T) {
 	_, err := Load()
 	if err == nil {
 		t.Fatal("expected error for empty device class")
+	}
+}
+
+func TestLoad_MQTTFromYAML(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	content := `
+listen_addr: ":9191"
+mqtt:
+  broker: "tcp://broker.local:1883"
+  username: "user"
+  password: "secret"
+  topic_prefix: "echonet"
+  discovery_prefix: "homeassistant"
+`
+	if err := os.WriteFile(cfgFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ECHONET_CONFIG", cfgFile)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.MQTTEnabled() {
+		t.Fatal("MQTTEnabled() should be true")
+	}
+	if cfg.MQTT.Broker != "tcp://broker.local:1883" {
+		t.Fatalf("MQTT.Broker = %q, want tcp://broker.local:1883", cfg.MQTT.Broker)
+	}
+	if cfg.MQTT.Username != "user" || cfg.MQTT.Password != "secret" {
+		t.Fatalf("MQTT credentials: got %q / %q", cfg.MQTT.Username, cfg.MQTT.Password)
+	}
+	if cfg.MQTT.TopicPrefix != "echonet" || cfg.MQTT.DiscoveryPrefix != "homeassistant" {
+		t.Fatalf("MQTT prefixes: topic=%q discovery=%q", cfg.MQTT.TopicPrefix, cfg.MQTT.DiscoveryPrefix)
+	}
+}
+
+func TestLoad_MQTTDefaultsWhenBrokerSet(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	content := `
+listen_addr: ":9191"
+mqtt:
+  broker: "tcp://localhost:1883"
+`
+	if err := os.WriteFile(cfgFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ECHONET_CONFIG", cfgFile)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MQTT.TopicPrefix != "echonetgo" {
+		t.Fatalf("TopicPrefix default = %q, want echonetgo", cfg.MQTT.TopicPrefix)
+	}
+	if cfg.MQTT.DiscoveryPrefix != "homeassistant" {
+		t.Fatalf("DiscoveryPrefix default = %q, want homeassistant", cfg.MQTT.DiscoveryPrefix)
+	}
+}
+
+func TestLoad_MQTTEnvOverrides(t *testing.T) {
+	clearEnv(t)
+	dir := t.TempDir()
+	cfgFile := filepath.Join(dir, "config.yaml")
+	content := `
+listen_addr: ":9191"
+mqtt:
+  broker: "tcp://file-broker:1883"
+  username: "fileuser"
+  topic_prefix: "fileprefix"
+`
+	if err := os.WriteFile(cfgFile, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ECHONET_CONFIG", cfgFile)
+	t.Setenv("MQTT_BROKER", "tcp://env-broker:1883")
+	t.Setenv("MQTT_USER", "envuser")
+	t.Setenv("MQTT_PASS", "envpass")
+	t.Setenv("MQTT_TOPIC_PREFIX", "envprefix")
+	t.Setenv("MQTT_DISCOVERY_PREFIX", "envdiscovery")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MQTT.Broker != "tcp://env-broker:1883" {
+		t.Fatalf("Broker = %q, want env override", cfg.MQTT.Broker)
+	}
+	if cfg.MQTT.Username != "envuser" || cfg.MQTT.Password != "envpass" {
+		t.Fatalf("credentials from env: got %q / %q", cfg.MQTT.Username, cfg.MQTT.Password)
+	}
+	if cfg.MQTT.TopicPrefix != "envprefix" || cfg.MQTT.DiscoveryPrefix != "envdiscovery" {
+		t.Fatalf("prefixes: topic=%q discovery=%q", cfg.MQTT.TopicPrefix, cfg.MQTT.DiscoveryPrefix)
+	}
+}
+
+func TestMQTTEnabled(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ECHONET_CONFIG", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.MQTTEnabled() {
+		t.Fatal("MQTTEnabled() should be false when broker empty")
+	}
+
+	clearEnv(t)
+	t.Setenv("ECHONET_CONFIG", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+	t.Setenv("MQTT_BROKER", "tcp://localhost:1883")
+	cfg, err = Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.MQTTEnabled() {
+		t.Fatal("MQTTEnabled() should be true when broker set via env")
 	}
 }
