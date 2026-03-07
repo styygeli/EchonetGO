@@ -65,6 +65,9 @@ type metricYAML struct {
 	Type           string         `yaml:"type"`
 	Enum           map[int]string `yaml:"enum"`
 	ScrapeInterval string         `yaml:"scrape_interval"`
+	HADeviceClass  string         `yaml:"ha_device_class"`
+	HAStateClass   string         `yaml:"ha_state_class"`
+	HAUnit         string         `yaml:"ha_unit"`
 }
 
 func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
@@ -143,6 +146,10 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 			}
 			interval = d
 		}
+		haDevice, haState, haUnit := m.HADeviceClass, m.HAStateClass, m.HAUnit
+		if haDevice == "" {
+			haDevice, haState, haUnit = inferHAMetadata(m.Name, m.Type, len(m.Enum) > 0)
+		}
 		spec.Metrics = append(spec.Metrics, MetricSpec{
 			EPC:            byte(m.EPC),
 			Name:           m.Name,
@@ -154,9 +161,52 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 			Type:           m.Type,
 			Enum:           enum,
 			ScrapeInterval: interval,
+			HADeviceClass:  haDevice,
+			HAStateClass:   haState,
+			HAUnit:         haUnit,
 		})
 	}
 	return spec, nil
+}
+
+// inferHAMetadata derives HA device_class, state_class, and unit from metric
+// naming conventions when not explicitly set in the YAML spec.
+// inferHAMetadata derives HA device_class, state_class, and unit from metric
+// naming conventions when not explicitly set in the YAML spec.
+func inferHAMetadata(name, metricType string, hasEnum bool) (deviceClass, stateClass, unit string) {
+	if hasEnum {
+		return "enum", "", ""
+	}
+	switch {
+	case strings.HasSuffix(name, "_power_w"), strings.HasSuffix(name, "_watts"):
+		return "power", "measurement", "W"
+	case strings.HasSuffix(name, "_kwh"):
+		if metricType == "counter" {
+			return "energy", "total_increasing", "kWh"
+		}
+		return "energy", "measurement", "kWh"
+	case strings.HasSuffix(name, "_wh"):
+		if metricType == "counter" {
+			return "energy", "total_increasing", "Wh"
+		}
+		return "energy", "measurement", "Wh"
+	case strings.HasSuffix(name, "_celsius"):
+		return "temperature", "measurement", "°C"
+	case strings.HasSuffix(name, "_percent"):
+		return "", "measurement", "%"
+	case strings.HasSuffix(name, "_m3"):
+		if metricType == "counter" {
+			return "volume", "total_increasing", "m³"
+		}
+		return "volume", "measurement", "m³"
+	}
+	if metricType == "gauge" {
+		return "", "measurement", ""
+	}
+	if metricType == "counter" {
+		return "", "total_increasing", ""
+	}
+	return "", "", ""
 }
 
 func enumValueFits(v int, size int, signed bool) bool {

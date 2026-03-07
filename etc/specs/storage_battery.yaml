@@ -28,6 +28,9 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    ha_device_class: battery
+    ha_state_class: measurement
+    ha_unit: "%"
   - epc: 0xD3
     name: measured_instantaneous_charge_discharge_raw
     help: "Measured instantaneous charging/discharging value (signed)."
@@ -35,6 +38,9 @@ metrics:
     signed: true
     scale: 1
     type: gauge
+    ha_device_class: power
+    ha_state_class: measurement
+    ha_unit: W
   - epc: 0xE2
     name: remaining_capacity_wh
     help: "Remaining stored electricity in Wh."

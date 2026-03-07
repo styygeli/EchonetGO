@@ -92,6 +92,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 					pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
 					continue
 				}
+				c.SetDeviceSpecs(dev, activeMetrics)
 
 				devDefaultInterval := spec.DefaultScrapeInterval
 				if dev.ScrapeInterval != "" {

@@ -12,13 +12,29 @@ import (
 
 // Config holds EchonetGO configuration (from etc/ YAML and/or environment).
 type Config struct {
-	ListenAddr           string   `yaml:"listen_addr" json:"listen_addr"`
-	ScrapeTimeoutSec     int      `yaml:"scrape_timeout_sec" json:"scrape_timeout_sec"`
-	StrictSourcePort3610 bool     `yaml:"strict_source_port_3610" json:"strict_source_port_3610"`
-	ConfigPath           string   `yaml:"-" json:"-"` // path to etc config file
-	DevicesPath          string   `yaml:"devices_path" json:"devices_path"`
-	SpecsDir             string   `yaml:"specs_dir" json:"specs_dir"`
-	Devices              []Device `yaml:"devices" json:"devices"`
+	ListenAddr           string     `yaml:"listen_addr" json:"listen_addr"`
+	ScrapeTimeoutSec     int        `yaml:"scrape_timeout_sec" json:"scrape_timeout_sec"`
+	StrictSourcePort3610 bool       `yaml:"strict_source_port_3610" json:"strict_source_port_3610"`
+	ConfigPath           string     `yaml:"-" json:"-"`
+	DevicesPath          string     `yaml:"devices_path" json:"devices_path"`
+	SpecsDir             string     `yaml:"specs_dir" json:"specs_dir"`
+	Devices              []Device   `yaml:"devices" json:"devices"`
+	MQTT                 MQTTConfig `yaml:"mqtt" json:"mqtt"`
+}
+
+// MQTTConfig holds optional MQTT settings for HA auto-discovery.
+// If Broker is empty, MQTT publishing is disabled.
+type MQTTConfig struct {
+	Broker          string `yaml:"broker" json:"broker"`
+	Username        string `yaml:"username" json:"username"`
+	Password        string `yaml:"password" json:"password"`
+	TopicPrefix     string `yaml:"topic_prefix" json:"topic_prefix"`
+	DiscoveryPrefix string `yaml:"discovery_prefix" json:"discovery_prefix"`
+}
+
+// MQTTEnabled returns true if MQTT publishing is configured.
+func (c *Config) MQTTEnabled() bool {
+	return c.MQTT.Broker != ""
 }
 
 // Device is a single ECHONET device to poll.
@@ -32,12 +48,13 @@ type Device struct {
 
 // fileConfig is the on-disk shape for the main config file.
 type fileConfig struct {
-	ListenAddr           string   `yaml:"listen_addr"`
-	ScrapeTimeoutSec     int      `yaml:"scrape_timeout_sec"`
-	StrictSourcePort3610 *bool    `yaml:"strict_source_port_3610"`
-	DevicesPath          string   `yaml:"devices_path"`
-	SpecsDir             string   `yaml:"specs_dir"`
-	Devices              []Device `yaml:"devices"`
+	ListenAddr           string     `yaml:"listen_addr"`
+	ScrapeTimeoutSec     int        `yaml:"scrape_timeout_sec"`
+	StrictSourcePort3610 *bool      `yaml:"strict_source_port_3610"`
+	DevicesPath          string     `yaml:"devices_path"`
+	SpecsDir             string     `yaml:"specs_dir"`
+	Devices              []Device   `yaml:"devices"`
+	MQTT                 MQTTConfig `yaml:"mqtt"`
 }
 
 // Load reads configuration: optional etc config file, then env overrides.
@@ -83,6 +100,15 @@ func Load() (*Config, error) {
 		if len(fc.Devices) > 0 {
 			cfg.Devices = fc.Devices
 		}
+		cfg.MQTT = fc.MQTT
+	}
+
+	// MQTT defaults
+	if cfg.MQTT.TopicPrefix == "" {
+		cfg.MQTT.TopicPrefix = "echonetgo"
+	}
+	if cfg.MQTT.DiscoveryPrefix == "" {
+		cfg.MQTT.DiscoveryPrefix = "homeassistant"
 	}
 
 	// Environment overrides
@@ -106,6 +132,21 @@ func Load() (*Config, error) {
 	}
 	if v := os.Getenv("ECHONET_SPECS_DIR"); v != "" {
 		cfg.SpecsDir = v
+	}
+	if v := os.Getenv("MQTT_BROKER"); v != "" {
+		cfg.MQTT.Broker = v
+	}
+	if v := os.Getenv("MQTT_USER"); v != "" {
+		cfg.MQTT.Username = v
+	}
+	if v := os.Getenv("MQTT_PASS"); v != "" {
+		cfg.MQTT.Password = v
+	}
+	if v := os.Getenv("MQTT_TOPIC_PREFIX"); v != "" {
+		cfg.MQTT.TopicPrefix = v
+	}
+	if v := os.Getenv("MQTT_DISCOVERY_PREFIX"); v != "" {
+		cfg.MQTT.DiscoveryPrefix = v
 	}
 
 	// Devices from file if no devices in main config

@@ -31,3 +31,6 @@ metrics:
     size: 4
     scale: 0.001
     type: counter
+    ha_device_class: gas
+    ha_state_class: total_increasing
+    ha_unit: "m³"
