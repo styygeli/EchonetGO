@@ -3,9 +3,32 @@
 # Class names must match a file in etc/specs (e.g. home_ac.yaml -> class: home_ac).
 
 devices:
+  # Air conditioners
   - name: my_aircon_living
     ip: 192.168.1.10
     class: home_ac
   - name: my_aircon_bedroom
     ip: 192.168.1.11
     class: home_ac
+
+  # Solar / battery (EP Cube, etc.)
+  - name: epcube_battery
+    ip: 192.168.1.20
+    class: storage_battery
+  - name: epcube_solar
+    ip: 192.168.1.20
+    class: home_solar
+
+  # Panasonic Smart Cosmo distribution board (multiple EOJ classes on one IP)
+  - name: breaker_panel
+    ip: 192.168.1.30
+    class: power_dist_board
+  - name: panel_solar
+    ip: 192.168.1.30
+    class: home_solar
+  - name: water_meter
+    ip: 192.168.1.30
+    class: water_flow_meter
+  - name: gas_meter
+    ip: 192.168.1.30
+    class: gas_meter

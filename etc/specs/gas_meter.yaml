@@ -1,21 +1,33 @@
-# Auto-generated from pychonet class GasMeter.
+# Gas Meter (0x0282) — ECHONET Appendix E
+# Measures cumulative gas consumption via pulse counting.
 eoj: [0x02, 0x82, 0x01]
 description: "Gas meter"
-default_scrape_interval: 1m
+default_scrape_interval: 10m
 
 metrics:
   - epc: 0x80
     name: operation_status
-    help: "Operation status"
-    size: 0
+    help: "Operation status (0x30=ON, 0x31=OFF)."
+    size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
     enum:
       0x30: on
       0x31: off
-  - epc: 0xe0
-    name: cumulative_amount_of_gas_consumption_measurement_value
-    help: "Cumulative amount of gas consumption measurement value"
-    size: 0
+  - epc: 0x88
+    name: fault_status
+    help: "Fault status."
+    size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
+    enum:
+      0x41: fault
+      0x42: no_fault
+  - epc: 0xE0
+    name: cumulative_gas_m3
+    help: "Cumulative gas consumption in 0.001 m3."
+    size: 4
+    scale: 0.001
+    type: counter
