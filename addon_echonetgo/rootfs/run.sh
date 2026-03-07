@@ -1,19 +1,15 @@
-#!/usr/bin/with-contenv bashio
-# EchonetGO add-on entrypoint. Reads options from /data/options.json and runs the binary.
+#!/usr/bin/with-contenv sh
+# EchonetGO add-on entrypoint. Reads options and fetches MQTT from Supervisor.
 set -e
 
 CONFIG_PATH="/config/echonetgo/config.yaml"
 DEVICES_PATH=""
 LOG_LEVEL="info"
 
-if bashio::config.has_value 'config_path'; then
-  CONFIG_PATH=$(bashio::config 'config_path')
-fi
-if bashio::config.has_value 'devices_path'; then
-  DEVICES_PATH=$(bashio::config 'devices_path')
-fi
-if bashio::config.has_value 'log_level'; then
-  LOG_LEVEL=$(bashio::config 'log_level')
+if [ -f /data/options.json ]; then
+  v=$(jq -r '.config_path // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && CONFIG_PATH="$v"
+  v=$(jq -r '.devices_path // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && DEVICES_PATH="$v"
+  v=$(jq -r '.log_level // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && LOG_LEVEL="$v"
 fi
 
 export ECHONET_CONFIG="${CONFIG_PATH}"
@@ -23,19 +19,31 @@ export ECHONET_LOG_LEVEL="${LOG_LEVEL:-info}"
 export ECHONET_SPECS_DIR="${ECHONET_SPECS_DIR:-/usr/share/echonetgo/specs}"
 export ECHONET_LISTEN_ADDR="0.0.0.0:9191"
 
-# MQTT: fetch credentials from HA Supervisor services API (mqtt: auto)
-if bashio::services.available "mqtt"; then
-  MQTT_HOST=$(bashio::services mqtt "host")
-  MQTT_PORT=$(bashio::services mqtt "port")
-  MQTT_USER=$(bashio::services mqtt "username")
-  MQTT_PASS=$(bashio::services mqtt "password")
+# MQTT: query Supervisor services API directly via curl
+if [ -n "${SUPERVISOR_TOKEN}" ] && [ -z "${MQTT_BROKER}" ]; then
+  MQTT_JSON=$(curl -s -f \
+    -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+    http://supervisor/services/mqtt 2>/dev/null) || true
 
-  export MQTT_BROKER="tcp://${MQTT_HOST}:${MQTT_PORT}"
-  export MQTT_USER
-  export MQTT_PASS
-  bashio::log.info "MQTT service found at ${MQTT_HOST}:${MQTT_PORT}"
+  if [ -n "${MQTT_JSON}" ]; then
+    MQTT_HOST=$(echo "${MQTT_JSON}" | jq -r '.data.host // empty')
+    MQTT_PORT=$(echo "${MQTT_JSON}" | jq -r '.data.port // "1883"')
+    MQTT_USER=$(echo "${MQTT_JSON}" | jq -r '.data.username // empty')
+    MQTT_PASS=$(echo "${MQTT_JSON}" | jq -r '.data.password // empty')
+
+    if [ -n "${MQTT_HOST}" ]; then
+      export MQTT_BROKER="tcp://${MQTT_HOST}:${MQTT_PORT}"
+      [ -n "${MQTT_USER}" ] && export MQTT_USER
+      [ -n "${MQTT_PASS}" ] && export MQTT_PASS
+      echo "[run.sh] MQTT service found at ${MQTT_HOST}:${MQTT_PORT}"
+    fi
+  else
+    echo "[run.sh] WARNING: Could not fetch MQTT service from Supervisor (token present but API call failed)"
+  fi
 else
-  bashio::log.warning "No MQTT service available from Supervisor"
+  if [ -z "${SUPERVISOR_TOKEN}" ]; then
+    echo "[run.sh] WARNING: No SUPERVISOR_TOKEN, skipping MQTT service discovery"
+  fi
 fi
 
 exec /usr/bin/echonetgo
