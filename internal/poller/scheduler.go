@@ -33,6 +33,9 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 		probeTimeoutSec = 1
 	}
 	probeClient := echonet.NewClient(probeTimeoutSec, cfg.StrictSourcePort3610)
+	// hostEOJCache is written per-IP inside a single goroutine per IP (the go func
+	// below groups devices by IP), so concurrent access across IPs is safe. If devices
+	// sharing an IP are ever split into separate goroutines, a mutex will be needed.
 	hostEOJCache := make(map[string][][3]byte)
 	hostDevicePairs := make(map[string][]deviceWithEOJ)
 	var hostDevicePairsMu sync.Mutex
@@ -56,9 +59,23 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 			var pairs []deviceWithEOJ
 			for _, dev := range devices {
 				spec := deviceSpecs[dev.Class]
+				if spec == nil {
+					continue
+				}
 				activeEOJ := resolveEOJInstance(ctx, probeClient, dev, spec.EOJ, hostEOJCache)
 				pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
 				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
+
+				mfgCode, err := client.GetManufacturerCode(ctx, dev.IP, activeEOJ)
+				if err != nil {
+					pollerLog.Warnf("device %s (%s): manufacturer code read failed, using generic spec: %v", dev.Name, dev.IP, err)
+				} else if mfgCode != "" {
+					vendorKey := dev.Class + "_" + mfgCode
+					if vendorSpec := deviceSpecs[vendorKey]; vendorSpec != nil {
+						spec = vendorSpec
+						pollerLog.Infof("device %s (%s): using vendor-specific spec %s", dev.Name, dev.IP, vendorKey)
+					}
+				}
 
 				activeMetrics := spec.Metrics
 				readable, err := client.GetReadablePropertyMap(ctx, dev.IP, activeEOJ)

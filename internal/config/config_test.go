@@ -176,3 +176,36 @@ func TestLoad_PermissionErrorReturnsError(t *testing.T) {
 		t.Fatal("expected error for unreadable config file")
 	}
 }
+
+func TestLoad_RejectsDeviceMissingName(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ECHONET_CONFIG", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+	t.Setenv("ECHONET_DEVICES", `[{"name":"","ip":"10.0.0.1","class":"home_ac"}]`)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for empty device name")
+	}
+}
+
+func TestLoad_RejectsDeviceMissingIP(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ECHONET_CONFIG", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+	t.Setenv("ECHONET_DEVICES", `[{"name":"dev1","ip":"","class":"home_ac"}]`)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for empty device ip")
+	}
+}
+
+func TestLoad_RejectsDeviceMissingClass(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ECHONET_CONFIG", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+	t.Setenv("ECHONET_DEVICES", `[{"name":"dev1","ip":"10.0.0.1","class":""}]`)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for empty device class")
+	}
+}

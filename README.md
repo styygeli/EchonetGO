@@ -22,7 +22,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 
 - `GET /` — brief info
 - `GET /health` — liveness
-- `GET /state` — JSON snapshot of cached device metrics and identity (manufacturer, product code, UID), plus scrape diagnostics (`success`, `last_error`, `consecutive_failures`)
+- `GET /state` — JSON snapshot of cached device metrics and identity (manufacturer, product code, UID), plus scrape diagnostics (`success`, `last_error`, `max_group_failures`)
 
 ## File layout
 
@@ -37,13 +37,13 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `internal/api/` | HTTP mux: `/health`, `/state`, `/` |
 | `internal/logging/` | Leveled logger (`ECHONET_LOG_LEVEL`) |
 | `etc/config.example.yaml` | Example config (listen_addr, devices_path, specs_dir, devices) |
-| `etc/devices.yaml` | Optional device list (name, ip, class, scrape_interval) |
+| `etc/devices.example.yaml` | Example device list — copy to `etc/devices.yaml` and set your IPs |
 | `etc/specs/*.yaml` | One file per device class (e.g. `home_ac`, `storage_battery`), including generated first-pass coverage for most classes from pychonet/echonetlite_homeassistant |
 
 ## Architecture
 
 - **Config** — Single source: optional `etc/config.yaml` plus env overrides. Devices can be in the config file, in a file at `devices_path`, or in `ECHONET_DEVICES` JSON.
-- **Specs** — One YAML per device class in `etc/specs/`; filename (without `.yaml`) is the class id. Each spec defines EOJ, default scrape interval, and metrics (EPC, name, help, size/scale/type, optional enum, per-metric scrape_interval).
+- **Specs** — One YAML per device class in `etc/specs/`; filename (without `.yaml`) is the class id. Each spec defines EOJ, default scrape interval, and metrics (EPC, name, help, size/scale/type, optional enum, per-metric scrape_interval). **Vendor-specific specs** are named `{class}_{manufacturer_hex}.yaml` (e.g. `home_ac_000006.yaml`) and are auto-selected at runtime when the device reports that manufacturer code (EPC 0x8A); otherwise the generic class spec is used. Known manufacturer codes: `000006` = Mitsubishi Electric, `000008` = Daikin, `000131` = Eternalplanet (EP Cube).
 - **ECHONET client** — Sends Get requests over UDP, parses Get_Res; supports GETMAP (0x9F) for readable properties and adaptive split when the device returns partial OPC.
 - **Poller** — For each configured device: load spec, optionally filter metrics by GETMAP, group by scrape interval, stagger startup, run per-interval scrapers and a device-info refresher; all results merged into a single cache. `/state` serves from cache regardless of scrape cadence.
 - **API** — Read-only in this scaffold: health and cached state JSON.
@@ -62,7 +62,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | Discovery (multicast, etc.) | pychonet discovery | **Planned**: discovery flow and quirk overlays |
 | Home Assistant add-on | HA add-on repo | **Planned**: add-on packaging once core runtime is stable |
 
-Contributors can add device classes and metrics by editing YAML under `etc/specs/` and listing devices in config or `etc/devices.yaml` without changing Go code. The shipped `etc/specs/` set is now committed as permanent baseline data (including broad class coverage imported from pychonet at migration time), so runtime/build does not depend on external projects.
+Contributors can add device classes and metrics by editing YAML under `etc/specs/` and listing devices in config or a `devices.yaml` file (see `etc/devices.example.yaml`) without changing Go code. The shipped `etc/specs/` set is now committed as permanent baseline data (including broad class coverage imported from pychonet at migration time), so runtime/build does not depend on external projects.
 
 ## Configuration
 

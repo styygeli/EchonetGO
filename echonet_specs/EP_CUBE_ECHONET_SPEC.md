@@ -1,6 +1,6 @@
 # EP Cube ECHONET Lite Specification Reference
 **Device Model:** GZ-000900 (EP Cube)
-**Manufacturer:** Sungrow (0x000131)
+**Manufacturer:** Shenzhen Eternalplanet Energy Pingshan Ltd. (0x000131)
 **Protocol:** ECHONET Lite Ver. 1.1
 
 This document provides a clean mapping of the ECHONET Lite registers (EPCs) implemented by the EP Cube, consolidated from the official compliance documentation (PDF/PNG verification).
@@ -16,7 +16,7 @@ Basic device identification and node management.
 | `0x82` | 規格Version情報 | Version information | 4B | Get | `0x010E0100` (Ver 1.1) |
 | `0x83` | 識別番号 | Identification number | 17B | Get | `0xFE` + `0x000131` + 13 bytes |
 | `0x88` | 異常発生状態 | Fault status | 1B | Get | `0x41`=Fault, `0x42`=Normal |
-| `0x8A` | メーカコード | Manufacturer code | 3B | Get | `0x000131` (Sungrow) |
+| `0x8A` | メーカコード | Manufacturer code | 3B | Get | `0x000131` (Eternalplanet) |
 | `0x9D` | 状変アナウンスプロパティマップ | Status change announcement property map | 3B | Get | `0x0280D5` |
 | `0x9E` | Set プロパティマップ | Set property map | 1B | Get | `0x00` |
 | `0x9F` | Get プロパティマップ | Get property map | 14B | Get | `0x0D808283888A9D9E9FD3D4D5D6D7` |
