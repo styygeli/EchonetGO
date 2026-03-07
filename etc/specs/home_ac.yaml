@@ -1,4 +1,5 @@
-# Home Air Conditioner (Daikin, Mitsubishi, etc.) - ECHONET Object 0x013001
+# Home Air Conditioner (Daikin, Mitsubishi MAC-900IF, etc.) - ECHONET Object 0x013001
+# Verified against Mitsubishi LZ-000156 (AC-AC-A3-2) certification sheet.
 eoj: [0x01, 0x30, 0x01]
 description: "Home air conditioner"
 default_scrape_interval: 1m
@@ -13,22 +14,29 @@ metrics:
     enum:
       0x30: on
       0x31: off
-  - epc: 0xBB
-    name: indoor_temperature_celsius
-    help: "Indoor temperature in °C."
-    size: 2
-    scale: 0.1
-    invalid: 0x7FFF
-    type: gauge
-  - epc: 0xB3
-    name: set_temperature_celsius
-    help: "Target temperature in °C."
+  - epc: 0x88
+    name: fault_status
+    help: "Fault status."
     size: 1
     scale: 1
     type: gauge
+    scrape_interval: 10m
+    enum:
+      0x41: fault
+      0x42: no_fault
+  - epc: 0x8F
+    name: power_saving_operation
+    help: "Power saving operation setting."
+    size: 1
+    scale: 1
+    type: gauge
+    scrape_interval: 10m
+    enum:
+      0x41: power_saving
+      0x42: normal
   - epc: 0xB0
     name: operation_mode
-    help: "Operation mode code (ECHONET EPC 0xB0): 0x41=auto, 0x42=cool, 0x43=heat, 0x44=dry, 0x45=fan_only, 0x40=other."
+    help: "Operation mode setting."
     size: 1
     scale: 1
     type: gauge
@@ -39,3 +47,32 @@ metrics:
       0x43: heat
       0x44: dry
       0x45: fan_only
+  - epc: 0xB3
+    name: set_temperature_celsius
+    help: "Target temperature in °C (0-50)."
+    size: 1
+    scale: 1
+    type: gauge
+  - epc: 0xBB
+    name: indoor_temperature_celsius
+    help: "Indoor temperature in °C (signed). Standard is 1B per ECHONET Appendix; auto-detect for vendor variance."
+    size: 0
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xA0
+    name: air_flow_rate
+    help: "Air flow rate setting: 0x41=auto, 0x31-0x38=level 1-8."
+    size: 1
+    scale: 1
+    type: gauge
+    enum:
+      0x41: auto
+      0x31: level_1
+      0x32: level_2
+      0x33: level_3
+      0x34: level_4
+      0x35: level_5
+      0x36: level_6
+      0x37: level_7
+      0x38: level_8
