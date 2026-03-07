@@ -35,7 +35,7 @@ type Publisher struct {
 	swVersion       string
 
 	mu        sync.Mutex
-	published map[string]bool // tracks which discovery configs have been sent
+	published map[string]string // tracks device name -> "manufacturer|model" published
 }
 
 // NewPublisher creates a connected MQTT publisher. Returns nil if broker is empty.
@@ -78,7 +78,7 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 		topicPrefix:     cfg.TopicPrefix,
 		discoveryPrefix: cfg.DiscoveryPrefix,
 		swVersion:       swVersion,
-		published:       make(map[string]bool),
+		published:       make(map[string]string),
 	}, nil
 }
 
@@ -102,7 +102,8 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 	defer p.mu.Unlock()
 
 	key := dev.Name
-	if p.published[key] {
+	infoKey := info.Manufacturer + "|" + info.ProductCode
+	if prev, ok := p.published[key]; ok && prev == infoKey {
 		return
 	}
 
@@ -177,8 +178,8 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 			mqttLog.Warnf("publish discovery for %s/%s: %v", dev.Name, ms.Name, err)
 		}
 	}
-	p.published[key] = true
-	mqttLog.Infof("published discovery for %s (%d sensors)", dev.Name, len(metricSpecs))
+	p.published[key] = infoKey
+	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, len(metricSpecs), info.Manufacturer, info.ProductCode)
 }
 
 func (p *Publisher) publishState(dev config.Device, metrics map[string]echonet.MetricValue) {
