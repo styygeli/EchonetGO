@@ -1,0 +1,296 @@
+# Power Distribution Board Metering (0x0287) — ECHONET Appendix E
+# Panasonic Smart Cosmo and similar residential distribution boards.
+# Per-circuit EPCs (0xD0-0xEF) return 8 bytes; size: 4 extracts instantaneous W.
+eoj: [0x02, 0x87, 0x01]
+description: "Power distribution board metering"
+default_scrape_interval: 1m
+
+metrics:
+  - epc: 0x80
+    name: operation_status
+    help: "Operation status (0x30=ON, 0x31=OFF)."
+    size: 1
+    scale: 1
+    type: gauge
+    scrape_interval: 10m
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0x88
+    name: fault_status
+    help: "Fault status."
+    size: 1
+    scale: 1
+    type: gauge
+    scrape_interval: 10m
+    enum:
+      0x41: fault
+      0x42: no_fault
+  - epc: 0xB0
+    name: wiring_config
+    help: "Wiring system configuration (0x00=single-phase 3-wire, etc.)."
+    size: 1
+    scale: 1
+    type: gauge
+    scrape_interval: 24h
+  - epc: 0xB8
+    name: ct_channel_count
+    help: "Number of CT measurement channels."
+    size: 1
+    scale: 1
+    type: gauge
+    scrape_interval: 24h
+  - epc: 0xC0
+    name: instantaneous_power_w
+    help: "Total instantaneous electric power in W (measured at main breaker)."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xC1
+    name: instantaneous_current_raw
+    help: "Total instantaneous current (aggregate, format depends on wiring config)."
+    size: 4
+    scale: 1
+    type: gauge
+  - epc: 0xC6
+    name: cumulative_energy_normal_raw
+    help: "Cumulative electric energy normal direction."
+    size: 4
+    signed: true
+    scale: 1
+    type: counter
+    scrape_interval: 10m
+  - epc: 0xC7
+    name: cumulative_energy_reverse_raw
+    help: "Cumulative electric energy reverse direction."
+    size: 4
+    signed: true
+    scale: 1
+    type: counter
+    scrape_interval: 10m
+  # Per-circuit instantaneous power (first 4 bytes of 8-byte EDT = signed W)
+  - epc: 0xD0
+    name: circuit_01_power_w
+    help: "Circuit 1 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD1
+    name: circuit_02_power_w
+    help: "Circuit 2 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD2
+    name: circuit_03_power_w
+    help: "Circuit 3 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD3
+    name: circuit_04_power_w
+    help: "Circuit 4 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD4
+    name: circuit_05_power_w
+    help: "Circuit 5 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD5
+    name: circuit_06_power_w
+    help: "Circuit 6 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD6
+    name: circuit_07_power_w
+    help: "Circuit 7 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD7
+    name: circuit_08_power_w
+    help: "Circuit 8 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD8
+    name: circuit_09_power_w
+    help: "Circuit 9 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xD9
+    name: circuit_10_power_w
+    help: "Circuit 10 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xDA
+    name: circuit_11_power_w
+    help: "Circuit 11 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xDB
+    name: circuit_12_power_w
+    help: "Circuit 12 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xDC
+    name: circuit_13_power_w
+    help: "Circuit 13 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xDD
+    name: circuit_14_power_w
+    help: "Circuit 14 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xDE
+    name: circuit_15_power_w
+    help: "Circuit 15 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xDF
+    name: circuit_16_power_w
+    help: "Circuit 16 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE0
+    name: circuit_17_power_w
+    help: "Circuit 17 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE1
+    name: circuit_18_power_w
+    help: "Circuit 18 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE2
+    name: circuit_19_power_w
+    help: "Circuit 19 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE3
+    name: circuit_20_power_w
+    help: "Circuit 20 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE4
+    name: circuit_21_power_w
+    help: "Circuit 21 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE5
+    name: circuit_22_power_w
+    help: "Circuit 22 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE6
+    name: circuit_23_power_w
+    help: "Circuit 23 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE7
+    name: circuit_24_power_w
+    help: "Circuit 24 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE8
+    name: circuit_25_power_w
+    help: "Circuit 25 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xE9
+    name: circuit_26_power_w
+    help: "Circuit 26 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xEA
+    name: circuit_27_power_w
+    help: "Circuit 27 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xEB
+    name: circuit_28_power_w
+    help: "Circuit 28 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xEC
+    name: circuit_29_power_w
+    help: "Circuit 29 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xED
+    name: circuit_30_power_w
+    help: "Circuit 30 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xEE
+    name: circuit_31_power_w
+    help: "Circuit 31 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+  - epc: 0xEF
+    name: circuit_32_power_w
+    help: "Circuit 32 instantaneous power in W."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge

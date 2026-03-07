@@ -28,3 +28,15 @@ specs_dir: "etc/specs"
 #   - name: living_ac
 #     ip: 192.168.1.20
 #     class: home_ac
+#   - name: breaker_panel
+#     ip: 192.168.1.30
+#     class: power_dist_board
+#   - name: panel_solar
+#     ip: 192.168.1.30
+#     class: home_solar
+#   - name: water_meter
+#     ip: 192.168.1.30
+#     class: water_flow_meter
+#   - name: gas_meter
+#     ip: 192.168.1.30
+#     class: gas_meter
