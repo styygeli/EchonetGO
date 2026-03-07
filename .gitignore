@@ -55,5 +55,9 @@ env/
 .idea/
 .vscode/
 
+# User device/config files (may contain real IPs)
+etc/devices.yaml
+etc/config.yaml
+
 # OS files
 .DS_Store
