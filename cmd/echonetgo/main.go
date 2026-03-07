@@ -18,7 +18,7 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-const addonVersion = "0.1.32"
+const addonVersion = "0.1.33"
 
 func main() {
 	log := logging.New("main")
