@@ -56,9 +56,23 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 			var pairs []deviceWithEOJ
 			for _, dev := range devices {
 				spec := deviceSpecs[dev.Class]
+				if spec == nil {
+					continue
+				}
 				activeEOJ := resolveEOJInstance(ctx, probeClient, dev, spec.EOJ, hostEOJCache)
 				pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
 				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
+
+				mfgCode, err := client.GetManufacturerCode(ctx, dev.IP, activeEOJ)
+				if err != nil {
+					pollerLog.Warnf("device %s (%s): manufacturer code read failed, using generic spec: %v", dev.Name, dev.IP, err)
+				} else if mfgCode != "" {
+					vendorKey := dev.Class + "_" + mfgCode
+					if vendorSpec := deviceSpecs[vendorKey]; vendorSpec != nil {
+						spec = vendorSpec
+						pollerLog.Infof("device %s (%s): using vendor-specific spec %s", dev.Name, dev.IP, vendorKey)
+					}
+				}
 
 				activeMetrics := spec.Metrics
 				readable, err := client.GetReadablePropertyMap(ctx, dev.IP, activeEOJ)

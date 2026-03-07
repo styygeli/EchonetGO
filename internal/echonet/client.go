@@ -517,6 +517,32 @@ func (c *Client) GetReadablePropertyMap(ctx context.Context, addr string, eoj [3
 	return nil, fmt.Errorf("readable property map (0x9F) missing")
 }
 
+// GetManufacturerCode reads EPC 0x8A and returns the 3-byte manufacturer code as a
+// 6-digit lowercase hex string (e.g. "000006"). Used for vendor-specific spec lookup.
+// Falls back to node profile EOJ if the class EOJ returns Get_SNA.
+func (c *Client) GetManufacturerCode(ctx context.Context, addr string, eoj [3]byte) (string, error) {
+	nodeProfileEOJ := [3]byte{0x0E, 0xF0, 0x01}
+	props, err := c.GetProps(ctx, addr, eoj, []byte{0x8A})
+	if err != nil {
+		if isGetSNA(err) && eoj != nodeProfileEOJ {
+			props, err = c.GetProps(ctx, addr, nodeProfileEOJ, []byte{0x8A})
+		}
+		if err != nil {
+			if isGetSNA(err) {
+				return "", nil
+			}
+			return "", err
+		}
+	}
+	for _, p := range props {
+		if p.EPC != 0x8A || len(p.EDT) != 3 {
+			continue
+		}
+		return fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2]), nil
+	}
+	return "", nil
+}
+
 // GetDeviceInfo reads generic identity properties.
 func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte) (DeviceInfo, error) {
 	nodeProfileEOJ := [3]byte{0x0E, 0xF0, 0x01}
