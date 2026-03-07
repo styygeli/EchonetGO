@@ -42,6 +42,8 @@ type Device struct {
 	Name           string            `yaml:"name" json:"name"`
 	IP             string            `yaml:"ip" json:"ip"`
 	Class          string            `yaml:"class" json:"class"`
+	Manufacturer   string            `yaml:"manufacturer,omitempty" json:"manufacturer,omitempty"`
+	Model          string            `yaml:"model,omitempty" json:"model,omitempty"`
 	Labels         map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 	ScrapeInterval string            `yaml:"scrape_interval,omitempty" json:"scrape_interval,omitempty"`
 }
