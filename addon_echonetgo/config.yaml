@@ -1,8 +1,8 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration
 name: EchonetGO
-version: "0.1.28"
+version: "0.1.29"
 slug: echonetgo
-description: ECHONET Lite polling service in Go. Polls devices from YAML config, caches state, and exposes health and state over HTTP for use by a Home Assistant integration or other consumers.
+description: ECHONET Lite polling service in Go. Polls devices from YAML config, caches state, publishes sensors via MQTT auto-discovery for Home Assistant.
 url: "https://github.com/styygeli/EchonetGO"
 arch:
   - aarch64
@@ -14,6 +14,7 @@ init: false
 host_network: true
 map:
   - config:rw
+mqtt: auto
 options:
   config_path: "/config/echonetgo/config.yaml"
   devices_path: ""

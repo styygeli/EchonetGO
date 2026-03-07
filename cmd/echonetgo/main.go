@@ -11,10 +11,14 @@ import (
 
 	"github.com/styygeli/echonetgo/internal/api"
 	"github.com/styygeli/echonetgo/internal/config"
+	"github.com/styygeli/echonetgo/internal/echonet"
 	"github.com/styygeli/echonetgo/internal/logging"
+	mqttpub "github.com/styygeli/echonetgo/internal/mqtt"
 	"github.com/styygeli/echonetgo/internal/poller"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
+
+const addonVersion = "0.1.29"
 
 func main() {
 	log := logging.New("main")
@@ -31,9 +35,22 @@ func main() {
 	}
 
 	cache := poller.NewCache()
+
+	var mqttPub *mqttpub.Publisher
+	if cfg.MQTTEnabled() {
+		mqttPub, err = mqttpub.NewPublisher(cfg.MQTT, addonVersion)
+		if err != nil {
+			log.Warnf("MQTT disabled: %v", err)
+		} else {
+			log.Infof("MQTT publishing to %s", cfg.MQTT.Broker)
+			cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, success bool) {
+				mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, success)
+			})
+		}
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// Start polling in background so the API listener comes up immediately.
 	go cache.Start(ctx, cfg, deviceSpecs)
 
 	srv := &api.Server{
@@ -63,6 +80,9 @@ func main() {
 	case <-sigCh:
 		log.Infof("Shutting down...")
 		cancel()
+		if mqttPub != nil {
+			mqttPub.Disconnect()
+		}
 		if err := server.Shutdown(context.Background()); err != nil {
 			log.Warnf("HTTP shutdown: %v", err)
 		}

@@ -26,4 +26,16 @@ export ECHONET_SPECS_DIR="${ECHONET_SPECS_DIR:-/usr/share/echonetgo/specs}"
 # Listen on all interfaces so HA can reach the API
 export ECHONET_LISTEN_ADDR="0.0.0.0:9191"
 
+# MQTT: HA Supervisor provides these via the services API when mqtt: auto
+if [ -n "${MQTT_HOST}" ] && [ -z "${MQTT_BROKER}" ]; then
+  MQTT_PORT="${MQTT_PORT:-1883}"
+  export MQTT_BROKER="tcp://${MQTT_HOST}:${MQTT_PORT}"
+fi
+if [ -n "${MQTT_USERNAME}" ] && [ -z "${MQTT_USER}" ]; then
+  export MQTT_USER="${MQTT_USERNAME}"
+fi
+if [ -n "${MQTT_PASSWORD}" ] && [ -z "${MQTT_PASS}" ]; then
+  export MQTT_PASS="${MQTT_PASSWORD}"
+fi
+
 exec /usr/bin/echonetgo

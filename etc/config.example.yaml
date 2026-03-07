@@ -5,6 +5,7 @@
 #   ECHONET_LISTEN_ADDR, ECHONET_SCRAPE_TIMEOUT_SEC,
 #   ECHONET_STRICT_SOURCE_PORT_3610,
 #   ECHONET_DEVICES_PATH, ECHONET_SPECS_DIR, ECHONET_DEVICES (JSON)
+#   MQTT_BROKER, MQTT_USER, MQTT_PASS, MQTT_TOPIC_PREFIX, MQTT_DISCOVERY_PREFIX
 
 listen_addr: ":9191"
 scrape_timeout_sec: 15
@@ -40,3 +41,14 @@ specs_dir: "etc/specs"
 #   - name: gas_meter
 #     ip: 192.168.1.30
 #     class: gas_meter
+
+# MQTT publishing for Home Assistant auto-discovery.
+# Leave broker empty (or omit mqtt block) to disable.
+# When running as an HA add-on with mqtt: auto, the broker/credentials
+# are injected automatically via MQTT_HOST/MQTT_USERNAME/MQTT_PASSWORD.
+# mqtt:
+#   broker: "tcp://localhost:1883"
+#   username: ""
+#   password: ""
+#   topic_prefix: "echonetgo"         # state/availability published here
+#   discovery_prefix: "homeassistant" # HA MQTT auto-discovery prefix

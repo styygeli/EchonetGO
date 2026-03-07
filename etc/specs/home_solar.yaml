@@ -116,12 +116,18 @@ metrics:
     size: 2
     scale: 1
     type: gauge
+    ha_device_class: power
+    ha_state_class: measurement
+    ha_unit: W
   - epc: 0xE1
     name: cumulative_generation_kwh
     help: "Measured cumulative electricity generated in kWh."
     size: 4
     scale: 0.001
     type: counter
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: kWh
   - epc: 0xE8
     name: rated_generation_output_watts
     help: "Rated power generation output (system-interconnected)."

@@ -22,4 +22,9 @@ type MetricSpec struct {
 	Type           string // gauge or counter
 	Enum           map[int]string
 	ScrapeInterval time.Duration
+
+	// Home Assistant MQTT discovery metadata (optional).
+	HADeviceClass string // e.g. "power", "energy", "temperature", "enum"
+	HAStateClass  string // "measurement", "total_increasing", or ""
+	HAUnit        string // e.g. "W", "kWh", "°C"
 }

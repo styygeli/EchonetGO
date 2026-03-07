@@ -80,8 +80,9 @@ type DeviceInfo struct {
 
 // MetricValue holds a parsed value and its type (gauge or counter).
 type MetricValue struct {
-	Value float64
-	Type  string
+	Value     float64
+	Type      string
+	EnumLabel string // resolved enum label (empty if not an enum metric)
 }
 
 // NewClient creates a client with the given scrape timeout in seconds.
@@ -1040,7 +1041,13 @@ func ParsePropsToMetrics(props []model.GetResProperty, metrics []specs.MetricSpe
 			}
 			continue
 		}
-		out[m.Name] = MetricValue{Value: v, Type: m.Type}
+		mv := MetricValue{Value: v, Type: m.Type}
+		if len(m.Enum) > 0 {
+			if label, ok := m.Enum[int(v)]; ok {
+				mv.EnumLabel = label
+			}
+		}
+		out[m.Name] = mv
 	}
 	return out
 }

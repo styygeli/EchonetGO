@@ -7,6 +7,7 @@ import (
 
 	"github.com/styygeli/echonetgo/internal/config"
 	"github.com/styygeli/echonetgo/internal/echonet"
+	"github.com/styygeli/echonetgo/internal/specs"
 )
 
 // APIState is the top-level JSON response for the /state endpoint.
@@ -34,10 +35,15 @@ type APIMetric struct {
 	Type  string  `json:"type"`
 }
 
+// UpdateCallback is called after a successful scrape with the device's current state.
+type UpdateCallback func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, success bool)
+
 // Cache holds the latest scraped metrics per device. Safe for concurrent use.
 type Cache struct {
-	mu      sync.RWMutex
-	metrics map[string]deviceCache
+	mu         sync.RWMutex
+	metrics    map[string]deviceCache
+	onUpdate   UpdateCallback
+	specsByDev map[string][]specs.MetricSpec // filtered specs per device key
 }
 
 type deviceCache struct {
@@ -63,7 +69,24 @@ func DeviceKey(dev config.Device) string {
 
 // NewCache creates an empty cache.
 func NewCache() *Cache {
-	return &Cache{metrics: make(map[string]deviceCache)}
+	return &Cache{
+		metrics:    make(map[string]deviceCache),
+		specsByDev: make(map[string][]specs.MetricSpec),
+	}
+}
+
+// SetOnUpdate registers a callback invoked after each scrape update.
+func (c *Cache) SetOnUpdate(cb UpdateCallback) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.onUpdate = cb
+}
+
+// SetDeviceSpecs records the filtered metric specs for a device (post-GETMAP).
+func (c *Cache) SetDeviceSpecs(dev config.Device, metricSpecs []specs.MetricSpec) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.specsByDev[DeviceKey(dev)] = metricSpecs
 }
 
 // Get returns aggregated scrape status and a copy of cached metrics for a device.
@@ -118,7 +141,6 @@ func (c *Cache) GetInfo(dev config.Device) echonet.DeviceInfo {
 // Update merges a scrape result into the cache for a device/group.
 func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration, success bool, durationSec float64, metrics map[string]echonet.MetricValue, errMsg string) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	key := DeviceKey(dev)
 	dc := c.metrics[key]
 	if dc.groups == nil {
@@ -149,6 +171,22 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 	}
 	dc.groups[groupID] = gs
 	c.metrics[key] = dc
+
+	cb := c.onUpdate
+	var devSpecs []specs.MetricSpec
+	if cb != nil {
+		devSpecs = c.specsByDev[key]
+	}
+	info := dc.info
+	allMetrics := make(map[string]echonet.MetricValue, len(dc.metrics))
+	for k, v := range dc.metrics {
+		allMetrics[k] = v
+	}
+	c.mu.Unlock()
+
+	if cb != nil {
+		cb(dev, info, allMetrics, devSpecs, success)
+	}
 }
 
 // UpdateInfo stores generic device identity properties.
