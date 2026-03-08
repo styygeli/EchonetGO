@@ -84,3 +84,20 @@ metrics:
       0x36: level_6
       0x37: level_7
       0x38: level_8
+
+# HA climate entity mapping (power/mode/temp/fan via 0x80, 0xB0, 0xB3, 0xBB, 0xA0)
+climate:
+  mode_epc: 0xB0
+  temperature_epc: 0xB3
+  current_temperature_epc: 0xBB
+  fan_mode_epc: 0xA0
+  min_temp: 16
+  max_temp: 30
+  temp_step: 1
+  modes:
+    "off": null
+    "auto": 0x41
+    "cool": 0x42
+    "heat": 0x43
+    "dry": 0x44
+    "fan_only": 0x45

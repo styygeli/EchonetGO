@@ -3,6 +3,8 @@ package mqtt
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/styygeli/echonetgo/internal/specs"
 )
 
 func TestFriendlyDeviceName(t *testing.T) {
@@ -170,5 +172,74 @@ func TestStatePayloadWithEnumLabels(t *testing.T) {
 	}
 	if decoded["indoor_temperature_celsius"] != 24.5 {
 		t.Fatalf("indoor_temperature_celsius = %v", decoded["indoor_temperature_celsius"])
+	}
+}
+
+func TestWritableEntityType(t *testing.T) {
+	tests := []struct {
+		name string
+		ms   specs.MetricSpec
+		want string
+	}{
+		{"on/off enum -> switch", specs.MetricSpec{
+			Enum: map[int]string{0x30: "on", 0x31: "off"},
+			ReverseEnum: map[string]int{"on": 0x30, "off": 0x31},
+		}, "switch"},
+		{"multi enum -> select", specs.MetricSpec{
+			Enum: map[int]string{0x41: "auto", 0x42: "cool", 0x43: "heat"},
+			ReverseEnum: map[string]int{"auto": 0x41, "cool": 0x42, "heat": 0x43},
+		}, "select"},
+		{"no enum -> number", specs.MetricSpec{Scale: 1, Type: "gauge"}, "number"},
+		{"exclude_set -> empty", specs.MetricSpec{ExcludeSet: true, Enum: map[int]string{0x30: "on", 0x31: "off"}, ReverseEnum: map[string]int{"on": 0x30, "off": 0x31}}, ""},
+		{"two enum but not on/off -> select", specs.MetricSpec{
+			Enum: map[int]string{0x41: "fault", 0x42: "no_fault"},
+			ReverseEnum: map[string]int{"fault": 0x41, "no_fault": 0x42},
+		}, "select"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := writableEntityType(tt.ms)
+			if got != tt.want {
+				t.Fatalf("writableEntityType() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsClimateEPC(t *testing.T) {
+	cl := &specs.ClimateSpec{ModeEPC: 0xB0, TemperatureEPC: 0xB3, CurrentTemperatureEPC: 0xBB, FanModeEPC: 0xA0}
+	tests := []struct {
+		epc  byte
+		cl   *specs.ClimateSpec
+		want bool
+	}{
+		{0x80, cl, true},
+		{0xB0, cl, true},
+		{0xB3, cl, true},
+		{0xBB, cl, true},
+		{0xA0, cl, true},
+		{0x88, cl, false},
+		{0x80, nil, false},
+	}
+	for _, tt := range tests {
+		got := isClimateEPC(tt.epc, tt.cl)
+		if got != tt.want {
+			t.Errorf("isClimateEPC(0x%02x, cl) = %v, want %v", tt.epc, got, tt.want)
+		}
+	}
+}
+
+func TestClimateModesList(t *testing.T) {
+	i41, i42, i43 := 0x41, 0x42, 0x43
+	modes := map[string]*int{"off": nil, "auto": &i41, "cool": &i42, "heat": &i43}
+	got := climateModesList(modes)
+	want := []string{"off", "auto", "cool", "heat"}
+	if len(got) != len(want) {
+		t.Fatalf("climateModesList() = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("climateModesList()[%d] = %q, want %q", i, got[i], want[i])
+		}
 	}
 }

@@ -43,15 +43,21 @@ func main() {
 			log.Warnf("MQTT disabled: %v", err)
 		} else {
 			log.Infof("MQTT publishing to %s", cfg.MQTT.Broker)
-			cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, success bool) {
-				mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, success)
+			cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, success bool) {
+				mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, writable, climateSpec, success)
 			})
+			// Commander will be started after ctx is created (below)
 		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go cache.Start(ctx, cfg, deviceSpecs)
+	if mqttPub != nil {
+		echonetClient := echonet.NewClient(cfg.ScrapeTimeoutSec, cfg.StrictSourcePort3610)
+		commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
+		go commander.Run(ctx, mqttPub.Client())
+	}
 
 	srv := &api.Server{
 		ListenAddr: cfg.ListenAddr,

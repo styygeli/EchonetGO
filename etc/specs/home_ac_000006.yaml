@@ -171,3 +171,20 @@ metrics:
     scale: 1
     type: gauge
     scrape_interval: 10m
+
+# HA climate entity mapping (same EPCs as generic home_ac)
+climate:
+  mode_epc: 0xB0
+  temperature_epc: 0xB3
+  current_temperature_epc: 0xBB
+  fan_mode_epc: 0xA0
+  min_temp: 16
+  max_temp: 30
+  temp_step: 1
+  modes:
+    "off": null
+    "auto": 0x41
+    "cool": 0x42
+    "heat": 0x43
+    "dry": 0x44
+    "fan_only": 0x45
