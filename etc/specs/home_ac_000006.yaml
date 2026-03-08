@@ -1,6 +1,11 @@
 # Mitsubishi MAC-900IF (LZ-000156, AC-AC-A3-2) — vendor-specific Home AC spec
 # Manufacturer code 0x000006. Auto-selected when device reports this manufacturer.
 # See echonet_specs/MITSUBISHI_MAC-900IF_LZ-000156_SPEC.md.
+#
+# Removed from generic spec: identification_number (0x83), standard_version (0x82),
+# manufacturer_fault_code (0x86), manufacturer_code (0x8A). These are binary/structured
+# data that produce nonsensical values when forced into numeric gauges. The useful info
+# (UID, manufacturer name) is already captured in device identity fields.
 eoj: [0x01, 0x30, 0x01]
 description: "Home air conditioner (Mitsubishi MAC-900IF)"
 default_scrape_interval: 1m
@@ -22,34 +27,16 @@ metrics:
     scale: 1
     type: gauge
     scrape_interval: 10m
-  - epc: 0x82
-    name: standard_version
-    help: "Standard version information (4B, Appendix K)."
-    size: 4
-    scale: 1
-    type: gauge
-    scrape_interval: 24h
-  - epc: 0x83
-    name: identification_number
-    help: "Identification number (9 or 17B)."
-    size: 0
-    scale: 1
-    type: gauge
-    scrape_interval: 24h
+  # Mitsubishi does NOT follow the standard [unit(1B), counter(3B)] format for 0x85.
+  # Both tested units return first byte 0x00 (not a valid unit code), so we treat the
+  # full 4 bytes as a plain counter. Unit is unknown; empirically appears to be minutes.
   - epc: 0x85
     name: cumulative_operating_time
-    help: "Cumulative operating time."
+    help: "Cumulative operating time (raw counter; Mitsubishi non-standard format, unit unknown)."
     size: 4
     scale: 1
     type: counter
     scrape_interval: 1h
-  - epc: 0x86
-    name: manufacturer_fault_code
-    help: "Manufacturer fault code (variable length)."
-    size: 0
-    scale: 1
-    type: gauge
-    scrape_interval: 10m
   - epc: 0x88
     name: fault_status
     help: "Fault status."
@@ -67,13 +54,6 @@ metrics:
     scale: 1
     type: gauge
     scrape_interval: 10m
-  - epc: 0x8A
-    name: manufacturer_code
-    help: "Manufacturer code (3B). 0x000006 = Mitsubishi."
-    size: 0
-    scale: 1
-    type: gauge
-    scrape_interval: 24h
   - epc: 0x8B
     name: business_facility_code
     help: "Business facility code."
@@ -121,6 +101,9 @@ metrics:
     scale: 1
     type: gauge
     scrape_interval: 10m
+    enum:
+      0x41: auto
+      0x42: non_auto
   - epc: 0xA3
     name: air_flow_swing
     help: "Air flow swing setting."
@@ -128,6 +111,11 @@ metrics:
     scale: 1
     type: gauge
     scrape_interval: 10m
+    enum:
+      0x31: off
+      0x41: vertical
+      0x42: horizontal
+      0x43: both
   - epc: 0xA4
     name: air_flow_direction_horizontal
     help: "Air flow direction (horizontal)."
@@ -157,17 +145,25 @@ metrics:
       0x45: fan_only
   - epc: 0xB3
     name: set_temperature_celsius
-    help: "Target temperature in °C (0-50)."
+    help: "Target temperature in °C (0-50). 0xFD=undefined (e.g. fan_only mode)."
     size: 1
     scale: 1
     type: gauge
+    invalid: 0xFD
+    ha_device_class: temperature
+    ha_state_class: measurement
+    ha_unit: "°C"
   - epc: 0xBB
     name: indoor_temperature_celsius
-    help: "Indoor temperature in °C (1B signed, -127 to +125)."
+    help: "Indoor temperature in °C (signed). 0x7E=unable to measure."
     size: 1
     signed: true
     scale: 1
     type: gauge
+    invalid: 0x7E
+    ha_device_class: temperature
+    ha_state_class: measurement
+    ha_unit: "°C"
   - epc: 0xD0
     name: thermostat_state
     help: "Special state / thermostat state."

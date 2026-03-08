@@ -422,9 +422,6 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 	}
 	tid = binary.BigEndian.Uint16(data[2:4])
 	esv := data[10]
-	if esv != esvGetRes {
-		return 0, nil, &ESVError{ESV: esv}
-	}
 	opc := int(data[11])
 	pos := 12
 	truncated := false
@@ -450,6 +447,9 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 			clientLog.Warnf("Get_Res ended early: parsed=%d declared_opc=%d", len(props), opc)
 		}
 	}
+	if esv != esvGetRes {
+		return tid, props, &ESVError{ESV: esv}
+	}
 	return tid, props, nil
 }
 
@@ -464,8 +464,17 @@ func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte,
 		return nil, err
 	}
 	_, props, err := ParseGetRes(raw)
-	if err != nil {
+	if err != nil && !isGetSNA(err) {
 		return nil, err
+	}
+	if isGetSNA(err) {
+		var validProps []model.GetResProperty
+		for _, p := range props {
+			if p.PDC > 0 {
+				validProps = append(validProps, p)
+			}
+		}
+		props = validProps
 	}
 	missing := missingEPCs(epcs, props)
 	if len(missing) == 0 {
@@ -526,23 +535,28 @@ func (c *Client) GetReadablePropertyMap(ctx context.Context, addr string, eoj [3
 func (c *Client) GetManufacturerCode(ctx context.Context, addr string, eoj [3]byte) (string, error) {
 	nodeProfileEOJ := [3]byte{0x0E, 0xF0, 0x01}
 	props, err := c.GetProps(ctx, addr, eoj, []byte{0x8A})
-	if err != nil {
-		if isGetSNA(err) && eoj != nodeProfileEOJ {
-			props, err = c.GetProps(ctx, addr, nodeProfileEOJ, []byte{0x8A})
+	if err != nil && !isGetSNA(err) {
+		return "", err
+	}
+	
+	for _, p := range props {
+		if p.EPC == 0x8A && len(p.EDT) == 3 {
+			return fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2]), nil
 		}
-		if err != nil {
-			if isGetSNA(err) {
-				return "", nil
-			}
+	}
+	
+	if eoj != nodeProfileEOJ {
+		props, err = c.GetProps(ctx, addr, nodeProfileEOJ, []byte{0x8A})
+		if err != nil && !isGetSNA(err) {
 			return "", err
 		}
-	}
-	for _, p := range props {
-		if p.EPC != 0x8A || len(p.EDT) != 3 {
-			continue
+		for _, p := range props {
+			if p.EPC == 0x8A && len(p.EDT) == 3 {
+				return fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2]), nil
+			}
 		}
-		return fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2]), nil
 	}
+	
 	return "", nil
 }
 
@@ -550,20 +564,10 @@ func (c *Client) GetManufacturerCode(ctx context.Context, addr string, eoj [3]by
 func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte) (DeviceInfo, error) {
 	nodeProfileEOJ := [3]byte{0x0E, 0xF0, 0x01}
 	props, err := c.GetProps(ctx, addr, eoj, []byte{0x83, 0x8A, 0x8C})
-	if err != nil {
-		if isGetSNA(err) && eoj != nodeProfileEOJ {
-			clientLog.Debugf("device %s eoj=%s: identity Get returned Get_SNA; retrying via node profile",
-				normalizeHost(addr), formatEOJ(eoj))
-			props, err = c.GetProps(ctx, addr, nodeProfileEOJ, []byte{0x83, 0x8A, 0x8C})
-		}
-		if err != nil {
-			if isGetSNA(err) {
-				clientLog.Debugf("device %s eoj=%s: identity properties not supported (Get_SNA)", normalizeHost(addr), formatEOJ(eoj))
-				return DeviceInfo{}, nil
-			}
-			return DeviceInfo{}, err
-		}
+	if err != nil && !isGetSNA(err) {
+		return DeviceInfo{}, err
 	}
+	
 	info := DeviceInfo{}
 	for _, p := range props {
 		switch p.EPC {
@@ -575,6 +579,30 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte) (D
 			info.ProductCode = decodeProductCode(p.EDT)
 		}
 	}
+	
+	if (info.UID == "" || info.Manufacturer == "" || info.ProductCode == "") && eoj != nodeProfileEOJ {
+		var missing []byte
+		if info.UID == "" { missing = append(missing, 0x83) }
+		if info.Manufacturer == "" { missing = append(missing, 0x8A) }
+		if info.ProductCode == "" { missing = append(missing, 0x8C) }
+		
+		clientLog.Debugf("device %s eoj=%s: missing identity properties %x, retrying via node profile", normalizeHost(addr), formatEOJ(eoj), missing)
+		npProps, err := c.GetProps(ctx, addr, nodeProfileEOJ, missing)
+		if err != nil && !isGetSNA(err) {
+			return DeviceInfo{}, err
+		}
+		for _, p := range npProps {
+			switch p.EPC {
+			case 0x83:
+				info.UID = decodeUID(p.EDT, normalizeHost(addr))
+			case 0x8A:
+				info.Manufacturer = decodeManufacturer(p.EDT)
+			case 0x8C:
+				info.ProductCode = decodeProductCode(p.EDT)
+			}
+		}
+	}
+	
 	if info.UID == "" || info.Manufacturer == "" || info.ProductCode == "" {
 		clientLog.Warnf("device %s eoj=%s: incomplete device info uid=%q manufacturer=%q product_code=%q",
 			normalizeHost(addr), formatEOJ(eoj), info.UID, info.Manufacturer, info.ProductCode)
@@ -1001,6 +1029,11 @@ func parseEDTWithReason(edt []byte, m specs.MetricSpec) (float64, bool, string) 
 
 	v, _ := new(big.Float).SetInt(rawValue).Float64()
 	v *= m.Scale
+	if m.Scale > 0 && m.Scale < 1 {
+		digits := int(math.Ceil(-math.Log10(m.Scale)))
+		factor := math.Pow(10, float64(digits))
+		v = math.Round(v*factor) / factor
+	}
 	if math.IsInf(v, 0) || math.IsNaN(v) {
 		return 0, false, "scaled value overflows float64"
 	}

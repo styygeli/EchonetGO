@@ -27,17 +27,25 @@ metrics:
       0x42: no_fault
   - epc: 0xE0
     name: cumulative_flow_m3
-    help: "Cumulative water flow in m3 (unit determined by 0xE1)."
+    help: "Cumulative water flow in m³. Raw counter × 0.001 (assumes flow_rate_unit=0x03)."
     size: 4
-    scale: 1
+    scale: 0.001
     type: counter
     ha_device_class: water
     ha_state_class: total_increasing
     ha_unit: "m³"
   - epc: 0xE1
     name: flow_rate_unit
-    help: "Unit for flow measurement (0x00=m3, 0x01=L, 0x02=gal, 0x03=0.001m3)."
+    help: "Unit for flow measurement."
     size: 1
     scale: 1
     type: gauge
     scrape_interval: 24h
+    enum:
+      0x00: "1_m3"
+      0x01: "0.1_m3"
+      0x02: "0.01_m3"
+      0x03: "0.001_m3"
+      0x04: "1_L"
+      0x05: "0.1_L"
+      0x06: "0.01_L"

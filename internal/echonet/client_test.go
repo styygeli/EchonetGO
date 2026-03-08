@@ -297,3 +297,31 @@ func TestNextTIDIsMonotonic(t *testing.T) {
 		t.Fatalf("expected sequential TIDs: got %d then %d", a, b)
 	}
 }
+
+func TestFPRoundingAfterScale(t *testing.T) {
+	cases := []struct {
+		name  string
+		raw   []byte
+		scale float64
+		want  float64
+	}{
+		{"638 * 0.1 = 63.8", []byte{0x00, 0x00, 0x02, 0x7E}, 0.1, 63.8},
+		{"87 * 0.1 = 8.7", []byte{0x00, 0x00, 0x00, 0x57}, 0.1, 8.7},
+		{"29 * 0.1 = 2.9", []byte{0x00, 0x00, 0x00, 0x1D}, 0.1, 2.9},
+		{"51 * 0.1 = 5.1", []byte{0x00, 0x00, 0x00, 0x33}, 0.1, 5.1},
+		{"7 * 0.1 = 0.7", []byte{0x00, 0x00, 0x00, 0x07}, 0.1, 0.7},
+		{"59790 * 0.001 = 59.79", []byte{0x00, 0x00, 0xE9, 0x8E}, 0.001, 59.79},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := specs.MetricSpec{Name: "test", Size: 4, Scale: tc.scale, Type: "gauge"}
+			got, ok, reason := parseEDTWithReason(tc.raw, m)
+			if !ok {
+				t.Fatalf("parseEDTWithReason not ok: %s", reason)
+			}
+			if got != tc.want {
+				t.Fatalf("got %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
