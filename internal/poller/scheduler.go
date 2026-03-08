@@ -303,7 +303,7 @@ func (c *Cache) refreshDeviceInfo(ctx context.Context, client *echonet.Client, d
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		info, err := client.GetDeviceInfo(ctx, d.dev.IP, d.eoj)
+		info, err := client.GetDeviceInfo(ctx, d.dev.IP, d.eoj, d.dev.Model)
 		if err != nil {
 			pollerLog.Warnf("device %s (%s): device info read failed: %v", d.dev.Name, d.dev.IP, err)
 			continue

@@ -184,14 +184,23 @@ func (c *Client) GetManufacturerCode(ctx context.Context, addr string, eoj [3]by
 }
 
 // GetDeviceInfo reads generic identity properties.
-func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte) (DeviceInfo, error) {
+// When knownModel is non-empty, 0x8C (product code) is skipped to avoid
+// expensive timeouts on devices that don't support it.
+func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, knownModel string) (DeviceInfo, error) {
 	nodeProfileEOJ := [3]byte{0x0E, 0xF0, 0x01}
-	props, err := c.GetProps(ctx, addr, eoj, []byte{0x83, 0x8A, 0x8C})
+	epcs := []byte{0x83, 0x8A}
+	if knownModel == "" {
+		epcs = append(epcs, 0x8C)
+	}
+	props, err := c.GetProps(ctx, addr, eoj, epcs)
 	if err != nil && !isGetSNA(err) {
 		return DeviceInfo{}, err
 	}
 
 	info := DeviceInfo{}
+	if knownModel != "" {
+		info.ProductCode = knownModel
+	}
 	for _, p := range props {
 		switch p.EPC {
 		case 0x83:
