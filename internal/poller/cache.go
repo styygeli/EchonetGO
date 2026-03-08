@@ -41,8 +41,7 @@ type groupStatus struct {
 	failures    int
 }
 
-// DeviceKey returns a unique key for a configured device.
-func DeviceKey(dev config.Device) string {
+func deviceKey(dev config.Device) string {
 	return dev.Name + "|" + dev.IP + "|" + dev.Class
 }
 
@@ -68,14 +67,14 @@ func (c *Cache) SetOnUpdate(cb UpdateCallback) {
 func (c *Cache) SetDeviceSpecs(dev config.Device, metricSpecs []specs.MetricSpec) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.specsByDev[DeviceKey(dev)] = metricSpecs
+	c.specsByDev[deviceKey(dev)] = metricSpecs
 }
 
 // SetDeviceClimate records the climate spec for a device (e.g. home_ac).
 func (c *Cache) SetDeviceClimate(dev config.Device, climate *specs.ClimateSpec) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := DeviceKey(dev)
+	key := deviceKey(dev)
 	if climate == nil {
 		delete(c.climateByDev, key)
 		return
@@ -87,14 +86,14 @@ func (c *Cache) SetDeviceClimate(dev config.Device, climate *specs.ClimateSpec) 
 func (c *Cache) SetWritableEPCs(dev config.Device, writable map[byte]struct{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.writableEPCs[DeviceKey(dev)] = writable
+	c.writableEPCs[deviceKey(dev)] = writable
 }
 
 // GetWritableEPCs returns the writable EPC set for a device, if known.
 func (c *Cache) GetWritableEPCs(dev config.Device) (map[byte]struct{}, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	w, ok := c.writableEPCs[DeviceKey(dev)]
+	w, ok := c.writableEPCs[deviceKey(dev)]
 	return w, ok
 }
 
@@ -102,14 +101,14 @@ func (c *Cache) GetWritableEPCs(dev config.Device) (map[byte]struct{}, bool) {
 func (c *Cache) SetDeviceEOJ(dev config.Device, eoj [3]byte) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.eojByDev[DeviceKey(dev)] = eoj
+	c.eojByDev[deviceKey(dev)] = eoj
 }
 
 // GetDeviceEOJ returns the EOJ for a device, if known.
 func (c *Cache) GetDeviceEOJ(dev config.Device) ([3]byte, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	eoj, ok := c.eojByDev[DeviceKey(dev)]
+	eoj, ok := c.eojByDev[deviceKey(dev)]
 	return eoj, ok
 }
 
@@ -117,14 +116,14 @@ func (c *Cache) GetDeviceEOJ(dev config.Device) ([3]byte, bool) {
 func (c *Cache) GetDeviceClimate(dev config.Device) *specs.ClimateSpec {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.climateByDev[DeviceKey(dev)]
+	return c.climateByDev[deviceKey(dev)]
 }
 
 // GetDeviceSpecs returns the cached metric specs for a device, if any.
 func (c *Cache) GetDeviceSpecs(dev config.Device) ([]specs.MetricSpec, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	s, ok := c.specsByDev[DeviceKey(dev)]
+	s, ok := c.specsByDev[deviceKey(dev)]
 	return s, ok
 }
 
@@ -132,7 +131,7 @@ func (c *Cache) GetDeviceSpecs(dev config.Device) ([]specs.MetricSpec, bool) {
 func (c *Cache) Get(dev config.Device) (success bool, durationSec float64, lastScrape time.Time, metrics map[string]echonet.MetricValue) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	dc, ok := c.metrics[DeviceKey(dev)]
+	dc, ok := c.metrics[deviceKey(dev)]
 	if !ok {
 		return false, 0, time.Time{}, nil
 	}
@@ -170,7 +169,7 @@ func (c *Cache) Get(dev config.Device) (success bool, durationSec float64, lastS
 func (c *Cache) GetInfo(dev config.Device) echonet.DeviceInfo {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	dc, ok := c.metrics[DeviceKey(dev)]
+	dc, ok := c.metrics[deviceKey(dev)]
 	if !ok {
 		return echonet.DeviceInfo{}
 	}
@@ -180,7 +179,7 @@ func (c *Cache) GetInfo(dev config.Device) echonet.DeviceInfo {
 // Update merges a scrape result into the cache for a device/group.
 func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration, success bool, durationSec float64, metrics map[string]echonet.MetricValue, errMsg string) {
 	c.mu.Lock()
-	key := DeviceKey(dev)
+	key := deviceKey(dev)
 	dc := c.metrics[key]
 	if dc.groups == nil {
 		dc.groups = make(map[string]groupStatus)
@@ -243,7 +242,7 @@ func (c *Cache) UpdateInfo(dev config.Device, info echonet.DeviceInfo) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	key := DeviceKey(dev)
+	key := deviceKey(dev)
 	dc := c.metrics[key]
 	dc.info = info
 	c.metrics[key] = dc

@@ -40,11 +40,6 @@ func New(component string) *Logger {
 	return NewWithWriters(component, os.Stdout, os.Stderr)
 }
 
-// NewWithWriter creates a logger writing all levels to w.
-func NewWithWriter(component string, w io.Writer) *Logger {
-	return NewWithWriters(component, w, w)
-}
-
 // NewWithWriters creates a logger with separate output streams.
 // debug/info go to stdoutWriter; warn/error/fatal go to stderrWriter.
 func NewWithWriters(component string, stdoutWriter, stderrWriter io.Writer) *Logger {
@@ -64,14 +59,13 @@ func NewWithWriters(component string, stdoutWriter, stderrWriter io.Writer) *Log
 // SetLevelFromEnv reads ECHONET_LOG_LEVEL and sets global level.
 func SetLevelFromEnv() {
 	level := os.Getenv(envLogLevel)
-	if err := SetLevel(level); err != nil {
+	if err := setLevel(level); err != nil {
 		globalLevel.Store(int32(LevelInfo))
 		log.New(os.Stderr, "", log.LstdFlags).Printf("[WARN] [logging] invalid %s=%q; using info", envLogLevel, level)
 	}
 }
 
-// SetLevel updates global log level.
-func SetLevel(level string) error {
+func setLevel(level string) error {
 	v, err := parseLevel(level)
 	if err != nil {
 		return err
