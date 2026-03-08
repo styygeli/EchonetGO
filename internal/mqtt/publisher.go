@@ -73,17 +73,22 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 		return nil, fmt.Errorf("mqtt connect to %s: %w", cfg.Broker, err)
 	}
 
-	return &Publisher{
+	pub := &Publisher{
 		client:          client,
 		topicPrefix:     cfg.TopicPrefix,
 		discoveryPrefix: cfg.DiscoveryPrefix,
 		swVersion:       swVersion,
 		published:       make(map[string]string),
-	}, nil
+	}
+	pub.publishBridgeDevice()
+	return pub, nil
 }
 
 // Disconnect cleanly shuts down the MQTT connection.
 func (p *Publisher) Disconnect() {
+	topic := fmt.Sprintf("%s/bridge/availability", p.topicPrefix)
+	token := p.client.Publish(topic, qos, true, "offline")
+	token.WaitTimeout(publishTimeout)
 	p.client.Disconnect(1000)
 	mqttLog.Infof("disconnected")
 }
@@ -130,7 +135,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 			Name:              friendlyMetricName(ms.Name),
 			UniqueID:          "echonetgo_" + objectID,
 			StateTopic:        stateTopic,
-			ValueTemplate:     fmt.Sprintf("{{ value_json.%s }}", ms.Name),
+			ValueTemplate:     fmt.Sprintf("{{ value_json.%s | default(None) }}", ms.Name),
 			AvailabilityTopic: availTopic,
 			ExpireAfter:       300,
 			Device:            device,
@@ -156,7 +161,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 				options = append(options, label)
 			}
 			payload.Options = options
-			payload.ValueTemplate = fmt.Sprintf("{{ value_json.%s_str | default(value_json.%s) }}", ms.Name, ms.Name)
+			payload.ValueTemplate = fmt.Sprintf("{{ value_json.%s_str | default(value_json.%s | default(None)) }}", ms.Name, ms.Name)
 		}
 
 		if ms.HADeviceClass == "power" || ms.HADeviceClass == "energy" {
@@ -212,6 +217,49 @@ func (p *Publisher) publishAvailability(dev config.Device, online bool) {
 	if !token.WaitTimeout(publishTimeout) {
 		mqttLog.Warnf("publish availability timeout for %s", dev.Name)
 	}
+}
+
+// publishBridgeDevice registers the EchonetGO bridge as a named device in HA
+// so that child devices (via_device) have a proper parent.
+func (p *Publisher) publishBridgeDevice() {
+	device := haDevice{
+		Identifiers:  []string{"echonetgo"},
+		Name:         "EchonetGO",
+		Manufacturer: "github.com/styygeli/EchonetGO",
+		Model:        "ECHONET Lite Gateway",
+		SWVersion:    p.swVersion,
+	}
+	availTopic := fmt.Sprintf("%s/bridge/availability", p.topicPrefix)
+	stateTopic := fmt.Sprintf("%s/bridge/state", p.topicPrefix)
+
+	payload := haDiscoveryPayload{
+		Name:              "Status",
+		UniqueID:          "echonetgo_bridge_status",
+		StateTopic:        stateTopic,
+		ValueTemplate:     "{{ value_json.status }}",
+		AvailabilityTopic: availTopic,
+		ExpireAfter:       300,
+		Device:            device,
+		ForceUpdate:       true,
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		mqttLog.Warnf("marshal bridge discovery: %v", err)
+		return
+	}
+	token := p.client.Publish(fmt.Sprintf("%s/sensor/echonetgo_bridge_status/config", p.discoveryPrefix), qos, true, data)
+	if !token.WaitTimeout(publishTimeout) {
+		mqttLog.Warnf("publish bridge discovery timeout")
+		return
+	}
+
+	// Publish availability and initial state.
+	p.client.Publish(availTopic, qos, true, "online")
+	stateData, _ := json.Marshal(map[string]string{"status": "online"})
+	p.client.Publish(stateTopic, qos, true, stateData)
+
+	mqttLog.Infof("published bridge device discovery")
 }
 
 // haDiscoveryPayload is the JSON structure for HA MQTT sensor auto-discovery.
