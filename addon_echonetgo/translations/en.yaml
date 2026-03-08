@@ -1,5 +1,5 @@
 name: EchonetGO
-description: ECHONET Lite polling service in Go. Polls devices from YAML config and exposes state over HTTP.
+description: ECHONET Lite polling service in Go. Polls devices, publishes HA entities via MQTT, and serves Prometheus metrics.
 config:
   config_path:
     name: Config file path
