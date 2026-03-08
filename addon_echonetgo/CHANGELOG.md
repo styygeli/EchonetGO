@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.4
+
+- Log version number at startup.
+
 ## 0.9.3
 
 - Skip ECHONET 0x8C (product code) query when device config already has a `model` field, avoiding ~30s of timeouts per device at startup.

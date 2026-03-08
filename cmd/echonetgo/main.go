@@ -23,11 +23,12 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-const addonVersion = "0.9.3"
+const addonVersion = "0.9.4"
 
 func main() {
 	log := logging.New("main")
 	logging.SetLevelFromEnv()
+	log.Infof("EchonetGO %s starting", addonVersion)
 
 	cfg, err := config.Load()
 	if err != nil {
