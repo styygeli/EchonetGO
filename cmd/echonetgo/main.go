@@ -69,7 +69,6 @@ func main() {
 
 	srv := &api.Server{
 		ListenAddr: cfg.ListenAddr,
-		GetState:   func() any { return cache.StateForAPI(cfg) },
 	}
 	if cfg.MetricsEnabled {
 		registry := prometheus.NewRegistry()

@@ -1,7 +1,6 @@
 package poller
 
 import (
-	"sort"
 	"sync"
 	"time"
 
@@ -9,31 +8,6 @@ import (
 	"github.com/styygeli/echonetgo/internal/echonet"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
-
-// APIState is the top-level JSON response for the /state endpoint.
-type APIState struct {
-	Devices []APIDevice `json:"devices"`
-}
-
-// APIDevice is the per-device JSON in the /state response.
-type APIDevice struct {
-	Name             string                `json:"name"`
-	IP               string                `json:"ip"`
-	Class            string                `json:"class"`
-	Success          bool                  `json:"success"`
-	Manufacturer     string                `json:"manufacturer"`
-	ProductCode      string                `json:"product_code"`
-	UID              string                `json:"uid"`
-	Metrics          map[string]APIMetric  `json:"metrics"`
-	LastError        string                `json:"last_error"`
-	MaxGroupFailures int                   `json:"max_group_failures"`
-}
-
-// APIMetric is one metric value in the /state response.
-type APIMetric struct {
-	Value float64 `json:"value"`
-	Type  string  `json:"type"`
-}
 
 // UpdateCallback is called after a scrape with the device's current state.
 // writable is the set of EPCs the device reports as writable (0x9E); may be nil.
@@ -275,65 +249,3 @@ func (c *Cache) UpdateInfo(dev config.Device, info echonet.DeviceInfo) {
 	c.metrics[key] = dc
 }
 
-// StateForAPI returns a typed, JSON-serializable snapshot of all cached device state.
-func (c *Cache) StateForAPI(cfg *config.Config) APIState {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	devices := make([]APIDevice, 0, len(cfg.Devices))
-	for _, dev := range cfg.Devices {
-		key := DeviceKey(dev)
-		dc, ok := c.metrics[key]
-		if !ok {
-			devices = append(devices, APIDevice{
-				Name:    dev.Name,
-				IP:      dev.IP,
-				Class:   dev.Class,
-				Metrics: map[string]APIMetric{},
-			})
-			continue
-		}
-		success := false
-		lastError := ""
-		maxGroupFailures := 0
-		lastErrorAt := time.Time{}
-		for _, gs := range dc.groups {
-			if gs.success {
-				ttl := gs.interval * 2
-				if ttl < 5*time.Second {
-					ttl = 5 * time.Second
-				}
-				if time.Since(gs.lastAttempt) <= ttl {
-					success = true
-					break
-				}
-			}
-			if gs.failures > maxGroupFailures {
-				maxGroupFailures = gs.failures
-			}
-			if gs.lastError != "" && gs.lastAttempt.After(lastErrorAt) {
-				lastErrorAt = gs.lastAttempt
-				lastError = gs.lastError
-			}
-		}
-		metrics := make(map[string]APIMetric, len(dc.metrics))
-		for k, v := range dc.metrics {
-			metrics[k] = APIMetric{Value: v.Value, Type: v.Type}
-		}
-		devices = append(devices, APIDevice{
-			Name:             dev.Name,
-			IP:               dev.IP,
-			Class:            dev.Class,
-			Success:          success,
-			Manufacturer:     dc.info.Manufacturer,
-			ProductCode:      dc.info.ProductCode,
-			UID:              dc.info.UID,
-			Metrics:          metrics,
-			LastError:        lastError,
-			MaxGroupFailures: maxGroupFailures,
-		})
-	}
-	sort.Slice(devices, func(i, j int) bool {
-		return devices[i].Name < devices[j].Name
-	})
-	return APIState{Devices: devices}
-}
