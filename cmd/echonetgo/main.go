@@ -50,11 +50,14 @@ func main() {
 		}
 	}
 
+	transport := echonet.NewTransport(cfg.StrictSourcePort3610)
+	defer transport.Close()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go cache.Start(ctx, cfg, deviceSpecs)
+	go cache.Start(ctx, cfg, deviceSpecs, transport)
 	if mqttPub != nil {
-		echonetClient := echonet.NewClient(cfg.ScrapeTimeoutSec, cfg.StrictSourcePort3610)
+		echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
 		commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
 		go commander.Run(ctx, mqttPub.Client())
 	}

@@ -234,8 +234,6 @@ func parseClimateYAML(raw *climateYAML) (*ClimateSpec, error) {
 
 // inferHAMetadata derives HA device_class, state_class, and unit from metric
 // naming conventions when not explicitly set in the YAML spec.
-// inferHAMetadata derives HA device_class, state_class, and unit from metric
-// naming conventions when not explicitly set in the YAML spec.
 func inferHAMetadata(name, metricType string, hasEnum bool) (deviceClass, stateClass, unit string) {
 	if hasEnum {
 		return "enum", "", ""
