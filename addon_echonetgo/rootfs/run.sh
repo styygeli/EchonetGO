@@ -19,13 +19,16 @@ export ECHONET_LOG_LEVEL="${LOG_LEVEL:-info}"
 export ECHONET_SPECS_DIR="${ECHONET_SPECS_DIR:-/usr/share/echonetgo/specs}"
 export ECHONET_LISTEN_ADDR="0.0.0.0:9191"
 
-# MQTT: query Supervisor services API directly via curl
-if [ -n "${SUPERVISOR_TOKEN}" ] && [ -z "${MQTT_BROKER}" ]; then
+# MQTT: skip Supervisor API if the config file already has broker settings,
+# or if MQTT_BROKER env var is already set.
+if [ -n "${MQTT_BROKER}" ]; then
+  echo "[run.sh] MQTT_BROKER already set, skipping Supervisor API"
+elif grep -q 'broker:' "${CONFIG_PATH}" 2>/dev/null; then
+  echo "[run.sh] MQTT broker found in ${CONFIG_PATH}, skipping Supervisor API"
+elif [ -n "${SUPERVISOR_TOKEN}" ]; then
   HTTP_CODE=$(curl -s -o /tmp/mqtt_resp.json -w '%{http_code}' \
     -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
     http://supervisor/services/mqtt 2>/dev/null) || HTTP_CODE="000"
-
-  echo "[run.sh] Supervisor /services/mqtt returned HTTP ${HTTP_CODE}"
 
   if [ "${HTTP_CODE}" = "200" ]; then
     MQTT_HOST=$(jq -r '.data.host // empty' /tmp/mqtt_resp.json)
@@ -40,17 +43,13 @@ if [ -n "${SUPERVISOR_TOKEN}" ] && [ -z "${MQTT_BROKER}" ]; then
       echo "[run.sh] MQTT service found at ${MQTT_HOST}:${MQTT_PORT} (user=${MQTT_USER})"
     else
       echo "[run.sh] WARNING: Supervisor returned 200 but no MQTT host in response"
-      cat /tmp/mqtt_resp.json
     fi
   else
-    echo "[run.sh] WARNING: Supervisor API denied (HTTP ${HTTP_CODE}). Try uninstalling and reinstalling the add-on."
-    cat /tmp/mqtt_resp.json 2>/dev/null || true
+    echo "[run.sh] Supervisor /services/mqtt returned HTTP ${HTTP_CODE}, MQTT will use config file settings if available"
   fi
   rm -f /tmp/mqtt_resp.json
 else
-  if [ -z "${SUPERVISOR_TOKEN}" ]; then
-    echo "[run.sh] WARNING: No SUPERVISOR_TOKEN, skipping MQTT service discovery"
-  fi
+  echo "[run.sh] No SUPERVISOR_TOKEN, MQTT will use config file settings if available"
 fi
 
 exec /usr/bin/echonetgo
