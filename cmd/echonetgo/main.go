@@ -9,16 +9,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
 	"github.com/styygeli/echonetgo/internal/api"
 	"github.com/styygeli/echonetgo/internal/config"
 	"github.com/styygeli/echonetgo/internal/echonet"
 	"github.com/styygeli/echonetgo/internal/logging"
+	echonetmetrics "github.com/styygeli/echonetgo/internal/metrics"
 	mqttpub "github.com/styygeli/echonetgo/internal/mqtt"
 	"github.com/styygeli/echonetgo/internal/poller"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-const addonVersion = "0.1.38"
+const addonVersion = "0.9.0"
 
 func main() {
 	log := logging.New("main")
@@ -65,6 +70,16 @@ func main() {
 	srv := &api.Server{
 		ListenAddr: cfg.ListenAddr,
 		GetState:   func() any { return cache.StateForAPI(cfg) },
+	}
+	if cfg.MetricsEnabled {
+		registry := prometheus.NewRegistry()
+		registry.MustRegister(
+			collectors.NewGoCollector(),
+			collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
+			echonetmetrics.NewCollector(cfg, cache, deviceSpecs),
+		)
+		srv.MetricsHandler = promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
+		log.Infof("/metrics endpoint enabled")
 	}
 
 	server := &http.Server{

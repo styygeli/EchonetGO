@@ -18,6 +18,7 @@ type Config struct {
 	ConfigPath           string     `yaml:"-" json:"-"`
 	DevicesPath          string     `yaml:"devices_path" json:"devices_path"`
 	SpecsDir             string     `yaml:"specs_dir" json:"specs_dir"`
+	MetricsEnabled       bool       `yaml:"metrics_enabled" json:"metrics_enabled"`
 	Devices              []Device   `yaml:"devices" json:"devices"`
 	MQTT                 MQTTConfig `yaml:"mqtt" json:"mqtt"`
 }
@@ -53,6 +54,7 @@ type fileConfig struct {
 	ListenAddr           string     `yaml:"listen_addr"`
 	ScrapeTimeoutSec     int        `yaml:"scrape_timeout_sec"`
 	StrictSourcePort3610 *bool      `yaml:"strict_source_port_3610"`
+	MetricsEnabled       *bool      `yaml:"metrics_enabled"`
 	DevicesPath          string     `yaml:"devices_path"`
 	SpecsDir             string     `yaml:"specs_dir"`
 	Devices              []Device   `yaml:"devices"`
@@ -93,6 +95,9 @@ func Load() (*Config, error) {
 		if fc.StrictSourcePort3610 != nil {
 			cfg.StrictSourcePort3610 = *fc.StrictSourcePort3610
 		}
+		if fc.MetricsEnabled != nil {
+			cfg.MetricsEnabled = *fc.MetricsEnabled
+		}
 		if fc.DevicesPath != "" {
 			cfg.DevicesPath = fc.DevicesPath
 		}
@@ -128,6 +133,13 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("ECHONET_STRICT_SOURCE_PORT_3610: %w", err)
 		}
 		cfg.StrictSourcePort3610 = b
+	}
+	if v := os.Getenv("ECHONET_METRICS_ENABLED"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("ECHONET_METRICS_ENABLED: %w", err)
+		}
+		cfg.MetricsEnabled = b
 	}
 	if v := os.Getenv("ECHONET_DEVICES_PATH"); v != "" {
 		cfg.DevicesPath = v

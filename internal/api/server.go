@@ -16,6 +16,9 @@ type Server struct {
 	// GetState is called to return current cached state for API responses.
 	// Can be nil; then /state returns {}.
 	GetState func() any
+	// MetricsHandler serves /metrics in Prometheus text format.
+	// If nil, the /metrics endpoint is not registered.
+	MetricsHandler http.Handler
 }
 
 // Handler returns an http.Handler for the API routes.
@@ -23,6 +26,9 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/state", s.handleState)
+	if s.MetricsHandler != nil {
+		mux.Handle("/metrics", s.MetricsHandler)
+	}
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
 }
@@ -56,6 +62,8 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Deprecation", "true")
+	w.Header().Set("Link", `</metrics>; rel="successor-version"`)
 	_, _ = w.Write(buf.Bytes())
 }
 
@@ -70,7 +78,7 @@ func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
 <head><title>EchonetGO</title></head>
 <body>
 <h1>EchonetGO</h1>
-<p><a href="/health">Health</a> | <a href="/state">State</a></p>
+<p><a href="/health">Health</a> | <a href="/metrics">Metrics</a> | <a href="/state">State (deprecated)</a></p>
 </body>
 </html>`))
 }
