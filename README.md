@@ -146,16 +146,9 @@ The **addon_echonetgo/** directory contains a ready-to-use Home Assistant add-on
 3. Create `/config/echonetgo/config.yaml` with your device list.
 4. Start the add-on.
 
-Devices appear automatically in Home Assistant under **Settings → Devices** as MQTT devices, grouped under the "EchonetGO" bridge device. Sensors are ready for dashboards and the Energy Dashboard.
+Devices appear automatically under **Settings → Devices** as MQTT devices, grouped under the "EchonetGO" bridge device.
 
-### Add-on features
-
-- **Host networking** for LAN UDP access to ECHONET Lite devices.
-- **MQTT auto** — Broker credentials injected by the HA Supervisor (requires Mosquitto add-on).
-- **Hassio API** — Queries the Supervisor for MQTT service credentials at startup.
-- **Config mapping** — Read-write access to `/config` for your config and device files.
-
-See [addon_echonetgo/DOCS.md](addon_echonetgo/DOCS.md) for detailed configuration.
+The add-on runs with host networking, injects MQTT broker credentials from the Supervisor automatically, and maps `/config` read-write for your config files. See [addon_echonetgo/DOCS.md](addon_echonetgo/DOCS.md) for add-on-specific options and troubleshooting.
 
 ## Local network probe
 
