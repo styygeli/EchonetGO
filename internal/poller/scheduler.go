@@ -23,8 +23,8 @@ type deviceWithEOJ struct {
 
 // Start begins background scrapers for all configured devices. Call with a context
 // that is cancelled on shutdown. Init (probe + GETMAP) runs in parallel per host IP.
-func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec) {
-	client := echonet.NewClient(cfg.ScrapeTimeoutSec, cfg.StrictSourcePort3610)
+func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec, transport *echonet.Transport) {
+	client := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
 	probeTimeoutSec := cfg.ScrapeTimeoutSec
 	if probeTimeoutSec > 3 {
 		probeTimeoutSec = 3
@@ -32,7 +32,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	if probeTimeoutSec < 1 {
 		probeTimeoutSec = 1
 	}
-	probeClient := echonet.NewClient(probeTimeoutSec, cfg.StrictSourcePort3610)
+	probeClient := echonet.NewClient(transport, probeTimeoutSec)
 	// hostEOJCache is written per-IP inside a single goroutine per IP (the go func
 	// below groups devices by IP), so concurrent access across IPs is safe. If devices
 	// sharing an IP are ever split into separate goroutines, a mutex will be needed.

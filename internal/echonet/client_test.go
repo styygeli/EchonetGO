@@ -291,8 +291,9 @@ func TestIsGetSNA(t *testing.T) {
 }
 
 func TestNextTIDIsMonotonic(t *testing.T) {
-	a := nextTID()
-	b := nextTID()
+	tr := NewTransport(false)
+	a := tr.NextTID()
+	b := tr.NextTID()
 	if b != a+1 {
 		t.Fatalf("expected sequential TIDs: got %d then %d", a, b)
 	}

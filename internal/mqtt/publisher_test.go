@@ -7,7 +7,7 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-func TestFriendlyDeviceName(t *testing.T) {
+func TestFriendlyName(t *testing.T) {
 	tests := []struct {
 		name string
 		in   string
@@ -16,31 +16,17 @@ func TestFriendlyDeviceName(t *testing.T) {
 		{"single word", "breaker_box", "Breaker Box"},
 		{"multiple words", "epcube_battery", "Epcube Battery"},
 		{"already spaced", "ac_av", "Ac Av"},
+		{"metric name", "instantaneous_power_w", "Instantaneous Power W"},
+		{"temperature", "indoor_temperature_celsius", "Indoor Temperature Celsius"},
+		{"two words", "operation_status", "Operation Status"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := friendlyDeviceName(tt.in)
+			got := friendlyName(tt.in)
 			if got != tt.want {
-				t.Fatalf("friendlyDeviceName(%q) = %q, want %q", tt.in, got, tt.want)
+				t.Fatalf("friendlyName(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 		})
-	}
-}
-
-func TestFriendlyMetricName(t *testing.T) {
-	tests := []struct {
-		in   string
-		want string
-	}{
-		{"instantaneous_power_w", "Instantaneous Power W"},
-		{"indoor_temperature_celsius", "Indoor Temperature Celsius"},
-		{"operation_status", "Operation Status"},
-	}
-	for _, tt := range tests {
-		got := friendlyMetricName(tt.in)
-		if got != tt.want {
-			t.Fatalf("friendlyMetricName(%q) = %q, want %q", tt.in, got, tt.want)
-		}
 	}
 }
 

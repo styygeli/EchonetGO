@@ -1,11 +1,10 @@
-// Package mqtt: Commander subscribes to MQTT command topics and routes SET requests to the ECHONET client.
-
 package mqtt
 
 import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
 
@@ -108,7 +107,8 @@ func (c *Commander) handleClimateMessage(_ pahomqtt.Client, msg pahomqtt.Message
 	climateSpec := c.cache.GetDeviceClimate(*dev)
 	writable, _ := c.cache.GetWritableEPCs(*dev)
 
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	addr := dev.IP + ":3610"
 
 	switch attr {
@@ -133,7 +133,6 @@ func (c *Commander) handleWritableMessage(_ pahomqtt.Client, msg pahomqtt.Messag
 		return
 	}
 	parts := strings.Split(topic, "/")
-	// prefix/deviceName/switch|select|number/metricname/set
 	if len(parts) != 5 || parts[4] != "set" {
 		return
 	}
@@ -174,7 +173,8 @@ func (c *Commander) handleWritableMessage(_ pahomqtt.Client, msg pahomqtt.Messag
 	if ms.ExcludeSet {
 		return
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 	addr := dev.IP + ":3610"
 	c.executeWritableSet(ctx, addr, eoj, dev, ms, entityType, payload)
 }
@@ -192,7 +192,6 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 	var value float64
 	switch entityType {
 	case "switch":
-		// ON/OFF -> enum on/off
 		switch strings.ToUpper(payload) {
 		case "ON", "1", "TRUE":
 			if raw, ok := ms.ReverseEnum["on"]; ok {
