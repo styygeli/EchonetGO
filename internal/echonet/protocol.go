@@ -18,7 +18,6 @@ const (
 	esvGet         = 0x62
 	esvGetRes      = 0x72
 	esvSetC        = 0x61
-	esvSetRes      = 0x71
 	seojController = 0x05
 	seojClass      = 0xFF
 	seojInstance   = 0x01
@@ -73,18 +72,6 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 		return 0, nil, err
 	}
 	if esv != esvGetRes {
-		return tid, props, &ESVError{ESV: esv}
-	}
-	return tid, props, nil
-}
-
-// ParseSetRes parses an ECHONET Lite frame and returns properties if it is a Set_Res.
-func ParseSetRes(data []byte) (tid uint16, props []model.GetResProperty, err error) {
-	tid, esv, props, err := parseFrame(data)
-	if err != nil {
-		return 0, nil, err
-	}
-	if esv != esvSetRes {
 		return tid, props, &ESVError{ESV: esv}
 	}
 	return tid, props, nil
