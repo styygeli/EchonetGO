@@ -1,16 +1,17 @@
 # EchonetGO
 
-A Go service for ECHONET Lite smart home devices. Polls devices over UDP, caches state, publishes sensors to Home Assistant via MQTT auto-discovery, and exposes a diagnostic HTTP API. Device and metric definitions live in editable YAML specs so non-Go contributors can add devices without changing code.
+A Go service for ECHONET Lite smart home devices. Polls devices over UDP, caches state, and publishes sensors, climate, switch, select, and number entities to Home Assistant via MQTT auto-discovery. Supports bidirectional control (SET commands) and exposes a diagnostic HTTP API. Device and metric definitions live in editable YAML specs so non-Go contributors can add devices without changing code.
 
 Originally inspired by [echonetlite_homeassistant](https://github.com/scottyphillips/echonetlite_homeassistant) and [pychonet](https://github.com/scottyphillips/pychonet), reimplemented in Go for reliability and ease of deployment as a Home Assistant add-on.
 
 ## Features
 
 - **ECHONET Lite polling** — Get/Get_Res over UDP with GETMAP filtering, adaptive split retries, and per-host concurrency.
-- **MQTT auto-discovery** — Publishes HA-compatible sensor entities with device_class, state_class, unit_of_measurement, and enum support. Sensors appear automatically in Home Assistant.
+- **Bidirectional control** — SET commands for climate (mode, temperature, fan speed), switches, selects, and numbers. Writable properties are auto-detected via the property map (EPC 0x9E).
+- **MQTT auto-discovery** — Publishes HA-compatible sensor, climate, switch, select, and number entities with device_class, state_class, unit_of_measurement, and enum support. Entities appear automatically in Home Assistant.
 - **Energy Dashboard ready** — Power, energy, water, and gas sensors include the correct HA metadata for the Energy Dashboard.
 - **Vendor-specific specs** — Auto-selects device-specific YAML specs based on manufacturer code (e.g. Mitsubishi MAC-900IF), falling back to generic class specs.
-- **YAML-driven** — All device classes, EPCs, metric names, scales, enums, and HA metadata are defined in `etc/specs/*.yaml`.
+- **YAML-driven** — All device classes, EPCs, metric names, scales, enums, climate mappings, and HA metadata are defined in `etc/specs/*.yaml`.
 - **Home Assistant add-on** — Ships as a ready-to-install HA add-on with automatic MQTT broker credential injection.
 
 ## Attribution
@@ -43,9 +44,9 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `internal/config/` | Config from `etc/config.yaml` and env (`ECHONET_CONFIG`, `ECHONET_DEVICES`, `MQTT_BROKER`, etc.) |
 | `internal/specs/` | Device class specs (EOJ, metrics with EPC/name/help/interval/HA metadata); loaders for `etc/specs/*.yaml` |
 | `internal/model/` | ECHONET Get_Res property types (EPC, PDC, EDT) |
-| `internal/echonet/` | UDP client: Get, Get_Res, GETMAP (0x9F), device info (0x83/0x8A/0x8C), manufacturer lookup, adaptive split retries |
+| `internal/echonet/` | ECHONET Lite client split across focused files: `client.go` (high-level API), `transport.go` (UDP connection pool, port fallback, per-host locking), `protocol.go` (frame parsing/building), `encoder.go` (EDT value encoding/decoding), `manufacturers.go` (manufacturer code lookup) |
 | `internal/poller/` | Cache and scheduler: per-device/per-interval scrapers, parallel init per host IP, startup stagger, update callbacks |
-| `internal/mqtt/` | MQTT publisher: HA auto-discovery (sensor config + device registration), state updates, availability, bridge device |
+| `internal/mqtt/` | `publisher.go` (MQTT connection, state publishing), `discovery.go` (HA auto-discovery for sensor/climate/switch/select/number entities), `commander.go` (subscribes to command topics, routes SET requests to the ECHONET client) |
 | `internal/api/` | HTTP mux: `/health`, `/state`, `/` |
 | `internal/logging/` | Leveled logger (`ECHONET_LOG_LEVEL`) |
 | `etc/config.example.yaml` | Example config (listen_addr, mqtt, devices) |
@@ -58,9 +59,9 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 
 - **Config** — Single source: optional `etc/config.yaml` plus env overrides. Devices can be in the config file, in a file at `devices_path`, or in `ECHONET_DEVICES` JSON. MQTT broker settings can be provided via config or env vars, and are automatically injected by the HA Supervisor when running as an add-on (`mqtt: auto`).
 - **Specs** — One YAML per device class in `etc/specs/`; filename (without `.yaml`) is the class id. Each spec defines EOJ, default scrape interval, and metrics (EPC, name, help, size/scale/type, optional enum, per-metric scrape_interval, optional HA metadata: `ha_device_class`, `ha_state_class`, `ha_unit`). HA metadata is inferred from naming conventions when not explicitly set. **Vendor-specific specs** are named `{class}_{manufacturer_hex}.yaml` (e.g. `home_ac_000006.yaml`) and are auto-selected at runtime when the device reports that manufacturer code (EPC 0x8A); otherwise the generic class spec is used.
-- **ECHONET client** — Sends Get requests over UDP from a shared source port 3610, parses Get_Res; supports GETMAP (0x9F) for readable properties and adaptive split when the device returns partial OPC. IPv4 only.
+- **ECHONET client** — Sends Get and SetC requests over UDP via a shared `Transport` that owns port 3610, per-host serialization, and connection pooling. Supports GETMAP (0x9F/0x9E) for readable and writable properties, adaptive split on partial responses, and ephemeral-port fallback. IPv4 only.
 - **Poller** — For each configured device: load spec, optionally filter metrics by GETMAP, group by scrape interval, stagger startup, run per-interval scrapers and a device-info refresher; all results merged into a single cache. Device initialization is parallelized per host IP. After each scrape, an update callback notifies the MQTT publisher.
-- **MQTT** — Publishes HA auto-discovery config (retained) for each sensor entity and a bridge device ("EchonetGO"). Publishes state updates after each scrape and per-device availability. Metrics filtered by invalid sentinels are excluded from state payloads and show as "Unknown" in HA. On clean shutdown the bridge goes offline.
+- **MQTT** — The **publisher** sends HA auto-discovery config (retained) for sensors, climate, switch, select, and number entities, plus a bridge device ("EchonetGO"). State updates are published after each scrape with per-device availability. The **commander** subscribes to HA command topics and translates incoming payloads into ECHONET SetC requests with a 5-second timeout. On clean shutdown the bridge goes offline.
 - **API** — Read-only: health and cached state JSON.
 
 ## Tested devices
