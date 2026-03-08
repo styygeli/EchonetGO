@@ -40,6 +40,9 @@ metrics:
 	if got := m.Enum[0x123]; got != "custom_state" {
 		t.Fatalf("Enum[0x123] = %q, want %q", got, "custom_state")
 	}
+	if m.ReverseEnum == nil || m.ReverseEnum["custom_state"] != 0x123 {
+		t.Fatalf("ReverseEnum[custom_state] = %v, want 0x123 (ReverseEnum populated from Enum)", m.ReverseEnum)
+	}
 }
 
 func TestParseDeviceYAML_RejectsEnumWithNonUnitScale(t *testing.T) {

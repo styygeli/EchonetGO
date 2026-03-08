@@ -48,10 +48,22 @@ func loadFromDir(dir string) (map[string]*DeviceSpec, error) {
 }
 
 type deviceYAML struct {
-	EOJ                   []int        `yaml:"eoj"`
-	Description           string       `yaml:"description"`
-	DefaultScrapeInterval string       `yaml:"default_scrape_interval"`
-	Metrics               []metricYAML `yaml:"metrics"`
+	EOJ                   []int         `yaml:"eoj"`
+	Description           string        `yaml:"description"`
+	DefaultScrapeInterval string        `yaml:"default_scrape_interval"`
+	Metrics               []metricYAML  `yaml:"metrics"`
+	Climate               *climateYAML  `yaml:"climate"`
+}
+
+type climateYAML struct {
+	ModeEPC               int             `yaml:"mode_epc"`
+	TemperatureEPC        int             `yaml:"temperature_epc"`
+	CurrentTemperatureEPC int             `yaml:"current_temperature_epc"`
+	FanModeEPC            int             `yaml:"fan_mode_epc"`
+	MinTemp               float64         `yaml:"min_temp"`
+	MaxTemp               float64         `yaml:"max_temp"`
+	TempStep              float64         `yaml:"temp_step"`
+	Modes                 map[string]*int `yaml:"modes"`
 }
 
 type metricYAML struct {
@@ -68,6 +80,7 @@ type metricYAML struct {
 	HADeviceClass  string         `yaml:"ha_device_class"`
 	HAStateClass   string         `yaml:"ha_state_class"`
 	HAUnit         string         `yaml:"ha_unit"`
+	ExcludeSet     bool           `yaml:"exclude_set"`
 }
 
 func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
@@ -150,6 +163,10 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		if haDevice == "" {
 			haDevice, haState, haUnit = inferHAMetadata(m.Name, m.Type, len(m.Enum) > 0)
 		}
+		reverseEnum := make(map[string]int, len(enum))
+		for raw, label := range enum {
+			reverseEnum[label] = raw
+		}
 		spec.Metrics = append(spec.Metrics, MetricSpec{
 			EPC:            byte(m.EPC),
 			Name:           m.Name,
@@ -160,13 +177,59 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 			Invalid:        m.Invalid,
 			Type:           m.Type,
 			Enum:           enum,
+			ReverseEnum:    reverseEnum,
 			ScrapeInterval: interval,
 			HADeviceClass:  haDevice,
 			HAStateClass:   haState,
 			HAUnit:         haUnit,
+			ExcludeSet:     m.ExcludeSet,
 		})
 	}
+	if raw.Climate != nil {
+		cl, err := parseClimateYAML(raw.Climate)
+		if err != nil {
+			return nil, err
+		}
+		spec.Climate = cl
+	}
 	return spec, nil
+}
+
+func parseClimateYAML(raw *climateYAML) (*ClimateSpec, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	if raw.ModeEPC < 0 || raw.ModeEPC > 0xFF {
+		return nil, fmt.Errorf("climate.mode_epc must be 0..255, got %d", raw.ModeEPC)
+	}
+	if raw.TemperatureEPC < 0 || raw.TemperatureEPC > 0xFF {
+		return nil, fmt.Errorf("climate.temperature_epc must be 0..255, got %d", raw.TemperatureEPC)
+	}
+	if raw.CurrentTemperatureEPC < 0 || raw.CurrentTemperatureEPC > 0xFF {
+		return nil, fmt.Errorf("climate.current_temperature_epc must be 0..255, got %d", raw.CurrentTemperatureEPC)
+	}
+	if raw.FanModeEPC < 0 || raw.FanModeEPC > 0xFF {
+		return nil, fmt.Errorf("climate.fan_mode_epc must be 0..255, got %d", raw.FanModeEPC)
+	}
+	if raw.MinTemp >= raw.MaxTemp {
+		return nil, fmt.Errorf("climate min_temp must be less than max_temp")
+	}
+	if raw.TempStep <= 0 {
+		return nil, fmt.Errorf("climate temp_step must be positive")
+	}
+	if len(raw.Modes) == 0 {
+		return nil, fmt.Errorf("climate.modes must be non-empty")
+	}
+	return &ClimateSpec{
+		ModeEPC:               byte(raw.ModeEPC),
+		TemperatureEPC:        byte(raw.TemperatureEPC),
+		CurrentTemperatureEPC: byte(raw.CurrentTemperatureEPC),
+		FanModeEPC:            byte(raw.FanModeEPC),
+		MinTemp:               raw.MinTemp,
+		MaxTemp:               raw.MaxTemp,
+		TempStep:              raw.TempStep,
+		Modes:                 raw.Modes,
+	}, nil
 }
 
 // inferHAMetadata derives HA device_class, state_class, and unit from metric

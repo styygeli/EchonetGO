@@ -35,15 +35,20 @@ type APIMetric struct {
 	Type  string  `json:"type"`
 }
 
-// UpdateCallback is called after a successful scrape with the device's current state.
-type UpdateCallback func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, success bool)
+// UpdateCallback is called after a scrape with the device's current state.
+// writable is the set of EPCs the device reports as writable (0x9E); may be nil.
+// climateSpec is non-nil for device classes that support HA climate (e.g. home_ac).
+type UpdateCallback func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, success bool)
 
 // Cache holds the latest scraped metrics per device. Safe for concurrent use.
 type Cache struct {
-	mu         sync.RWMutex
-	metrics    map[string]deviceCache
-	onUpdate   UpdateCallback
-	specsByDev map[string][]specs.MetricSpec // filtered specs per device key
+	mu            sync.RWMutex
+	metrics       map[string]deviceCache
+	onUpdate      UpdateCallback
+	specsByDev    map[string][]specs.MetricSpec   // filtered specs per device key
+	climateByDev  map[string]*specs.ClimateSpec   // device key -> climate spec if AC
+	writableEPCs map[string]map[byte]struct{}     // device key -> set of writable EPCs (from 0x9E)
+	eojByDev      map[string][3]byte              // device key -> EOJ for SET requests
 }
 
 type deviceCache struct {
@@ -70,8 +75,11 @@ func DeviceKey(dev config.Device) string {
 // NewCache creates an empty cache.
 func NewCache() *Cache {
 	return &Cache{
-		metrics:    make(map[string]deviceCache),
-		specsByDev: make(map[string][]specs.MetricSpec),
+		metrics:      make(map[string]deviceCache),
+		specsByDev:   make(map[string][]specs.MetricSpec),
+		climateByDev: make(map[string]*specs.ClimateSpec),
+		writableEPCs: make(map[string]map[byte]struct{}),
+		eojByDev:     make(map[string][3]byte),
 	}
 }
 
@@ -87,6 +95,63 @@ func (c *Cache) SetDeviceSpecs(dev config.Device, metricSpecs []specs.MetricSpec
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.specsByDev[DeviceKey(dev)] = metricSpecs
+}
+
+// SetDeviceClimate records the climate spec for a device (e.g. home_ac).
+func (c *Cache) SetDeviceClimate(dev config.Device, climate *specs.ClimateSpec) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := DeviceKey(dev)
+	if climate == nil {
+		delete(c.climateByDev, key)
+		return
+	}
+	c.climateByDev[key] = climate
+}
+
+// SetWritableEPCs records the writable property map (0x9E) for a device.
+func (c *Cache) SetWritableEPCs(dev config.Device, writable map[byte]struct{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.writableEPCs[DeviceKey(dev)] = writable
+}
+
+// GetWritableEPCs returns the writable EPC set for a device, if known.
+func (c *Cache) GetWritableEPCs(dev config.Device) (map[byte]struct{}, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	w, ok := c.writableEPCs[DeviceKey(dev)]
+	return w, ok
+}
+
+// SetDeviceEOJ stores the EOJ for a device (used for SET requests).
+func (c *Cache) SetDeviceEOJ(dev config.Device, eoj [3]byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.eojByDev[DeviceKey(dev)] = eoj
+}
+
+// GetDeviceEOJ returns the EOJ for a device, if known.
+func (c *Cache) GetDeviceEOJ(dev config.Device) ([3]byte, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	eoj, ok := c.eojByDev[DeviceKey(dev)]
+	return eoj, ok
+}
+
+// GetDeviceClimate returns the climate spec for a device, if any (e.g. home_ac).
+func (c *Cache) GetDeviceClimate(dev config.Device) *specs.ClimateSpec {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.climateByDev[DeviceKey(dev)]
+}
+
+// GetDeviceSpecs returns the cached metric specs for a device, if any.
+func (c *Cache) GetDeviceSpecs(dev config.Device) ([]specs.MetricSpec, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	s, ok := c.specsByDev[DeviceKey(dev)]
+	return s, ok
 }
 
 // Get returns aggregated scrape status and a copy of cached metrics for a device.
@@ -174,8 +239,12 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 
 	cb := c.onUpdate
 	var devSpecs []specs.MetricSpec
+	var writable map[byte]struct{}
+	var climateSpec *specs.ClimateSpec
 	if cb != nil {
 		devSpecs = c.specsByDev[key]
+		writable = c.writableEPCs[key]
+		climateSpec = c.climateByDev[key]
 	}
 	info := dc.info
 	allMetrics := make(map[string]echonet.MetricValue, len(dc.metrics))
@@ -185,7 +254,7 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 	c.mu.Unlock()
 
 	if cb != nil {
-		cb(dev, info, allMetrics, devSpecs, success)
+		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, success)
 	}
 }
 

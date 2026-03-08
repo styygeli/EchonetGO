@@ -77,6 +77,8 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 					}
 				}
 
+				c.SetDeviceEOJ(dev, activeEOJ)
+
 				activeMetrics := spec.Metrics
 				readable, err := client.GetReadablePropertyMap(ctx, dev.IP, activeEOJ)
 				if err != nil {
@@ -88,11 +90,18 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 						pollerLog.Warnf("device %s (%s): skipping unsupported EPCs from GETMAP: %v", dev.Name, dev.IP, unsupported)
 					}
 				}
+				writable, err := client.GetWritablePropertyMap(ctx, dev.IP, activeEOJ)
+				if err != nil {
+					pollerLog.Warnf("device %s (%s): failed to read writable property map (0x9E): %v", dev.Name, dev.IP, err)
+				} else {
+					c.SetWritableEPCs(dev, writable)
+				}
 				if len(activeMetrics) == 0 {
 					pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
 					continue
 				}
 				c.SetDeviceSpecs(dev, activeMetrics)
+				c.SetDeviceClimate(dev, spec.Climate)
 
 				devDefaultInterval := spec.DefaultScrapeInterval
 				if dev.ScrapeInterval != "" {

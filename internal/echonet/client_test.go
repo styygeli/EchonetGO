@@ -298,6 +298,55 @@ func TestNextTIDIsMonotonic(t *testing.T) {
 	}
 }
 
+func TestEncodeValueToEDT(t *testing.T) {
+	t.Run("enum 1-byte", func(t *testing.T) {
+		m := specs.MetricSpec{
+			Name: "operation_mode", Size: 1, Scale: 1, Type: "gauge",
+			Enum:        map[int]string{0x41: "auto", 0x42: "cool"},
+			ReverseEnum: map[string]int{"auto": 0x41, "cool": 0x42},
+		}
+		got, err := EncodeValueToEDT(0x42, m)
+		if err != nil {
+			t.Fatalf("EncodeValueToEDT() error = %v", err)
+		}
+		if len(got) != 1 || got[0] != 0x42 {
+			t.Fatalf("got %v, want [0x42]", got)
+		}
+	})
+	t.Run("numeric with scale", func(t *testing.T) {
+		m := specs.MetricSpec{
+			Name: "set_temperature_celsius", Size: 1, Scale: 1, Type: "gauge",
+		}
+		got, err := EncodeValueToEDT(26, m)
+		if err != nil {
+			t.Fatalf("EncodeValueToEDT() error = %v", err)
+		}
+		if len(got) != 1 || got[0] != 26 {
+			t.Fatalf("got %v, want [26]", got)
+		}
+	})
+	t.Run("size 0 returns error", func(t *testing.T) {
+		m := specs.MetricSpec{Name: "auto", Size: 0, Type: "gauge"}
+		_, err := EncodeValueToEDT(1, m)
+		if err == nil {
+			t.Fatal("EncodeValueToEDT() expected error for size 0")
+		}
+		if !strings.Contains(err.Error(), "size 0") {
+			t.Fatalf("error = %q, want mention of size 0", err.Error())
+		}
+	})
+	t.Run("2-byte big-endian", func(t *testing.T) {
+		m := specs.MetricSpec{Name: "word", Size: 2, Scale: 1, Type: "gauge"}
+		got, err := EncodeValueToEDT(256, m)
+		if err != nil {
+			t.Fatalf("EncodeValueToEDT() error = %v", err)
+		}
+		if len(got) != 2 || got[0] != 0x01 || got[1] != 0x00 {
+			t.Fatalf("got %v, want [0x01 0x00]", got)
+		}
+	})
+}
+
 func TestFPRoundingAfterScale(t *testing.T) {
 	cases := []struct {
 		name  string

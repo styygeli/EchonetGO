@@ -27,6 +27,8 @@ const (
 	ehd2                  = 0x81
 	esvGet                = 0x62
 	esvGetRes             = 0x72
+	esvSetC               = 0x61
+	esvSetRes             = 0x71
 	seojController        = 0x05
 	seojClass             = 0xFF
 	seojInstance          = 0x01
@@ -106,6 +108,22 @@ func GetRequest(tid uint16, eoj [3]byte, epcs []byte) []byte {
 	for _, epc := range epcs {
 		b = append(b, epc, 0)
 	}
+	return b
+}
+
+// SetRequest builds an ECHONET Lite SetC frame (single property).
+func SetRequest(tid uint16, eoj [3]byte, epc byte, edt []byte) []byte {
+	pdc := byte(len(edt))
+	n := 4 + 2 + 3 + 3 + 1 + 1 + 2 + len(edt)
+	b := make([]byte, 0, n)
+	b = append(b, ehd1, ehd2)
+	b = append(b, byte(tid>>8), byte(tid))
+	b = append(b, seojController, seojClass, seojInstance)
+	b = append(b, eoj[0], eoj[1], eoj[2])
+	b = append(b, esvSetC)
+	b = append(b, 1) // OPC: one property
+	b = append(b, epc, pdc)
+	b = append(b, edt...)
 	return b
 }
 
@@ -414,25 +432,36 @@ func lockForHost(host string) *sync.Mutex {
 
 // ParseGetRes parses an ECHONET Lite frame and returns properties if it is a Get_Res.
 func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err error) {
+	tid, esv, props, err := parseFrame(data)
+	if err != nil {
+		return 0, nil, err
+	}
+	if esv != esvGetRes {
+		return tid, props, &ESVError{ESV: esv}
+	}
+	return tid, props, nil
+}
+
+// parseFrame parses EHD, TID, ESV, and OPC/EDT from an ECHONET Lite frame.
+// Caller must check ESV for Get_Res (0x72) or Set_Res (0x71).
+func parseFrame(data []byte) (tid uint16, esv byte, props []model.GetResProperty, err error) {
 	if len(data) < minResponseLen {
-		return 0, nil, fmt.Errorf("response too short: %d", len(data))
+		return 0, 0, nil, fmt.Errorf("response too short: %d", len(data))
 	}
 	if data[0] != ehd1 || data[1] != ehd2 {
-		return 0, nil, fmt.Errorf("invalid EHD: %02x %02x", data[0], data[1])
+		return 0, 0, nil, fmt.Errorf("invalid EHD: %02x %02x", data[0], data[1])
 	}
 	tid = binary.BigEndian.Uint16(data[2:4])
-	esv := data[10]
+	esv = data[10]
 	opc := int(data[11])
 	pos := 12
-	truncated := false
 	for i := 0; i < opc && pos+2 <= len(data); i++ {
 		epc := data[pos]
 		pdc := data[pos+1]
 		pos += 2
 		edtLen := int(pdc)
 		if pos+edtLen > len(data) {
-			clientLog.Warnf("malformed Get_Res: truncated property data for EPC=0x%02x PDC=%d payload_len=%d", epc, pdc, len(data))
-			truncated = true
+			clientLog.Warnf("malformed frame: truncated property data for EPC=0x%02x PDC=%d", epc, pdc)
 			break
 		}
 		edt := make([]byte, edtLen)
@@ -440,17 +469,53 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 		pos += edtLen
 		props = append(props, model.GetResProperty{EPC: epc, PDC: pdc, EDT: edt})
 	}
-	if len(props) < opc {
-		if truncated {
-			clientLog.Warnf("Get_Res partially parsed: parsed=%d declared_opc=%d", len(props), opc)
-		} else {
-			clientLog.Warnf("Get_Res ended early: parsed=%d declared_opc=%d", len(props), opc)
-		}
+	return tid, esv, props, nil
+}
+
+// ParseSetRes parses an ECHONET Lite frame and returns properties if it is a Set_Res.
+func ParseSetRes(data []byte) (tid uint16, props []model.GetResProperty, err error) {
+	tid, esv, props, err := parseFrame(data)
+	if err != nil {
+		return 0, nil, err
 	}
-	if esv != esvGetRes {
+	if esv != esvSetRes {
 		return tid, props, &ESVError{ESV: esv}
 	}
 	return tid, props, nil
+}
+
+// SendSet sends a SetC request (single property) and returns the raw Set_Res or an error.
+func (c *Client) SendSet(ctx context.Context, addr string, eoj [3]byte, epc byte, edt []byte) ([]byte, error) {
+	hostKey := normalizeHost(addr)
+	hostLock := lockForHost(hostKey)
+	hostLock.Lock()
+	defer hostLock.Unlock()
+
+	tid := nextTID()
+	req := SetRequest(tid, eoj, epc, edt)
+	host := addr
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		host = net.JoinHostPort(addr, fmt.Sprint(echonetPort))
+	}
+	resp, err := c.sendGetWithFixedPort(ctx, host, req, tid, hostKey, echonetPort)
+	if err == nil {
+		return resp, nil
+	}
+	if c.strictSourcePort3610 {
+		return nil, fmt.Errorf("failed to send SET from required local UDP source port %d to %s: %w",
+			echonetPort, hostKey, err)
+	}
+	if !isPortBindFailure(err) {
+		return nil, err
+	}
+	clientLog.Warnf("failed to bind local UDP port %d for SET to %s; falling back to ephemeral source port: %v",
+		echonetPort, hostKey, err)
+	resp, fallbackErr := c.sendGetEphemeral(ctx, host, req, tid, hostKey)
+	if fallbackErr != nil {
+		return nil, fmt.Errorf("failed local UDP source port %d (%v), ephemeral fallback also failed: %w",
+			echonetPort, err, fallbackErr)
+	}
+	return resp, nil
 }
 
 // GetProps fetches requested EPCs and adaptively splits when devices return partial responses.
@@ -527,6 +592,21 @@ func (c *Client) GetReadablePropertyMap(ctx context.Context, addr string, eoj [3
 	}
 	clientLog.Warnf("device %s eoj=%s: readable property map (0x9F) missing/empty", normalizeHost(addr), formatEOJ(eoj))
 	return nil, fmt.Errorf("readable property map (0x9F) missing")
+}
+
+// GetWritablePropertyMap reads EPC 0x9E and decodes writable properties.
+func (c *Client) GetWritablePropertyMap(ctx context.Context, addr string, eoj [3]byte) (map[byte]struct{}, error) {
+	props, err := c.GetProps(ctx, addr, eoj, []byte{0x9E})
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range props {
+		if p.EPC == 0x9E && len(p.EDT) > 0 {
+			return decodePropertyMap(p.EDT), nil
+		}
+	}
+	clientLog.Warnf("device %s eoj=%s: writable property map (0x9E) missing/empty", normalizeHost(addr), formatEOJ(eoj))
+	return nil, fmt.Errorf("writable property map (0x9E) missing")
 }
 
 // GetManufacturerCode reads EPC 0x8A and returns the 3-byte manufacturer code as a
@@ -1054,6 +1134,59 @@ func parseInteger(raw []byte, signed bool) (*big.Int, error) {
 	twoPow := new(big.Int).Lsh(big.NewInt(1), uint(len(raw)*8))
 	value.Sub(value, twoPow)
 	return value, nil
+}
+
+// EncodeValueToEDT encodes a value to EDT bytes for SET requests.
+// For enum metrics, value is the raw ECHONET code (e.g. 0x42 for cool).
+// For numeric metrics, value is the display value (e.g. 26.0 for 26°C); scale is applied in reverse.
+func EncodeValueToEDT(value float64, m specs.MetricSpec) ([]byte, error) {
+	size := m.Size
+	if size == 0 {
+		return nil, fmt.Errorf("metric %s has size 0 (auto), cannot encode for SET", m.Name)
+	}
+	if size != 1 && size != 2 && size != 4 {
+		return nil, fmt.Errorf("metric %s has unsupported size %d for SET", m.Name, size)
+	}
+	var raw int64
+	if len(m.Enum) > 0 {
+		raw = int64(math.Round(value))
+	} else {
+		if m.Scale == 0 {
+			m.Scale = 1
+		}
+		scaled := value / m.Scale
+		raw = int64(math.Round(scaled))
+	}
+	// Clamp to size and signedness
+	bits := size * 8
+	if m.Signed {
+		maxPos := int64(1<<(bits-1)) - 1
+		minNeg := -int64(1 << (bits - 1))
+		if raw > maxPos {
+			raw = maxPos
+		}
+		if raw < minNeg {
+			raw = minNeg
+		}
+	} else {
+		if raw < 0 {
+			raw = 0
+		}
+		maxVal := int64(1<<bits) - 1
+		if raw > maxVal {
+			raw = maxVal
+		}
+	}
+	// Encode to big-endian bytes
+	val := big.NewInt(raw)
+	if m.Signed && raw < 0 {
+		twoPow := new(big.Int).Lsh(big.NewInt(1), uint(bits))
+		val.Add(val, twoPow)
+	}
+	b := val.Bytes()
+	out := make([]byte, size)
+	copy(out[size-len(b):], b)
+	return out, nil
 }
 
 // ParsePropsToMetrics converts Get_Res properties into metrics using the given metric specs.

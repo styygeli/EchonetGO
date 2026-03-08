@@ -57,7 +57,7 @@ func TestSetOnUpdate_CallbackFiresOnUpdate(t *testing.T) {
 	var lastDev config.Device
 	var lastSuccess bool
 	var lastMetrics map[string]echonet.MetricValue
-	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, success bool) {
+	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, success bool) {
 		callCount++
 		lastDev = d
 		lastSuccess = success
@@ -102,7 +102,7 @@ func TestSetDeviceSpecs_OnUpdateReceivesSpecs(t *testing.T) {
 	c.SetDeviceSpecs(dev, metricSpecs)
 
 	var receivedSpecs []specs.MetricSpec
-	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, ms []specs.MetricSpec, success bool) {
+	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, ms []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, success bool) {
 		receivedSpecs = ms
 	})
 
@@ -128,7 +128,7 @@ func TestSetOnUpdate_CallbackReceivesAggregatedMetrics(t *testing.T) {
 
 	var mu sync.Mutex
 	var lastMetrics map[string]echonet.MetricValue
-	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ bool) {
+	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ bool) {
 		mu.Lock()
 		lastMetrics = make(map[string]echonet.MetricValue, len(m))
 		for k, v := range m {
