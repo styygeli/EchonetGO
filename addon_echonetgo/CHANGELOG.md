@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.6
+
+- Fix bridge device "Status" sensor showing Unavailable after 5 minutes (remove time-based expiry; availability topic with LWT handles online/offline).
+- Fix devices sharing the same physical ECHONET UID (e.g. EP Cube battery + solar) being merged into one HA device. UIDs are now scoped per logical device.
+
 ## 0.9.5
 
 - Fix power distribution board (0x0287) EPC mappings: swap 0xC0/0xC1 (cumulative energy) with 0xC6/0xC7 (instantaneous power/current).
