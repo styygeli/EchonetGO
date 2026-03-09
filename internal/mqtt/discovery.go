@@ -311,7 +311,6 @@ func (p *Publisher) publishBridgeDevice() {
 		StateTopic:        stateTopic,
 		ValueTemplate:     "{{ value_json.status }}",
 		AvailabilityTopic: availTopic,
-		ExpireAfter:       300,
 		Device:            device,
 		ForceUpdate:       true,
 	}
