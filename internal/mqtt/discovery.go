@@ -81,7 +81,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 		ViaDevice:    "echonetgo",
 	}
 	if info.UID != "" {
-		device.Identifiers = append(device.Identifiers, info.UID)
+		device.Identifiers = append(device.Identifiers, info.UID+"_"+dev.Name)
 	}
 
 	availTopic := fmt.Sprintf("%s/%s/availability", p.topicPrefix, dev.Name)
