@@ -334,9 +334,19 @@ func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev conf
 }
 
 func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval time.Duration) {
+	seen := make(map[byte]struct{}, len(metrics))
 	epcs := make([]byte, 0, len(metrics))
 	for _, m := range metrics {
-		epcs = append(epcs, m.EPC)
+		if _, dup := seen[m.EPC]; !dup {
+			epcs = append(epcs, m.EPC)
+			seen[m.EPC] = struct{}{}
+		}
+		if m.MultiplierEPC != 0 {
+			if _, dup := seen[m.MultiplierEPC]; !dup {
+				epcs = append(epcs, m.MultiplierEPC)
+				seen[m.MultiplierEPC] = struct{}{}
+			}
+		}
 	}
 	start := time.Now()
 	props, err := client.GetProps(ctx, dev.IP, eoj, epcs)

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.5
+
+- Fix power distribution board (0x0287) EPC mappings: swap 0xC0/0xC1 (cumulative energy) with 0xC6/0xC7 (instantaneous power/current).
+- Add `offset` field to metric specs — extract partial values from multi-byte EDTs (e.g. R-phase vs T-phase current from a single 4-byte EPC).
+- Add `multiplier_epc` / `multiplier_map` — dynamically apply kWh unit multiplier from EPC 0xC2 to cumulative energy counters.
+- Deduplicate EPCs in scrape requests when multiple metrics share the same EPC.
+- Add T-phase current (0xC7 offset 2) and SN-T voltage (0xC8 offset 2) metrics for breaker box.
+- Cumulative energy metrics now report directly in kWh with proper HA metadata (`energy` / `total_increasing`).
+
 ## 0.9.4
 
 - Log version number at startup.
