@@ -2,6 +2,9 @@
 # Panasonic Smart Cosmo and similar residential distribution boards.
 # Per-circuit EPCs (0xD0-0xEF) return 8 bytes; size: 4 extracts the first int32.
 # Power values are in deciwatts (0.1 W); scale: 0.1 converts to watts.
+#
+# Cumulative energy EPCs 0xC0/0xC1 use multiplier_epc: 0xC2 to dynamically
+# read the energy unit and convert the raw counter to kWh.
 eoj: [0x02, 0x87, 0x01]
 description: "Power distribution board metering"
 default_scrape_interval: 1m
@@ -36,46 +39,132 @@ metrics:
     scrape_interval: 24h
   - epc: 0xB8
     name: ct_channel_count
-    help: "Number of CT measurement channels."
+    help: "Number of CT measurement channels (duplex)."
     size: 1
     scale: 1
     type: gauge
     scrape_interval: 24h
+
+  # --- Main breaker cumulative energy ---
+  # multiplier_epc reads EPC 0xC2 and applies the kWh unit multiplier at parse time.
   - epc: 0xC0
-    name: instantaneous_power_w
-    help: "Total instantaneous electric power in W (measured at main breaker)."
+    name: cumulative_energy_normal_kwh
+    help: "Cumulative electric energy normal direction (grid import) in kWh."
     size: 4
-    signed: true
-    scale: 0.1
-    type: gauge
+    scale: 1
+    type: counter
+    scrape_interval: 10m
+    exclude_set: true
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: kWh
+    multiplier_epc: 0xC2
+    multiplier_map:
+      0x00: 1
+      0x01: 0.1
+      0x02: 0.01
+      0x03: 0.001
+      0x04: 0.0001
+      0x0A: 10
+      0x0B: 100
+      0x0C: 1000
+      0x0D: 10000
   - epc: 0xC1
-    name: instantaneous_current_raw
-    help: "Total instantaneous current (aggregate, format depends on wiring config)."
+    name: cumulative_energy_reverse_kwh
+    help: "Cumulative electric energy reverse direction (grid export) in kWh."
     size: 4
+    scale: 1
+    type: counter
+    scrape_interval: 10m
+    exclude_set: true
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: kWh
+    multiplier_epc: 0xC2
+    multiplier_map:
+      0x00: 1
+      0x01: 0.1
+      0x02: 0.01
+      0x03: 0.001
+      0x04: 0.0001
+      0x0A: 10
+      0x0B: 100
+      0x0C: 1000
+      0x0D: 10000
+  - epc: 0xC2
+    name: energy_unit
+    help: "Unit multiplier for cumulative energy EPCs (0xC0/0xC1). 0x00=1kWh, 0x01=0.1kWh, 0x02=0.01kWh, 0x03=0.001kWh, 0x04=0.0001kWh, 0x0A=10kWh."
+    size: 1
+    scale: 1
+    type: gauge
+    scrape_interval: 24h
+    enum:
+      0x00: 1_kwh
+      0x01: 0_1_kwh
+      0x02: 0_01_kwh
+      0x03: 0_001_kwh
+      0x04: 0_0001_kwh
+      0x0A: 10_kwh
+      0x0B: 100_kwh
+      0x0C: 1000_kwh
+      0x0D: 10000_kwh
+
+  # --- Main breaker instantaneous measurements ---
+  - epc: 0xC6
+    name: instantaneous_power_w
+    help: "Total instantaneous electric power in W (measured at main breaker). Negative = exporting to grid."
+    size: 4
+    signed: true
+    scale: 1
+    type: gauge
+    ha_device_class: power
+    ha_state_class: measurement
+    ha_unit: W
+  - epc: 0xC7
+    name: instantaneous_current_r_phase_amperes
+    help: "Instantaneous current R-phase in A."
+    size: 2
+    offset: 0
+    signed: true
     scale: 0.1
     type: gauge
-  - epc: 0xC6
-    name: cumulative_energy_normal_raw
-    help: "Cumulative electric energy normal direction."
-    size: 4
-    signed: true
-    scale: 0.1
-    type: counter
-    scrape_interval: 10m
-    ha_device_class: energy
-    ha_state_class: total_increasing
-    ha_unit: kWh
+    ha_device_class: current
+    ha_state_class: measurement
+    ha_unit: A
   - epc: 0xC7
-    name: cumulative_energy_reverse_raw
-    help: "Cumulative electric energy reverse direction."
-    size: 4
+    name: instantaneous_current_t_phase_amperes
+    help: "Instantaneous current T-phase in A."
+    size: 2
+    offset: 2
     signed: true
     scale: 0.1
-    type: counter
-    scrape_interval: 10m
-    ha_device_class: energy
-    ha_state_class: total_increasing
-    ha_unit: kWh
+    type: gauge
+    ha_device_class: current
+    ha_state_class: measurement
+    ha_unit: A
+  - epc: 0xC8
+    name: instantaneous_voltage_r_sn_volts
+    help: "Instantaneous voltage R-SN in V."
+    size: 2
+    offset: 0
+    signed: true
+    scale: 0.1
+    type: gauge
+    ha_device_class: voltage
+    ha_state_class: measurement
+    ha_unit: V
+  - epc: 0xC8
+    name: instantaneous_voltage_sn_t_volts
+    help: "Instantaneous voltage SN-T in V."
+    size: 2
+    offset: 2
+    signed: true
+    scale: 0.1
+    type: gauge
+    ha_device_class: voltage
+    ha_state_class: measurement
+    ha_unit: V
+
   # Per-circuit instantaneous power (first 4 bytes of 8-byte EDT, in deciwatts)
   - epc: 0xD0
     name: circuit_01_power_w

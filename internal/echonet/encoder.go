@@ -11,16 +11,16 @@ import (
 func parseEDTWithReason(edt []byte, m specs.MetricSpec) (float64, bool, string) {
 	size := m.Size
 	if size == 0 {
-		size = len(edt)
+		size = len(edt) - m.Offset
 	}
 	if size <= 0 {
 		return 0, false, "empty EDT for auto-sized metric"
 	}
-	if len(edt) < size {
-		return 0, false, fmt.Sprintf("EDT too short: got=%d need=%d", len(edt), size)
+	if len(edt) < m.Offset+size {
+		return 0, false, fmt.Sprintf("EDT too short: got=%d need=%d (offset=%d size=%d)", len(edt), m.Offset+size, m.Offset, size)
 	}
 
-	rawValue, err := parseInteger(edt[:size], m.Signed)
+	rawValue, err := parseInteger(edt[m.Offset:m.Offset+size], m.Signed)
 	if err != nil {
 		return 0, false, err.Error()
 	}

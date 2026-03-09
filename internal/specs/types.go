@@ -30,6 +30,7 @@ type MetricSpec struct {
 	Name           string
 	Help           string
 	Size           int
+	Offset         int     // byte offset within the EDT before parsing (default 0)
 	Scale          float64
 	Signed         bool
 	Invalid        *int
@@ -37,6 +38,13 @@ type MetricSpec struct {
 	Enum           map[int]string
 	ReverseEnum    map[string]int // label -> raw value (for SET); populated at load from Enum
 	ScrapeInterval time.Duration
+
+	// MultiplierEPC, when non-zero, names another EPC whose raw 1-byte value
+	// is looked up in MultiplierMap to obtain an additional scale factor.
+	// Used for ECHONET cumulative energy EPCs where a separate "unit" EPC
+	// (e.g. 0xC2) determines the kWh multiplier.
+	MultiplierEPC byte
+	MultiplierMap map[int]float64
 
 	// Home Assistant MQTT discovery metadata (optional).
 	HADeviceClass string // e.g. "power", "energy", "temperature", "enum"

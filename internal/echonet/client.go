@@ -266,6 +266,18 @@ func ParsePropsToMetrics(props []model.GetResProperty, metrics []specs.MetricSpe
 			}
 			continue
 		}
+		if m.MultiplierEPC != 0 && len(m.MultiplierMap) > 0 {
+			if mulEDT, mulOK := prop(props, m.MultiplierEPC); mulOK && len(mulEDT) >= 1 {
+				rawUnit := int(mulEDT[0])
+				if mul, found := m.MultiplierMap[rawUnit]; found {
+					v *= mul
+				} else {
+					clientLog.Warnf("metric %q: multiplier EPC 0x%02X returned unknown value 0x%02X", m.Name, m.MultiplierEPC, rawUnit)
+				}
+			} else {
+				clientLog.Warnf("metric %q: multiplier EPC 0x%02X missing from response", m.Name, m.MultiplierEPC)
+			}
+		}
 		mv := MetricValue{Value: v, Type: m.Type}
 		if len(m.Enum) > 0 {
 			if label, ok := m.Enum[int(v)]; ok {

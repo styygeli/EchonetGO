@@ -67,20 +67,23 @@ type climateYAML struct {
 }
 
 type metricYAML struct {
-	EPC            int            `yaml:"epc"`
-	Name           string         `yaml:"name"`
-	Help           string         `yaml:"help"`
-	Size           int            `yaml:"size"`
-	Scale          float64        `yaml:"scale"`
-	Signed         bool           `yaml:"signed"`
-	Invalid        *int           `yaml:"invalid"`
-	Type           string         `yaml:"type"`
-	Enum           map[int]string `yaml:"enum"`
-	ScrapeInterval string         `yaml:"scrape_interval"`
-	HADeviceClass  string         `yaml:"ha_device_class"`
-	HAStateClass   string         `yaml:"ha_state_class"`
-	HAUnit         string         `yaml:"ha_unit"`
-	ExcludeSet     bool           `yaml:"exclude_set"`
+	EPC            int                `yaml:"epc"`
+	Name           string             `yaml:"name"`
+	Help           string             `yaml:"help"`
+	Size           int                `yaml:"size"`
+	Offset         int                `yaml:"offset"`
+	Scale          float64            `yaml:"scale"`
+	Signed         bool               `yaml:"signed"`
+	Invalid        *int               `yaml:"invalid"`
+	Type           string             `yaml:"type"`
+	Enum           map[int]string     `yaml:"enum"`
+	ScrapeInterval string             `yaml:"scrape_interval"`
+	HADeviceClass  string             `yaml:"ha_device_class"`
+	HAStateClass   string             `yaml:"ha_state_class"`
+	HAUnit         string             `yaml:"ha_unit"`
+	ExcludeSet     bool               `yaml:"exclude_set"`
+	MultiplierEPC  int                `yaml:"multiplier_epc"`
+	MultiplierMap  map[int]float64    `yaml:"multiplier_map"`
 }
 
 func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
@@ -123,6 +126,15 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		if m.EPC < 0 || m.EPC > 0xFF {
 			return nil, fmt.Errorf("metric %s: epc must be in range 0..255, got %d", m.Name, m.EPC)
 		}
+		if m.Offset < 0 {
+			return nil, fmt.Errorf("metric %s: offset must be non-negative, got %d", m.Name, m.Offset)
+		}
+		if m.MultiplierEPC < 0 || m.MultiplierEPC > 0xFF {
+			return nil, fmt.Errorf("metric %s: multiplier_epc must be in range 0..255, got %d", m.Name, m.MultiplierEPC)
+		}
+		if m.MultiplierEPC != 0 && len(m.MultiplierMap) == 0 {
+			return nil, fmt.Errorf("metric %s: multiplier_epc set but multiplier_map is empty", m.Name)
+		}
 		scale := m.Scale
 		if scale == 0 {
 			scale = 1
@@ -137,7 +149,6 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 				if label == "" {
 					return nil, fmt.Errorf("metric %s: enum label must not be empty for value %d", m.Name, rawValue)
 				}
-				// size=0 means auto-sized payloads, so enum fit cannot be statically checked.
 				if m.Size != 0 && !enumValueFits(rawValue, m.Size, m.Signed) {
 					return nil, fmt.Errorf("metric %s: enum value %d doesn't fit size=%d signed=%t", m.Name, rawValue, m.Size, m.Signed)
 				}
@@ -172,6 +183,7 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 			Name:           m.Name,
 			Help:           help,
 			Size:           m.Size,
+			Offset:         m.Offset,
 			Scale:          scale,
 			Signed:         m.Signed,
 			Invalid:        m.Invalid,
@@ -179,6 +191,8 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 			Enum:           enum,
 			ReverseEnum:    reverseEnum,
 			ScrapeInterval: interval,
+			MultiplierEPC:  byte(m.MultiplierEPC),
+			MultiplierMap:  m.MultiplierMap,
 			HADeviceClass:  haDevice,
 			HAStateClass:   haState,
 			HAUnit:         haUnit,
