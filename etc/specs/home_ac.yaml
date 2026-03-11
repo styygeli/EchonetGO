@@ -5,25 +5,6 @@ description: "Home air conditioner"
 default_scrape_interval: 1m
 
 metrics:
-  - epc: 0x80
-    name: operation_status
-    help: "Operation status: 0x30=ON, 0x31=OFF."
-    size: 1
-    scale: 1
-    type: gauge
-    enum:
-      0x30: on
-      0x31: off
-  - epc: 0x88
-    name: fault_status
-    help: "Fault status."
-    size: 1
-    scale: 1
-    type: gauge
-    scrape_interval: 10m
-    enum:
-      0x41: fault
-      0x42: no_fault
   - epc: 0x8F
     name: power_saving_operation
     help: "Power saving operation setting."
