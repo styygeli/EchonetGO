@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.8
+
+- Use add-on release version as runtime `sw_version` by injecting `BUILD_VERSION` into the Go binary at build time.
+- Remove hardcoded app version from `cmd/echonetgo/main.go` so startup logs and MQTT discovery report the actual release.
+
 ## 0.9.7
 
 - Add loader-level Super Class metric merge so common ECHONET properties are defined once and injected into each class spec.
