@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.10
+
+- Trigger immediate GET polling to ECHONET devices after successful SET operations to update Home Assistant states rapidly without waiting for the next polling cycle.
+
 ## 0.9.9
 
 - Remove exact-duplicate Super Class metrics (0x80, 0x88) from YAML specs where they matched loader-injected defaults; merge continues to supply them so behavior is unchanged.
