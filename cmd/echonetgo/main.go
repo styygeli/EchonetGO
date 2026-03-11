@@ -23,12 +23,15 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-const addonVersion = "0.9.6"
+// version is set at build time via:
+//   -ldflags "-X main.version=<release-version>"
+// Defaults to "dev" for local builds.
+var version = "dev"
 
 func main() {
 	log := logging.New("main")
 	logging.SetLevelFromEnv()
-	log.Infof("EchonetGO %s starting", addonVersion)
+	log.Infof("EchonetGO %s starting", version)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -44,7 +47,7 @@ func main() {
 
 	var mqttPub *mqttpub.Publisher
 	if cfg.MQTTEnabled() {
-		mqttPub, err = mqttpub.NewPublisher(cfg.MQTT, addonVersion)
+		mqttPub, err = mqttpub.NewPublisher(cfg.MQTT, version)
 		if err != nil {
 			log.Warnf("MQTT disabled: %v", err)
 		} else {

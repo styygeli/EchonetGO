@@ -12,7 +12,7 @@ WORKDIR /src
 RUN echo "Building EchonetGO source for addon version: ${BUILD_VERSION}" && \
     git clone --depth=1 --branch "${ECHONETGO_REF}" "${ECHONETGO_REPO}" /src
 RUN go mod download
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /echonetgo ./cmd/echonetgo
+RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${BUILD_VERSION}" -o /echonetgo ./cmd/echonetgo
 
 FROM ${BUILD_FROM}
 ARG BUILD_ARCH
