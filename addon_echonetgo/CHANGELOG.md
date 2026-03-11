@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.9
+
+- Remove exact-duplicate Super Class metrics (0x80, 0x88) from YAML specs where they matched loader-injected defaults; merge continues to supply them so behavior is unchanged.
+
 ## 0.9.8
 
 - Use add-on release version as runtime `sw_version` by injecting `BUILD_VERSION` into the Go binary at build time.

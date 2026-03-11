@@ -20,16 +20,6 @@ metrics:
     enum:
       0x30: on
       0x31: off
-  - epc: 0x88
-    name: fault_status
-    help: "Fault status."
-    size: 1
-    scale: 1
-    type: gauge
-    scrape_interval: 10m
-    enum:
-      0x41: fault
-      0x42: no_fault
   - epc: 0xB0
     name: wiring_config
     help: "Wiring system configuration (0x00=single-phase 3-wire, etc.)."

@@ -15,16 +15,6 @@ metrics:
     enum:
       0x30: on
       0x31: off
-  - epc: 0x88
-    name: fault_status
-    help: "Fault status."
-    size: 1
-    scale: 1
-    type: gauge
-    scrape_interval: 10m
-    enum:
-      0x41: fault
-      0x42: no_fault
   - epc: 0xE0
     name: cumulative_flow_m3
     help: "Cumulative water flow in m³. Raw counter × 0.001 (assumes flow_rate_unit=0x03)."
