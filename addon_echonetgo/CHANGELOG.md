@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.7
+
+- Add loader-level Super Class metric merge so common ECHONET properties are defined once and injected into each class spec.
+- Keep deterministic EPC precedence: class/vendor YAML definitions override Super Class defaults when the same EPC is present.
+- Keep property maps (0x9E/0x9F) runtime-only for GETMAP handling (not exposed as regular metrics).
+- Add/extend loader tests for Super Class injection, class override behavior, and vendor-specific spec compatibility.
+
 ## 0.9.6
 
 - Fix bridge device "Status" sensor showing Unavailable after 5 minutes (remove time-based expiry; availability topic with LWT handles online/offline).

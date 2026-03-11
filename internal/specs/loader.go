@@ -42,17 +42,18 @@ func loadFromDir(dir string) (map[string]*DeviceSpec, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %s: %w", path, err)
 		}
+		mergeSuperClass(spec)
 		out[class] = spec
 	}
 	return out, nil
 }
 
 type deviceYAML struct {
-	EOJ                   []int         `yaml:"eoj"`
-	Description           string        `yaml:"description"`
-	DefaultScrapeInterval string        `yaml:"default_scrape_interval"`
-	Metrics               []metricYAML  `yaml:"metrics"`
-	Climate               *climateYAML  `yaml:"climate"`
+	EOJ                   []int        `yaml:"eoj"`
+	Description           string       `yaml:"description"`
+	DefaultScrapeInterval string       `yaml:"default_scrape_interval"`
+	Metrics               []metricYAML `yaml:"metrics"`
+	Climate               *climateYAML `yaml:"climate"`
 }
 
 type climateYAML struct {
@@ -67,23 +68,23 @@ type climateYAML struct {
 }
 
 type metricYAML struct {
-	EPC            int                `yaml:"epc"`
-	Name           string             `yaml:"name"`
-	Help           string             `yaml:"help"`
-	Size           int                `yaml:"size"`
-	Offset         int                `yaml:"offset"`
-	Scale          float64            `yaml:"scale"`
-	Signed         bool               `yaml:"signed"`
-	Invalid        *int               `yaml:"invalid"`
-	Type           string             `yaml:"type"`
-	Enum           map[int]string     `yaml:"enum"`
-	ScrapeInterval string             `yaml:"scrape_interval"`
-	HADeviceClass  string             `yaml:"ha_device_class"`
-	HAStateClass   string             `yaml:"ha_state_class"`
-	HAUnit         string             `yaml:"ha_unit"`
-	ExcludeSet     bool               `yaml:"exclude_set"`
-	MultiplierEPC  int                `yaml:"multiplier_epc"`
-	MultiplierMap  map[int]float64    `yaml:"multiplier_map"`
+	EPC            int             `yaml:"epc"`
+	Name           string          `yaml:"name"`
+	Help           string          `yaml:"help"`
+	Size           int             `yaml:"size"`
+	Offset         int             `yaml:"offset"`
+	Scale          float64         `yaml:"scale"`
+	Signed         bool            `yaml:"signed"`
+	Invalid        *int            `yaml:"invalid"`
+	Type           string          `yaml:"type"`
+	Enum           map[int]string  `yaml:"enum"`
+	ScrapeInterval string          `yaml:"scrape_interval"`
+	HADeviceClass  string          `yaml:"ha_device_class"`
+	HAStateClass   string          `yaml:"ha_state_class"`
+	HAUnit         string          `yaml:"ha_unit"`
+	ExcludeSet     bool            `yaml:"exclude_set"`
+	MultiplierEPC  int             `yaml:"multiplier_epc"`
+	MultiplierMap  map[int]float64 `yaml:"multiplier_map"`
 }
 
 func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
@@ -207,6 +208,55 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		spec.Climate = cl
 	}
 	return spec, nil
+}
+
+// mergeSuperClass injects canonical Super Class metrics into spec. Class (and
+// vendor) YAML definitions take precedence: if a metric with the same EPC
+// already exists, it is left unchanged. Merged metrics with ScrapeInterval == 0
+// use the spec's DefaultScrapeInterval.
+func mergeSuperClass(spec *DeviceSpec) {
+	have := make(map[byte]struct{}, len(spec.Metrics))
+	for _, m := range spec.Metrics {
+		have[m.EPC] = struct{}{}
+	}
+	devInterval := spec.DefaultScrapeInterval
+	if devInterval <= 0 {
+		devInterval = defaultScrapeInterval
+	}
+	for _, m := range SuperClassMetrics() {
+		if _, ok := have[m.EPC]; ok {
+			continue
+		}
+		have[m.EPC] = struct{}{}
+		interval := m.ScrapeInterval
+		if interval <= 0 {
+			interval = devInterval
+		}
+		haDevice, haState, haUnit := m.HADeviceClass, m.HAStateClass, m.HAUnit
+		if haDevice == "" {
+			haDevice, haState, haUnit = inferHAMetadata(m.Name, m.Type, len(m.Enum) > 0)
+		}
+		spec.Metrics = append(spec.Metrics, MetricSpec{
+			EPC:            m.EPC,
+			Name:           m.Name,
+			Help:           m.Help,
+			Size:           m.Size,
+			Offset:         m.Offset,
+			Scale:          m.Scale,
+			Signed:         m.Signed,
+			Invalid:        m.Invalid,
+			Type:           m.Type,
+			Enum:           m.Enum,
+			ReverseEnum:    m.ReverseEnum,
+			ScrapeInterval: interval,
+			MultiplierEPC:  m.MultiplierEPC,
+			MultiplierMap:  m.MultiplierMap,
+			HADeviceClass:  haDevice,
+			HAStateClass:   haState,
+			HAUnit:         haUnit,
+			ExcludeSet:     m.ExcludeSet,
+		})
+	}
 }
 
 func parseClimateYAML(raw *climateYAML) (*ClimateSpec, error) {
