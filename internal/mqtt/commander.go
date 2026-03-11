@@ -237,6 +237,7 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 		return
 	}
 	mqttLog.Infof("commander: set %s %s = %s", dev.Name, ms.Name, payload)
+	c.triggerStateUpdate(dev, eoj, ms.EPC)
 }
 
 func (c *Commander) deviceByName(name string) *config.Device {
@@ -269,6 +270,7 @@ func (c *Commander) handleClimatePower(ctx context.Context, addr string, eoj [3]
 		return
 	}
 	mqttLog.Infof("commander: set %s power %s", dev.Name, payload)
+	c.triggerStateUpdate(dev, eoj, operationStatusEPC)
 }
 
 func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec) {
@@ -284,6 +286,7 @@ func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]b
 			return
 		}
 		mqttLog.Infof("commander: set %s mode off", dev.Name)
+		c.triggerStateUpdate(dev, eoj, operationStatusEPC)
 		return
 	}
 	// Turn on first, then set operation mode
@@ -314,6 +317,7 @@ func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]b
 		return
 	}
 	mqttLog.Infof("commander: set %s mode %s", dev.Name, payload)
+	c.triggerStateUpdate(dev, eoj, operationStatusEPC, epc)
 }
 
 func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
@@ -346,6 +350,7 @@ func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, e
 		return
 	}
 	mqttLog.Infof("commander: set %s temperature %s", dev.Name, payload)
+	c.triggerStateUpdate(dev, eoj, epc)
 }
 
 func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
@@ -378,6 +383,7 @@ func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [
 		return
 	}
 	mqttLog.Infof("commander: set %s fan_mode %s", dev.Name, payload)
+	c.triggerStateUpdate(dev, eoj, epc)
 }
 
 func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
@@ -387,4 +393,31 @@ func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
 		}
 	}
 	return nil
+}
+
+func (c *Commander) triggerStateUpdate(dev *config.Device, eoj [3]byte, epcs ...byte) {
+	// Spawns a background goroutine to wait a tiny bit, then read the state
+	go func() {
+		// Minimum wait is recommended to allow device internal state propagation
+		time.Sleep(500 * time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		props, err := c.client.GetProps(ctx, dev.IP, eoj, epcs)
+		if err != nil {
+			mqttLog.Warnf("commander: failed delayed read for %s: %v", dev.Name, err)
+			return
+		}
+
+		deviceSpecs, ok := c.cache.GetDeviceSpecs(*dev)
+		if !ok {
+			return
+		}
+
+		metrics := echonet.ParsePropsToMetrics(props, deviceSpecs)
+		if len(metrics) > 0 {
+			c.cache.Update(*dev, "set_update", 0, true, 0, metrics, "")
+			mqttLog.Debugf("commander: immediate update for %s parsed %d metrics", dev.Name, len(metrics))
+		}
+	}()
 }
