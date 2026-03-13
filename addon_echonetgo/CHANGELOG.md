@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.14
+
+- **MQTT discovery**: Select entities with enum options now support a defined option order. For `air_flow_direction_horizontal` (0xA4), options are shown ceiling→floor: uppermost, upper_mid, middle, lower_mid, lowermost. Entity names follow ECHONET spec (0xA4 = horizontal, 0xA5 = vertical).
+
 ## 0.9.13
 
 - **MAC-900IF (home_ac_000006) spec**: Document vertical blade behaviour: 0xA3 = vertical swing (off/on), 0xA4 = vertical position (0x41 uppermost → 0x44, 0x43, 0x45, 0x42 lowermost); 0xA5 not reported. Add 0xA1=0x43 (full_auto). Note that 0xA4 updates on arrival only and does not track live position during swing; horizontal blade has no EPC change on this unit.

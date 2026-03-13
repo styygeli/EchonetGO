@@ -239,11 +239,14 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				mqttLog.Debugf("published switch discovery for %s/%s", dev.Name, ms.Name)
 			}
 		case "select":
-			options := make([]string, 0, len(ms.ReverseEnum))
-			for label := range ms.ReverseEnum {
-				options = append(options, label)
+			options := selectOptionsOrdered(ms)
+			if options == nil {
+				options = make([]string, 0, len(ms.ReverseEnum))
+				for label := range ms.ReverseEnum {
+					options = append(options, label)
+				}
+				sortStrings(options)
 			}
-			sortStrings(options)
 			payload := map[string]any{
 				"name":               friendlyName(ms.Name),
 				"unique_id":          "echonetgo_" + objectID,
@@ -340,6 +343,34 @@ func friendlyName(name string) string {
 }
 
 func intPtr(v int) *int { return &v }
+
+// selectOptionsOrdered returns options in a defined order for metrics that need it (e.g. 0xA4
+// on MAC-900IF: blade position ceiling→floor). Returns nil to use default alphabetical order.
+func selectOptionsOrdered(ms specs.MetricSpec) []string {
+	if ms.Name != "air_flow_direction_horizontal" {
+		return nil
+	}
+	order := []string{"uppermost", "upper_mid", "middle", "lower_mid", "lowermost"}
+	out := make([]string, 0, len(ms.ReverseEnum))
+	for _, label := range order {
+		if _, ok := ms.ReverseEnum[label]; ok {
+			out = append(out, label)
+		}
+	}
+	for label := range ms.ReverseEnum {
+		found := false
+		for _, o := range order {
+			if o == label {
+				found = true
+				break
+			}
+		}
+		if !found {
+			out = append(out, label)
+		}
+	}
+	return out
+}
 
 func fanModesFromSpec(metricSpecs []specs.MetricSpec, epc byte) []string {
 	for _, m := range metricSpecs {
