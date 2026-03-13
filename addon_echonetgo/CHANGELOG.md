@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.20
+
+- **Electric water heater (Ecocute) spec**: Set correct byte sizes for all 38 metrics (31x 1-byte, 7x 2-byte), fixing SET command encoding errors (`size 0 (auto), cannot encode for SET`). Add HA display metadata: temperature sensors with °C, water volumes in liters, HP power consumption in watts, and `ha_device_class: enum` for multi-value selects so they display string labels instead of raw numbers. Add `invalid: 0xFD` sentinel for temperature setpoints.
+
 ## 0.9.19
 
 - **Concurrency**: Fix data race on shared EOJ cache during parallel device init by switching to `sync.Map`.

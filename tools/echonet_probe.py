@@ -40,17 +40,64 @@ class ProbeCase:
     epcs: tuple[int, ...]
 
 
-def probe_cases(ac_instance: int) -> list[ProbeCase]:
-    ac_eoj = (0x01, 0x30, ac_instance)
+def node_profile_cases() -> list[ProbeCase]:
     return [
         ProbeCase("node_profile_instance_list", DEOJ_NODE_PROFILE, (0xD6,)),
         ProbeCase("node_profile_getmap", DEOJ_NODE_PROFILE, (0x9F,)),
         ProbeCase("node_profile_identity", DEOJ_NODE_PROFILE, (0x83, 0x8A, 0x8C)),
-        ProbeCase("ac_operation_status", ac_eoj, (0x80,)),
-        ProbeCase("ac_getmap", ac_eoj, (0x9F,)),
-        # Operation mode (0xB0=heat/cool/etc) and blade/direction: swing (0xA3), horizontal (0xA4), vertical (0xA5)
-        ProbeCase("ac_mode_and_blades", ac_eoj, (0xB0, 0xA3, 0xA4, 0xA5)),
     ]
+
+
+def instance_cases(eoj: tuple[int, int, int]) -> list[ProbeCase]:
+    label = f"{eoj[0]:02x}{eoj[1]:02x}{eoj[2]:02x}"
+    return [
+        ProbeCase(f"{label}_operation_status", eoj, (0x80,)),
+        ProbeCase(f"{label}_getmap", eoj, (0x9F,)),
+        ProbeCase(f"{label}_identity", eoj, (0x83, 0x8A)),
+    ]
+
+
+def parse_eoj_from_hex(s: str) -> tuple[int, int, int]:
+    """Parse '026b01' or '0x026b01' into (0x02, 0x6b, 0x01)."""
+    if s.startswith(("0x", "0X")):
+        s = s[2:]
+    if len(s) != 6:
+        raise ValueError(f"EOJ must be exactly 6 hex digits, got '{s}'")
+    b = bytes.fromhex(s)
+    return (b[0], b[1], b[2])
+
+
+def parse_epcs_from_arg(s: str) -> tuple[int, ...]:
+    """Parse '0x80,0xB0,0xB2' into (0x80, 0xB0, 0xB2)."""
+    out: list[int] = []
+    for p in s.split(","):
+        p = p.strip()
+        if not p:
+            continue
+        if p.startswith(("0x", "0X")):
+            p = p[2:]
+        out.append(int(p, 16))
+    return tuple(out)
+
+
+def extract_instances_from_edt(edt: bytes) -> list[tuple[int, int, int]]:
+    """Parse D6 instance list EDT into (group, class, instance) tuples."""
+    if not edt:
+        return []
+    count = min(edt[0], (len(edt) - 1) // 3)
+    out: list[tuple[int, int, int]] = []
+    for i in range(count):
+        base = 1 + i * 3
+        out.append((edt[base], edt[base + 1], edt[base + 2]))
+    return out
+
+
+def format_eoj(eoj: tuple[int, int, int]) -> str:
+    return f"0x{eoj[0]:02x}{eoj[1]:02x}{eoj[2]:02x}"
+
+
+def decode_instance_list(edt: bytes) -> list[str]:
+    return [format_eoj(e) for e in extract_instances_from_edt(edt)]
 
 
 def route_local_ip_for_target(target_ip: str) -> str:
@@ -101,17 +148,6 @@ def parse_get_res(data: bytes) -> tuple[int, int, list[tuple[int, bytes]]]:
     return tid, esv, props
 
 
-def decode_instance_list(edt: bytes) -> list[str]:
-    if not edt:
-        return []
-    count = min(edt[0], (len(edt) - 1) // 3)
-    out: list[str] = []
-    for i in range(count):
-        base = 1 + i * 3
-        out.append(f"0x{edt[base]:02x}{edt[base + 1]:02x}{edt[base + 2]:02x}")
-    return out
-
-
 def create_socket(target_ip: str, timeout: float, source_port: int, pychonet_like: bool) -> socket.socket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.settimeout(timeout)
@@ -128,7 +164,6 @@ def create_socket(target_ip: str, timeout: float, source_port: int, pychonet_lik
             mreq = struct.pack("=4s4s", socket.inet_aton(MCAST_ADDR), socket.inet_aton(local_ip))
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
         except OSError:
-            # Not required for unicast probe flow.
             pass
     return sock
 
@@ -140,19 +175,19 @@ def receive_for_tid(
     timeout: float,
     case_name: str,
     verbose: bool,
-) -> tuple[bool, str]:
+) -> tuple[bool, str, list[tuple[int, bytes]]]:
     deadline = time.monotonic() + timeout
     while True:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            return False, f"[{case_name}] timeout after {timeout:.1f}s"
+            return False, f"[{case_name}] timeout after {timeout:.1f}s", []
         sock.settimeout(remaining)
         try:
             data, addr = sock.recvfrom(4096)
         except socket.timeout:
-            return False, f"[{case_name}] timeout after {timeout:.1f}s"
+            return False, f"[{case_name}] timeout after {timeout:.1f}s", []
         except OSError as exc:
-            return False, f"[{case_name}] socket error: {exc}"
+            return False, f"[{case_name}] socket error: {exc}", []
 
         src_ip, src_port = addr[0], addr[1]
         if src_ip != target_ip:
@@ -179,18 +214,20 @@ def receive_for_tid(
         # 0x72 = Get_Res, 0x52 = Get_SNA (service not available) - still print props when present
         if esv not in (ESV_GET_RES, 0x52):
             lines.append(f"[{case_name}] unexpected ESV, expected 0x72 or 0x52")
-            return False, "\n".join(lines)
+            return False, "\n".join(lines), []
         if esv == 0x52:
             lines.append(f"[{case_name}] Get_SNA (partial/not available) - showing returned props")
         for epc, edt in props:
-            if case_name == "node_profile_instance_list" and epc == 0xD6:
+            if epc == 0xD6:
                 lines.append(f"[{case_name}] D6 instances={decode_instance_list(edt)}")
             else:
                 lines.append(f"[{case_name}] EPC 0x{epc:02x} EDT {edt.hex()}")
-        return True, "\n".join(lines)
+        return True, "\n".join(lines), props
 
 
-def run_case(sock: socket.socket, target_ip: str, timeout: float, case: ProbeCase, verbose: bool) -> bool:
+def run_case(
+    sock: socket.socket, target_ip: str, timeout: float, case: ProbeCase, verbose: bool,
+) -> tuple[bool, list[tuple[int, bytes]]]:
     tid, payload = build_get(case.deoj, case.epcs)
     local_ip, local_port = sock.getsockname()
     print(f"[{case.name}] {local_ip}:{local_port} -> {target_ip}:{ECHONET_PORT} tid=0x{tid:04x}")
@@ -198,55 +235,109 @@ def run_case(sock: socket.socket, target_ip: str, timeout: float, case: ProbeCas
         sock.sendto(payload, (target_ip, ECHONET_PORT))
     except OSError as exc:
         print(f"[{case.name}] send error: {exc}")
-        return False
-    ok, message = receive_for_tid(sock, target_ip, tid, timeout, case.name, verbose)
+        return False, []
+    ok, message, props = receive_for_tid(sock, target_ip, tid, timeout, case.name, verbose)
     print(message)
-    return ok
+    return ok, props
 
 
-def run_port_mode(args: argparse.Namespace, source_port: int, cases: list[ProbeCase]) -> bool:
-    mode_label = "bind3610" if source_port == ECHONET_PORT else "ephemeral"
-    print(f"\n=== mode: {mode_label}, socket: {args.socket_mode}, pychonet_like: {args.pychonet_like} ===")
+def _run_case_list(
+    args: argparse.Namespace, source_port: int, cases: list[ProbeCase],
+) -> tuple[bool, list[tuple[int, bytes]]]:
+    """Run a list of probe cases respecting socket-mode. Returns (any_success, collected_props)."""
     success = False
+    all_props: list[tuple[int, bytes]] = []
+    mode_label = "bind3610" if source_port == ECHONET_PORT else "ephemeral"
 
     if args.socket_mode == "shared":
         try:
             sock = create_socket(args.target_ip, args.timeout, source_port, args.pychonet_like)
         except OSError as exc:
             print(f"[setup] failed to create shared socket for mode {mode_label}: {exc}")
-            return False
+            return False, []
         try:
             for case in cases:
                 for attempt in range(1, args.retries + 1):
-                    if run_case(sock, args.target_ip, args.timeout, case, args.verbose):
+                    ok, props = run_case(sock, args.target_ip, args.timeout, case, args.verbose)
+                    if ok:
                         success = True
+                        all_props.extend(props)
                         break
                     if attempt < args.retries:
                         print(f"[{case.name}] retry {attempt + 1}/{args.retries}")
         finally:
             sock.close()
-        return success
+    else:
+        for case in cases:
+            for attempt in range(1, args.retries + 1):
+                try:
+                    sock = create_socket(args.target_ip, args.timeout, source_port, args.pychonet_like)
+                except OSError as exc:
+                    print(f"[setup] failed to create per-request socket for mode {mode_label}: {exc}")
+                    return success, all_props
+                try:
+                    ok, props = run_case(sock, args.target_ip, args.timeout, case, args.verbose)
+                    if ok:
+                        success = True
+                        all_props.extend(props)
+                        break
+                finally:
+                    sock.close()
+                if attempt < args.retries:
+                    print(f"[{case.name}] retry {attempt + 1}/{args.retries}")
 
-    # per-request
-    for case in cases:
-        for attempt in range(1, args.retries + 1):
-            try:
-                sock = create_socket(args.target_ip, args.timeout, source_port, args.pychonet_like)
-            except OSError as exc:
-                print(f"[setup] failed to create per-request socket for mode {mode_label}: {exc}")
-                return success
-            try:
-                if run_case(sock, args.target_ip, args.timeout, case, args.verbose):
-                    success = True
-                    break
-            finally:
-                sock.close()
-            if attempt < args.retries:
-                print(f"[{case.name}] retry {attempt + 1}/{args.retries}")
-    return success
+    return success, all_props
 
 
-def watch_loop(args: argparse.Namespace, ac_eoj: tuple[int, int, int], epcs: tuple[int, ...]) -> None:
+def run_port_mode(
+    args: argparse.Namespace, source_port: int, eoj_override: tuple[int, int, int] | None,
+) -> bool:
+    mode_label = "bind3610" if source_port == ECHONET_PORT else "ephemeral"
+    print(f"\n=== mode: {mode_label}, socket: {args.socket_mode}, pychonet_like: {args.pychonet_like} ===")
+
+    np_success, np_props = _run_case_list(args, source_port, node_profile_cases())
+
+    target_eoj = eoj_override
+    if target_eoj is None:
+        for epc, edt in np_props:
+            if epc == 0xD6:
+                instances = extract_instances_from_edt(edt)
+                if instances:
+                    target_eoj = instances[0]
+                    print(f"[auto-detect] targeting first discovered instance: {format_eoj(target_eoj)}")
+                break
+
+    if target_eoj is None:
+        if eoj_override is None:
+            print("[auto-detect] no instances discovered; skipping instance probes")
+        return np_success
+
+    inst_success, _ = _run_case_list(args, source_port, instance_cases(target_eoj))
+    return np_success or inst_success
+
+
+def auto_detect_eoj(args: argparse.Namespace) -> tuple[int, int, int] | None:
+    """Quick single-probe to discover first instance EOJ for watch mode."""
+    case = ProbeCase("auto_detect", DEOJ_NODE_PROFILE, (0xD6,))
+    try:
+        sock = create_socket(args.target_ip, args.timeout, ECHONET_PORT, args.pychonet_like)
+    except OSError as exc:
+        print(f"[auto-detect] failed to create socket: {exc}", file=sys.stderr)
+        return None
+    try:
+        ok, props = run_case(sock, args.target_ip, args.timeout, case, args.verbose)
+        if ok:
+            for epc, edt in props:
+                if epc == 0xD6:
+                    instances = extract_instances_from_edt(edt)
+                    if instances:
+                        return instances[0]
+    finally:
+        sock.close()
+    return None
+
+
+def watch_loop(args: argparse.Namespace, eoj: tuple[int, int, int], epcs: tuple[int, ...]) -> None:
     """Poll targeted EPCs every --interval seconds; print one line per poll with timestamp."""
     try:
         sock = create_socket(args.target_ip, args.timeout, ECHONET_PORT, args.pychonet_like)
@@ -255,10 +346,10 @@ def watch_loop(args: argparse.Namespace, ac_eoj: tuple[int, int, int], epcs: tup
         sys.exit(1)
     interval = args.interval
     epc_list = " ".join(f"0x{e:02x}" for e in epcs)
-    print(f"Watching {epc_list} every {interval}s (Ctrl+C to stop)", file=sys.stderr)
+    print(f"Watching {format_eoj(eoj)} EPCs {epc_list} every {interval}s (Ctrl+C to stop)", file=sys.stderr)
     try:
         while True:
-            tid, payload = build_get(ac_eoj, epcs)
+            tid, payload = build_get(eoj, epcs)
             try:
                 sock.sendto(payload, (args.target_ip, ECHONET_PORT))
             except OSError as exc:
@@ -334,13 +425,22 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable pychonet-like route/multicast socket setup",
     )
-    parser.add_argument("--ac-instance", type=int, default=1, help="Home AC EOJ instance byte (default: 1)")
+    parser.add_argument(
+        "--eoj",
+        default=None,
+        help="Explicit target EOJ in hex, e.g. 026b01 or 0x013001. Auto-detected from node profile if omitted.",
+    )
     parser.add_argument("--retries", type=int, default=1, help="Retries per probe case (default: 1)")
     parser.add_argument("--verbose", action="store_true", help="Show stale/ignored frames")
     parser.add_argument(
         "--watch",
         action="store_true",
-        help="Poll 0xB0 0xA3 0xA4 0xA5 every second; print one line per poll (Ctrl+C to stop)",
+        help="Poll EPCs every --interval seconds; print one line per poll (Ctrl+C to stop)",
+    )
+    parser.add_argument(
+        "--epcs",
+        default=None,
+        help="Comma-separated hex EPCs for --watch mode, e.g. 0x80,0xB0,0xB2. Default: 0x80,0x9F",
     )
     parser.add_argument(
         "--interval",
@@ -350,29 +450,49 @@ def parse_args() -> argparse.Namespace:
     )
     args = parser.parse_args()
 
-    if not (0 <= args.ac_instance <= 0xFF):
-        parser.error("--ac-instance must be in range 0..255")
     if args.retries < 1:
         parser.error("--retries must be >= 1")
     if args.source_port is not None and not (0 <= args.source_port <= 65535):
         parser.error("--source-port must be in range 0..65535")
     if args.watch and args.interval <= 0:
         parser.error("--interval must be positive")
+
+    args.eoj_tuple = None
+    if args.eoj is not None:
+        try:
+            args.eoj_tuple = parse_eoj_from_hex(args.eoj)
+        except ValueError as exc:
+            parser.error(f"--eoj: {exc}")
+
+    args.epcs_tuple = None
+    if args.epcs is not None:
+        try:
+            args.epcs_tuple = parse_epcs_from_arg(args.epcs)
+        except ValueError as exc:
+            parser.error(f"--epcs: {exc}")
+        if not args.epcs_tuple:
+            parser.error("--epcs: no valid EPCs given")
+
     return args
 
 
 def main() -> int:
     args = parse_args()
     if args.watch:
-        ac_eoj = (0x01, 0x30, args.ac_instance)
-        # All climate-related EPCs that typically change: on/off, mode, set/room temp, fan, blades
-        epcs = (0x80, 0xB0, 0xB3, 0xBB, 0xA0, 0xA1, 0xA3, 0xA4, 0xA5)
-        watch_loop(args, ac_eoj, epcs)
+        eoj = args.eoj_tuple
+        if eoj is None:
+            eoj = auto_detect_eoj(args)
+            if eoj is None:
+                print("error: could not auto-detect EOJ; use --eoj to specify", file=sys.stderr)
+                return 1
+            print(f"[auto-detect] watching instance {format_eoj(eoj)}")
+        epcs = args.epcs_tuple or (0x80, 0x9F)
+        watch_loop(args, eoj, epcs)
         return 0
-    cases = probe_cases(args.ac_instance)
+
     success = False
     for source_port in resolve_source_ports(args):
-        success = run_port_mode(args, source_port, cases) or success
+        success = run_port_mode(args, source_port, args.eoj_tuple) or success
     print("\nRESULT:", "reachable (at least one successful probe)" if success else "no successful probes")
     return 0 if success else 1
 
