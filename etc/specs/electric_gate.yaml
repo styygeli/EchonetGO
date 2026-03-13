@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xc2
     name: epc_c2
     help: "EPC 0xC2"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -25,7 +25,7 @@ metrics:
   - epc: 0xc3
     name: epc_c3
     help: "EPC 0xC3"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -34,7 +34,7 @@ metrics:
   - epc: 0xd0
     name: opening_speed_setting
     help: "Opening speed setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -44,7 +44,7 @@ metrics:
   - epc: 0xd1
     name: closing_speed_setting
     help: "Closing speed setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -54,13 +54,13 @@ metrics:
   - epc: 0xd2
     name: operation_time_setting_value
     help: "Operation time setting value"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xd4
     name: epc_d4
     help: "EPC 0xD4"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -69,25 +69,30 @@ metrics:
   - epc: 0xe0
     name: opening_closing_operation_setting
     help: "Opening/closing operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
+    enum:
+      0x41: open
+      0x42: closed
+      0x43: stop
   - epc: 0xe1
     name: degree_of_opening_setting
     help: "Degree-of-opening setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xe2
     name: epc_e2
     help: "EPC 0xE2"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xe3
     name: opening_closing_speed_setting
     help: "Opening/closing speed setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -97,7 +102,7 @@ metrics:
   - epc: 0xe5
     name: electric_lock_setting
     help: "Electric lock setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -106,7 +111,7 @@ metrics:
   - epc: 0xe8
     name: remote_operation
     help: "Remote operation"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -115,7 +120,7 @@ metrics:
   - epc: 0xe9
     name: selective_degree_of_opening_setting
     help: "Selective degree-of-opening setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -136,13 +141,20 @@ metrics:
   - epc: 0xea
     name: open_closed_status
     help: "Open/closed status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
+    enum:
+      0x41: fully_open
+      0x42: closed
+      0x43: opening
+      0x44: closing
+      0x45: stop
   - epc: 0xee
     name: one_time_opening_speed_setting
     help: "One-time opening speed setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -152,7 +164,7 @@ metrics:
   - epc: 0xef
     name: one_time_closing_speed_setting
     help: "One-time closing speed setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

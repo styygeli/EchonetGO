@@ -1,4 +1,5 @@
-# Auto-generated from pychonet class DiffPressureSensor.
+# Differential pressure sensor - ECHONET Object 0x001E01
+# Sizes verified against pychonet DiffPressureSensor.py and ECHONET Lite Appendix (class 0x001E).
 eoj: [0x00, 0x1e, 0x01]
 description: "Differential pressure sensor"
 default_scrape_interval: 1m
@@ -7,7 +8,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -15,7 +16,11 @@ metrics:
       0x31: off
   - epc: 0xe0
     name: measured_value_of_differential_pressure
-    help: "Measured value of differential pressure"
-    size: 0
+    help: "Measured value of differential pressure (Pa)"
+    size: 2
     scale: 1
+    signed: true
     type: gauge
+    ha_device_class: pressure
+    ha_state_class: measurement
+    ha_unit: "Pa"

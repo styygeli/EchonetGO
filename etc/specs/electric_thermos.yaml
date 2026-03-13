@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xb0
     name: cover_open_close_status
     help: "Cover open/close status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -25,7 +25,7 @@ metrics:
   - epc: 0xb1
     name: no_water_warning
     help: "No-water warning"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -34,7 +34,7 @@ metrics:
   - epc: 0xb2
     name: boil_up_setting
     help: "Boil-up setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -43,9 +43,10 @@ metrics:
   - epc: 0xe0
     name: boil_up_warmer_mode_setting
     help: "Boil-up/warmer mode setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
     enum:
       0x41: citric_acid_cleaning
       0x42: normal_warmer
@@ -53,13 +54,16 @@ metrics:
   - epc: 0xe1
     name: set_value_of_warmer_temperature
     help: "Set value of warmer temperature"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: temperature
+    ha_state_class: measurement
+    ha_unit: "°C"
   - epc: 0xe2
     name: hot_water_discharge_status
     help: "Hot water discharge status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -68,7 +72,7 @@ metrics:
   - epc: 0xe3
     name: lock_status
     help: "Lock status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

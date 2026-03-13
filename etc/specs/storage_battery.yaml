@@ -34,7 +34,7 @@ metrics:
   - epc: 0xD3
     name: measured_instantaneous_charge_discharge_raw
     help: "Measured instantaneous charging/discharging value (signed)."
-    size: 0
+    size: 4
     signed: true
     scale: 1
     type: gauge

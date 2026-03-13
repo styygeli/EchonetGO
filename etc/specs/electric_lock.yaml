@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xe0
     name: lock_setting_1
     help: "Lock setting 1"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -25,7 +25,7 @@ metrics:
   - epc: 0xe1
     name: lock_setting_2
     help: "Lock setting 2"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -34,7 +34,7 @@ metrics:
   - epc: 0xe2
     name: lock_status_of_door_guard
     help: "Lock status of door guard"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -43,7 +43,7 @@ metrics:
   - epc: 0xe3
     name: door_open_close_status
     help: "Door open/close status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -52,7 +52,7 @@ metrics:
   - epc: 0xe4
     name: occupant_non_occupant_status
     help: "Occupant/non-occupant status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -61,9 +61,10 @@ metrics:
   - epc: 0xe5
     name: alarm_status
     help: "Alarm status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
     enum:
       0x40: normal
       0x41: break_open
@@ -73,7 +74,7 @@ metrics:
   - epc: 0xe6
     name: auto_lock_mode_setting
     help: "Auto lock mode setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -82,7 +83,7 @@ metrics:
   - epc: 0xe7
     name: battery_level
     help: "Battery level"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

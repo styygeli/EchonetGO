@@ -1,4 +1,5 @@
-# Auto-generated from pychonet class TemperatureSensor.
+# Temperature sensor - ECHONET Object 0x001101
+# Sizes verified against pychonet TemperatureSensor.py and ECHONET Lite Appendix (class 0x0011).
 eoj: [0x00, 0x11, 0x01]
 description: "Temperature sensor"
 default_scrape_interval: 1m
@@ -7,7 +8,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -15,7 +16,11 @@ metrics:
       0x31: off
   - epc: 0xe0
     name: measured_temperature_value
-    help: "Measured temperature value"
-    size: 0
+    help: "Measured temperature value (0.1°C resolution)"
+    size: 2
     scale: 0.1
+    signed: true
     type: gauge
+    ha_device_class: temperature
+    ha_state_class: measurement
+    ha_unit: "°C"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.21
+
+- **Spec remediation (46 files)**: Set correct byte sizes for all metrics across 46 ECHONET device class specs imported from pychonet, fixing `size 0 (auto), cannot encode for SET` errors for every SET-capable EPC. Covers home AC, electric lock, 7 cover/actuator classes (blind, shutter, curtain, window, gate, sliding door, entrance door), hot water generator, floor heater, bathroom dryer, refrigerator, electric thermos, hybrid water heater, EV charger, storage battery, fuel cell, multiple-input PCS, 2 energy meters, 3 lighting classes, air cleaner, ceiling fan, and 19 sensor classes. Add HA display metadata (device_class, state_class, unit) for temperatures, energy, power, current, humidity, pressure, CO₂, and multi-value enum selects. Add missing open/close/stop enums on cover devices from pychonet. Only one known composite EPC (electric_energy_sensor 0xE4, 48×4B read-only log) remains at size: 0 by design.
+- **Regression guard**: Add `TestLoad_NoUnexpectedAutoSize` to prevent reintroduction of unresolved `size: 0` in curated spec files.
+
 ## 0.9.20
 
 - **Electric water heater (Ecocute) spec**: Set correct byte sizes for all 38 metrics (31x 1-byte, 7x 2-byte), fixing SET command encoding errors (`size 0 (auto), cannot encode for SET`). Add HA display metadata: temperature sensors with °C, water volumes in liters, HP power consumption in watts, and `ha_device_class: enum` for multi-value selects so they display string labels instead of raw numbers. Add `invalid: 0xFD` sentinel for temperature setpoints.

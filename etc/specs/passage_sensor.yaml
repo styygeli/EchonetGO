@@ -1,4 +1,5 @@
-# Auto-generated from pychonet class PassageSensor.
+# Passage sensor - ECHONET Object 0x002701
+# Sizes verified against pychonet PassageSensor.py and ECHONET Lite Appendix (class 0x0027).
 eoj: [0x00, 0x27, 0x01]
 description: "Passage sensor"
 default_scrape_interval: 1m
@@ -7,7 +8,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +17,7 @@ metrics:
   - epc: 0xb0
     name: detection_threshold_level
     help: "Detection threshold level"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -30,14 +31,16 @@ metrics:
       0x38: level_8
   - epc: 0xbe
     name: passage_detection_hold_time
-    help: "Passage detection hold time"
-    size: 0
+    help: "Passage detection hold time (seconds)"
+    size: 2
     scale: 1
     type: gauge
+    ha_unit: "s"
+    ha_state_class: measurement
   - epc: 0xe0
     name: passage_detection_direction
     help: "Passage detection direction"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

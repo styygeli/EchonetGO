@@ -326,6 +326,46 @@ metrics:
 	}
 }
 
+// TestLoad_NoUnexpectedAutoSize scans all curated spec files and asserts that
+// size: 0 (auto-detect) only appears on known composite/log EPCs that cannot be
+// represented as a single scalar metric. Any new size: 0 must be added to the
+// allowlist below so it is intentional.
+func TestLoad_NoUnexpectedAutoSize(t *testing.T) {
+	cwd, _ := os.Getwd()
+	specsDir := filepath.Join(cwd, "..", "..", "etc", "specs")
+	if _, err := os.Stat(specsDir); err != nil {
+		t.Skipf("etc/specs not found at %s: %v", specsDir, err)
+	}
+	specs, err := Load(specsDir)
+	if err != nil {
+		t.Fatalf("Load(%s) error = %v", specsDir, err)
+	}
+
+	type autoSizeKey struct {
+		specName string
+		epc      byte
+	}
+	allowed := map[autoSizeKey]bool{
+		{"electric_energy_sensor", 0xE4}: true, // 48×4B composite read-only measurement log
+	}
+
+	var violations []string
+	for name, spec := range specs {
+		for _, m := range spec.Metrics {
+			if m.Size == 0 {
+				key := autoSizeKey{name, m.EPC}
+				if !allowed[key] {
+					violations = append(violations, name+"/"+m.Name)
+				}
+			}
+		}
+	}
+	if len(violations) > 0 {
+		t.Errorf("unexpected size: 0 (auto) metrics; fix the spec or add to allowlist:\n  %s",
+			strings.Join(violations, "\n  "))
+	}
+}
+
 // TestLoad_VendorSpecMergesCorrectly verifies that loading from the real specs
 // dir succeeds and vendor-specific specs (e.g. home_ac_000006) load and receive
 // Super Class merge like any other class.

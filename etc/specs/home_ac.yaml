@@ -41,7 +41,7 @@ metrics:
   - epc: 0xBB
     name: indoor_temperature_celsius
     help: "Indoor temperature in °C (signed). 0x7E=unable to measure."
-    size: 0
+    size: 1
     signed: true
     scale: 1
     type: gauge

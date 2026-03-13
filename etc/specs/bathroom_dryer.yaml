@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0x90
     name: on_timer_based_reservation_setting_1
     help: "“ON timer-based reservation” setting 1"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -25,7 +25,7 @@ metrics:
   - epc: 0x94
     name: off_timer_based_reservation_setting
     help: "“OFF timer-based reservation” setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -34,9 +34,10 @@ metrics:
   - epc: 0xb0
     name: operation_setting
     help: "Operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
     enum:
       0x00: stop
       0x10: ventilation
@@ -49,62 +50,68 @@ metrics:
   - epc: 0xb1
     name: ventilation_operation_setting
     help: "Ventilation operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xb2
     name: bathroom_pre_warmer_operation_setting
     help: "Bathroom pre-warmer operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xb3
     name: bathroom_heater_operation_setting
     help: "Bathroom heater operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xb4
     name: bathroom_dryer_operation_setting
     help: "Bathroom dryer operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xb5
     name: cool_air_circulator_operation_setting
     help: "Cool air circulator operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xb6
     name: mist_sauna_operation_setting
     help: "Mist sauna operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xb7
     name: water_mist_operation_setting
     help: "Water mist operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xba
     name: measured_relative_bathroom_humidity
     help: "Measured relative bathroom humidity"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: humidity
+    ha_state_class: measurement
+    ha_unit: "%"
   - epc: 0xbb
     name: measured_bathroom_temperature
     help: "Measured bathroom temperature"
-    size: 0
+    size: 1
     scale: 1
     signed: true
     type: gauge
+    ha_device_class: temperature
+    ha_state_class: measurement
+    ha_unit: "°C"
   - epc: 0xc2
     name: ventilation_air_flow_rate_setting
     help: "Ventilation air flow rate setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -120,7 +127,7 @@ metrics:
   - epc: 0xcf
     name: filter_cleaning_reminder_sign_setting
     help: "Filter cleaning reminder sign setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -129,7 +136,7 @@ metrics:
   - epc: 0xe0
     name: human_body_detection_status
     help: "Human body detection status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -138,7 +145,7 @@ metrics:
   - epc: 0xe1
     name: on_timer_based_reservation_setting_2
     help: "“ON timer-based reservation” setting 2"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

@@ -1,4 +1,5 @@
-# Auto-generated from pychonet class FuelCell.
+# Fuel cell - ECHONET Object 0x027C01
+# Sizes verified against pychonet FuelCell.py and ECHONET Lite Appendix (class 0x027C).
 eoj: [0x02, 0x7c, 0x01]
 description: "Fuel cell"
 default_scrape_interval: 1m
@@ -7,7 +8,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,49 +17,67 @@ metrics:
   - epc: 0xc1
     name: measured_temperature_of_water_in_water_heater
     help: "Measured temperature of water in water heater"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: temperature
+    ha_state_class: measurement
+    ha_unit: "°C"
   - epc: 0xc2
     name: rated_power_generation_output
-    help: "Rated power generation output"
-    size: 0
+    help: "Rated power generation output (W)"
+    size: 2
     scale: 1
     type: gauge
+    ha_device_class: power
+    ha_state_class: measurement
+    ha_unit: "W"
   - epc: 0xc3
     name: heating_value_of_hot_water_storage_tank
-    help: "Heating value of hot water storage tank"
-    size: 0
+    help: "Heating value of hot water storage tank (MJ)"
+    size: 2
     scale: 1
     type: gauge
   - epc: 0xc4
     name: measured_instantaneous_power_generation_output
-    help: "Measured instantaneous power generation output"
-    size: 0
+    help: "Measured instantaneous power generation output (W)"
+    size: 2
     scale: 1
     type: gauge
+    ha_device_class: power
+    ha_state_class: measurement
+    ha_unit: "W"
   - epc: 0xc5
     name: measured_cumulative_power_generation_output
-    help: "Measured cumulative power generation output"
-    size: 0
+    help: "Measured cumulative power generation output (Wh)"
+    size: 4
     scale: 1
-    type: gauge
+    type: counter
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
   - epc: 0xc7
     name: measured_instantaneous_gas_consumption
-    help: "Measured instantaneous gas consumption"
-    size: 0
-    scale: 1
+    help: "Measured instantaneous gas consumption (0.001 m³/h)"
+    size: 2
+    scale: 0.001
     type: gauge
+    ha_device_class: gas
+    ha_state_class: measurement
+    ha_unit: "m³/h"
   - epc: 0xc8
     name: measured_cumulative_gas_consumption
-    help: "Measured cumulative gas consumption"
-    size: 0
-    scale: 1
-    type: gauge
+    help: "Measured cumulative gas consumption (0.001 m³)"
+    size: 4
+    scale: 0.001
+    type: counter
+    ha_device_class: gas
+    ha_state_class: total_increasing
+    ha_unit: "m³"
   - epc: 0xca
     name: power_generation_setting
     help: "Power generation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -67,9 +86,10 @@ metrics:
   - epc: 0xcb
     name: power_generation_status
     help: "Power generation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
     enum:
       0x41: generating
       0x42: stopped
@@ -78,35 +98,46 @@ metrics:
       0x45: idling
   - epc: 0xcc
     name: measured_in_house_instantaneous_power_consumption
-    help: "Measured in-house instantaneous power consumption"
-    size: 0
+    help: "Measured in-house instantaneous power consumption (W)"
+    size: 2
     scale: 1
     type: gauge
+    ha_device_class: power
+    ha_state_class: measurement
+    ha_unit: "W"
   - epc: 0xcd
     name: measured_in_house_cumulative_power_consumption
-    help: "Measured in-house cumulative power consumption"
-    size: 0
+    help: "Measured in-house cumulative power consumption (Wh)"
+    size: 4
     scale: 1
-    type: gauge
+    type: counter
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
   - epc: 0xd0
     name: system_interconnected_type
     help: "System interconnected type"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
     enum:
       0x01: system_interconnected_reverse_power_flow_acceptable
       0x02: independent
       0x03: system_interconnected_reverse_power_flow_not_acceptable
   - epc: 0xe1
     name: measured_remaining_hot_water_amount
-    help: "Measured remaining hot water amount"
-    size: 0
+    help: "Measured remaining hot water amount (L)"
+    size: 2
     scale: 1
     type: gauge
+    ha_unit: "L"
+    ha_state_class: measurement
   - epc: 0xe2
     name: tank_capacity
-    help: "Tank capacity"
-    size: 0
+    help: "Tank capacity (L)"
+    size: 2
     scale: 1
     type: gauge
+    ha_unit: "L"
+    ha_state_class: measurement

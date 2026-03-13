@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xa0
     name: air_flow_rate_setting
     help: "Air flow rate setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -32,7 +32,7 @@ metrics:
   - epc: 0xc0
     name: air_pollution_detection_status
     help: "Air pollution detection status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -41,7 +41,7 @@ metrics:
   - epc: 0xc1
     name: smoke_cigarette_detection_status
     help: "Smoke (cigarette) detection status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -50,7 +50,7 @@ metrics:
   - epc: 0xc2
     name: optical_catalyst_operation_setting
     help: "Optical catalyst operation setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -59,7 +59,7 @@ metrics:
   - epc: 0xe1
     name: filter_change_notice
     help: "Filter change notice"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

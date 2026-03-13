@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,6 +16,6 @@ metrics:
   - epc: 0xb0
     name: illuminance_level_setting
     help: "Illuminance level setting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge

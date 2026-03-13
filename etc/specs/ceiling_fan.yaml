@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xf1
     name: fan_direction
     help: "Fan direction"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -25,7 +25,7 @@ metrics:
   - epc: 0xf2
     name: fan_fluctuation
     help: "Fan fluctuation"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -34,7 +34,7 @@ metrics:
   - epc: 0xf3
     name: light_power
     help: "Light Power"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -43,7 +43,7 @@ metrics:
   - epc: 0xf4
     name: light_mode
     help: "Light Mode"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -52,19 +52,19 @@ metrics:
   - epc: 0xf5
     name: light_brightness
     help: "Light Brightness"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xf6
     name: light_color
     help: "Light Color"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xf7
     name: nightlight_brightness
     help: "Nightlight Brightness"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -74,7 +74,7 @@ metrics:
   - epc: 0xfc
     name: fan_buzzer
     help: "Fan Buzzer"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

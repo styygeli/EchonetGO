@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xb0
     name: epc_b0
     help: "EPC 0xB0"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -31,7 +31,7 @@ metrics:
   - epc: 0xb1
     name: epc_b1
     help: "EPC 0xB1"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -40,18 +40,18 @@ metrics:
   - epc: 0xb2
     name: epc_b2
     help: "EPC 0xB2"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xbc
     name: epc_bc
     help: "EPC 0xBC"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
   - epc: 0xbd
     name: epc_bd
     help: "EPC 0xBD"
-    size: 0
+    size: 1
     scale: 1
     type: gauge

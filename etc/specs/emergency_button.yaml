@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xb1
     name: emergency_occurrence_status
     help: "Emergency occurrence status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -25,7 +25,7 @@ metrics:
   - epc: 0xbf
     name: emergency_occurrence_status_resetting
     help: "Emergency occurrence status resetting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

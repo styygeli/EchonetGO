@@ -1,4 +1,5 @@
-# Auto-generated from pychonet class ElectricEnergyMeter.
+# Electric energy meter - ECHONET Object 0x028001
+# Sizes verified against pychonet ElectricEnergyMeter.py and ECHONET Lite Appendix (class 0x0280).
 eoj: [0x02, 0x80, 0x01]
 description: "Electric energy meter"
 default_scrape_interval: 1m
@@ -7,7 +8,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -15,13 +16,16 @@ metrics:
       0x31: off
   - epc: 0xe0
     name: cumulative_amounts_of_electric_energy_measurement_value
-    help: "Cumulative amounts of electric energy measurement value"
-    size: 0
+    help: "Cumulative amounts of electric energy measurement value (kWh)"
+    size: 4
     scale: 1
-    type: gauge
+    type: counter
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "kWh"
   - epc: 0xe2
     name: cumulative_amounts_of_electric_energy_unit
     help: "Cumulative amounts of electric energy unit"
-    size: 0
+    size: 1
     scale: 1
     type: gauge

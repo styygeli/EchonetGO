@@ -1,4 +1,5 @@
-# Auto-generated from pychonet class GasSensor.
+# Gas sensor - ECHONET Object 0x001C01
+# Sizes verified against pychonet GasSensor.py and ECHONET Lite Appendix (class 0x001C).
 eoj: [0x00, 0x1c, 0x01]
 description: "Gas sensor"
 default_scrape_interval: 1m
@@ -7,7 +8,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +17,7 @@ metrics:
   - epc: 0xb0
     name: detection_threshold_level
     help: "Detection threshold level"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -31,7 +32,7 @@ metrics:
   - epc: 0xb1
     name: gas_detection_status
     help: "Gas detection status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -39,7 +40,8 @@ metrics:
       0x42: not_found
   - epc: 0xe0
     name: measured_value_of_gas_concentration
-    help: "Measured value of gas concentration"
-    size: 0
+    help: "Measured value of gas concentration (ppm)"
+    size: 2
     scale: 1
     type: gauge
+    ha_state_class: measurement

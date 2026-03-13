@@ -1,13 +1,14 @@
-# Auto-generated from pychonet class OdorSensor.
+# Odor sensor - ECHONET Object 0x001D01
+# Sizes verified against pychonet OdorSensor.py and ECHONET Lite Appendix.
 eoj: [0x00, 0x1d, 0x01]
-description: "VOC sensor"
+description: "Odor sensor"
 default_scrape_interval: 1m
 
 metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +17,7 @@ metrics:
   - epc: 0xb0
     name: detection_threshold_level
     help: "Detection threshold level"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -29,17 +30,18 @@ metrics:
       0x37: level_7
       0x38: level_8
   - epc: 0xb1
-    name: voc_detection_status
-    help: "VOC detection status"
-    size: 0
+    name: odor_detection_status
+    help: "Odor detection status"
+    size: 1
     scale: 1
     type: gauge
     enum:
       0x41: found
       0x42: not_found
   - epc: 0xe0
-    name: measured_value_of_voc_concentration
-    help: "Measured value of VOC concentration"
-    size: 0
+    name: measured_value_of_odor_level
+    help: "Measured value of odor level"
+    size: 2
     scale: 1
     type: gauge
+    ha_state_class: measurement

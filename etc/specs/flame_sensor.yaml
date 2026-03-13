@@ -7,7 +7,7 @@ metrics:
   - epc: 0x80
     name: operation_status
     help: "Operation status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -16,7 +16,7 @@ metrics:
   - epc: 0xb0
     name: detection_threshold_level
     help: "Detection threshold level"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -31,7 +31,7 @@ metrics:
   - epc: 0xb1
     name: flame_detection_status
     help: "Flame detection status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:
@@ -40,7 +40,7 @@ metrics:
   - epc: 0xbf
     name: flame_detection_status_resetting
     help: "Flame detection status resetting"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
     enum:

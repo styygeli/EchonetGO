@@ -1,4 +1,5 @@
-# Auto-generated from pychonet class MultipleInputPCS.
+# Multiple Input PCS - ECHONET Object 0x02A501
+# Sizes verified against pychonet MultipleInputPCS.py and ECHONET Lite Appendix (class 0x02A5).
 eoj: [0x02, 0xa5, 0x01]
 description: "Multiple Input PCS"
 default_scrape_interval: 1m
@@ -7,29 +8,39 @@ metrics:
   - epc: 0xd0
     name: grid_connection_status
     help: "Grid connection status"
-    size: 0
+    size: 1
     scale: 1
     type: gauge
+    ha_device_class: enum
     enum:
       0x00: system_interconnected_reverse_power_flow_acceptable
       0x01: output_during_a_power_outage
       0x02: system_interconnected_reverse_power_flow_not_acceptable
   - epc: 0xe0
     name: measured_cumulative_amount_of_electric_energy_normal_direction
-    help: "Measured cumulative amount of electric energy (normal direction)"
-    size: 0
+    help: "Measured cumulative amount of electric energy (normal direction, Wh)"
+    size: 4
     scale: 1
-    type: gauge
+    type: counter
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
   - epc: 0xe3
     name: measured_cumulative_amount_of_electric_energy_reverse_direction
-    help: "Measured cumulative amount of electric energy (reverse direction)"
-    size: 0
+    help: "Measured cumulative amount of electric energy (reverse direction, Wh)"
+    size: 4
     scale: 1
-    type: gauge
+    type: counter
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
   - epc: 0xe7
     name: measured_instantaneous_amount_of_electricity
-    help: "Measured instantaneous amount of electricity"
-    size: 0
+    help: "Measured instantaneous amount of electricity (signed W)"
+    size: 4
     scale: 1
     signed: true
     type: gauge
+    ha_device_class: power
+    ha_state_class: measurement
+    ha_unit: "W"
