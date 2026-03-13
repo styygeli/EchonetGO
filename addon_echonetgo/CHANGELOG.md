@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.12
+
+- Post-SET refresh: only pass requested EPCs to ParsePropsToMetrics so we no longer log spurious "missing EPC" warnings for properties we didn't ask for (e.g. when setting AC mode to auto).
+
 ## 0.9.11
 
 - Add **readiness** endpoint `GET /ready`: returns 200 when poller and commander (if MQTT enabled) have finished init, 503 with per-component JSON until then. Use for Kubernetes readiness probes; does not depend on devices being configured or reachable.
