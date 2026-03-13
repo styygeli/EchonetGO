@@ -417,8 +417,20 @@ func (c *Commander) triggerStateUpdate(dev *config.Device, eoj [3]byte, epcs ...
 		if !ok {
 			return
 		}
+		// Only parse specs for EPCs we requested; passing full deviceSpecs would log
+		// "missing EPC" for every other property we didn't ask for.
+		requestedEPCs := make(map[byte]struct{}, len(epcs))
+		for _, epc := range epcs {
+			requestedEPCs[epc] = struct{}{}
+		}
+		var specsForRequested []specs.MetricSpec
+		for _, ms := range deviceSpecs {
+			if _, ok := requestedEPCs[ms.EPC]; ok {
+				specsForRequested = append(specsForRequested, ms)
+			}
+		}
 
-		metrics := echonet.ParsePropsToMetrics(props, deviceSpecs)
+		metrics := echonet.ParsePropsToMetrics(props, specsForRequested)
 		if len(metrics) > 0 {
 			c.cache.Update(*dev, "set_update", 0, true, 0, metrics, "")
 			mqttLog.Debugf("commander: immediate update for %s parsed %d metrics", dev.Name, len(metrics))
