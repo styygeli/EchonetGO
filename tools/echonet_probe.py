@@ -16,6 +16,7 @@ import argparse
 import random
 import socket
 import struct
+import sys
 import time
 from dataclasses import dataclass
 from typing import Iterable
@@ -40,12 +41,15 @@ class ProbeCase:
 
 
 def probe_cases(ac_instance: int) -> list[ProbeCase]:
+    ac_eoj = (0x01, 0x30, ac_instance)
     return [
         ProbeCase("node_profile_instance_list", DEOJ_NODE_PROFILE, (0xD6,)),
         ProbeCase("node_profile_getmap", DEOJ_NODE_PROFILE, (0x9F,)),
         ProbeCase("node_profile_identity", DEOJ_NODE_PROFILE, (0x83, 0x8A, 0x8C)),
-        ProbeCase("ac_operation_status", (0x01, 0x30, ac_instance), (0x80,)),
-        ProbeCase("ac_getmap", (0x01, 0x30, ac_instance), (0x9F,)),
+        ProbeCase("ac_operation_status", ac_eoj, (0x80,)),
+        ProbeCase("ac_getmap", ac_eoj, (0x9F,)),
+        # Operation mode (0xB0=heat/cool/etc) and blade/direction: swing (0xA3), horizontal (0xA4), vertical (0xA5)
+        ProbeCase("ac_mode_and_blades", ac_eoj, (0xB0, 0xA3, 0xA4, 0xA5)),
     ]
 
 
@@ -172,9 +176,12 @@ def receive_for_tid(
         lines = [
             f"[{case_name}] reply tid=0x{resp_tid:04x} esv=0x{esv:02x} props={len(props)} bytes={len(data)}"
         ]
-        if esv != ESV_GET_RES:
-            lines.append(f"[{case_name}] unexpected ESV, expected 0x{ESV_GET_RES:02x}")
+        # 0x72 = Get_Res, 0x52 = Get_SNA (service not available) - still print props when present
+        if esv not in (ESV_GET_RES, 0x52):
+            lines.append(f"[{case_name}] unexpected ESV, expected 0x72 or 0x52")
             return False, "\n".join(lines)
+        if esv == 0x52:
+            lines.append(f"[{case_name}] Get_SNA (partial/not available) - showing returned props")
         for epc, edt in props:
             if case_name == "node_profile_instance_list" and epc == 0xD6:
                 lines.append(f"[{case_name}] D6 instances={decode_instance_list(edt)}")
@@ -239,6 +246,57 @@ def run_port_mode(args: argparse.Namespace, source_port: int, cases: list[ProbeC
     return success
 
 
+def watch_loop(args: argparse.Namespace, ac_eoj: tuple[int, int, int], epcs: tuple[int, ...]) -> None:
+    """Poll targeted EPCs every --interval seconds; print one line per poll with timestamp."""
+    try:
+        sock = create_socket(args.target_ip, args.timeout, ECHONET_PORT, args.pychonet_like)
+    except OSError as exc:
+        print(f"watch: failed to create socket: {exc}", file=sys.stderr)
+        sys.exit(1)
+    interval = args.interval
+    epc_list = " ".join(f"0x{e:02x}" for e in epcs)
+    print(f"Watching {epc_list} every {interval}s (Ctrl+C to stop)", file=sys.stderr)
+    try:
+        while True:
+            tid, payload = build_get(ac_eoj, epcs)
+            try:
+                sock.sendto(payload, (args.target_ip, ECHONET_PORT))
+            except OSError as exc:
+                print(f"{time.strftime('%H:%M:%S')} send error: {exc}")
+                time.sleep(interval)
+                continue
+            deadline = time.monotonic() + args.timeout
+            props_by_epc: dict[int, bytes] = {}
+            while time.monotonic() < deadline:
+                sock.settimeout(deadline - time.monotonic())
+                try:
+                    data, addr = sock.recvfrom(4096)
+                except socket.timeout:
+                    break
+                if addr[0] != args.target_ip:
+                    continue
+                try:
+                    resp_tid, esv, props = parse_get_res(data)
+                except ValueError:
+                    continue
+                if resp_tid != tid:
+                    continue
+                for epc, edt in props:
+                    props_by_epc[epc] = edt
+                break
+            ts = time.strftime("%H:%M:%S")
+            parts = [ts]
+            for epc in epcs:
+                edt = props_by_epc.get(epc)
+                parts.append(f"0x{epc:02x}={edt.hex() if edt else '-'}")
+            print(" ".join(parts))
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        sock.close()
+
+
 def resolve_source_ports(args: argparse.Namespace) -> list[int]:
     if args.source_port is not None:
         return [args.source_port]
@@ -279,6 +337,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ac-instance", type=int, default=1, help="Home AC EOJ instance byte (default: 1)")
     parser.add_argument("--retries", type=int, default=1, help="Retries per probe case (default: 1)")
     parser.add_argument("--verbose", action="store_true", help="Show stale/ignored frames")
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Poll 0xB0 0xA3 0xA4 0xA5 every second; print one line per poll (Ctrl+C to stop)",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=1.0,
+        help="Seconds between polls in --watch mode (default: 1.0)",
+    )
     args = parser.parse_args()
 
     if not (0 <= args.ac_instance <= 0xFF):
@@ -287,11 +356,19 @@ def parse_args() -> argparse.Namespace:
         parser.error("--retries must be >= 1")
     if args.source_port is not None and not (0 <= args.source_port <= 65535):
         parser.error("--source-port must be in range 0..65535")
+    if args.watch and args.interval <= 0:
+        parser.error("--interval must be positive")
     return args
 
 
 def main() -> int:
     args = parse_args()
+    if args.watch:
+        ac_eoj = (0x01, 0x30, args.ac_instance)
+        # All climate-related EPCs that typically change: on/off, mode, set/room temp, fan, blades
+        epcs = (0x80, 0xB0, 0xB3, 0xBB, 0xA0, 0xA1, 0xA3, 0xA4, 0xA5)
+        watch_loop(args, ac_eoj, epcs)
+        return 0
     cases = probe_cases(args.ac_instance)
     success = False
     for source_port in resolve_source_ports(args):
