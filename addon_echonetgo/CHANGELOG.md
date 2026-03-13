@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.18
+
+- **MQTT discovery**: Defer discovery publishing until device info (manufacturer/UID) has been fetched, preventing the double wipe/publish cycle on startup. Entities now appear once with correct manufacturer/model metadata from the start instead of briefly showing "unknown". Logs a warning if a device never returns identity properties after 5 polls.
+
 ## 0.9.17
 
 - **Super Class**: Add installation location (EPC 0x81) with ECHONET Lite standard location codes (living_room, kitchen, bathroom, etc.) to the super class, so all device types get a select dropdown instead of a useless numeric slider. Remove the per-device definition from the Mitsubishi home AC spec.

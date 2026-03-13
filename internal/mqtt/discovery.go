@@ -63,6 +63,17 @@ type haDevice struct {
 }
 
 func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, metrics map[string]echonet.MetricValue) {
+	if info.Manufacturer == "" && info.UID == "" {
+		p.mu.Lock()
+		p.infoSkips[dev.Name]++
+		n := p.infoSkips[dev.Name]
+		p.mu.Unlock()
+		if n == 5 {
+			mqttLog.Warnf("device %s: no manufacturer or UID after %d polls; device may not implement mandatory ECHONET Lite identity properties (0x8A/0x83)", dev.Name, n)
+		}
+		return
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 

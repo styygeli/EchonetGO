@@ -34,6 +34,7 @@ type Publisher struct {
 
 	mu        sync.Mutex
 	published map[string]string // tracks device name -> "manufacturer|model" published
+	infoSkips map[string]int    // tracks discovery skips while waiting for device info
 }
 
 // NewPublisher creates a connected MQTT publisher. Returns nil if broker is empty.
@@ -77,6 +78,7 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 		discoveryPrefix: cfg.DiscoveryPrefix,
 		swVersion:       swVersion,
 		published:       make(map[string]string),
+		infoSkips:       make(map[string]int),
 	}
 	pub.publishBridgeDevice()
 	return pub, nil
