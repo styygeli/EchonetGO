@@ -62,7 +62,6 @@ metrics:
     type: gauge
     invalid: 0xFD
     ha_device_class: temperature
-    ha_state_class: measurement
     ha_unit: "°C"
   - epc: 0xb4
     name: manual_water_heating_stop_days_setting
@@ -187,7 +186,6 @@ metrics:
     type: gauge
     invalid: 0xFD
     ha_device_class: temperature
-    ha_state_class: measurement
     ha_unit: "°C"
   - epc: 0xd3
     name: bath_water_temperature_setting
@@ -197,7 +195,6 @@ metrics:
     type: gauge
     invalid: 0xFD
     ha_device_class: temperature
-    ha_state_class: measurement
     ha_unit: "°C"
   - epc: 0xd4
     name: bath_water_volume_setting_4
@@ -241,7 +238,6 @@ metrics:
     scale: 1
     type: gauge
     ha_device_class: power
-    ha_state_class: measurement
     ha_unit: "W"
   - epc: 0xdc
     name: rated_power_consumption_of_h_p_unit_in_in_between_seasons
@@ -250,7 +246,6 @@ metrics:
     scale: 1
     type: gauge
     ha_device_class: power
-    ha_state_class: measurement
     ha_unit: "W"
   - epc: 0xdd
     name: rated_power_consumption_of_h_p_unit_in_summertime
@@ -259,7 +254,6 @@ metrics:
     scale: 1
     type: gauge
     ha_device_class: power
-    ha_state_class: measurement
     ha_unit: "W"
   - epc: 0xe0
     name: bath_water_volume_setting
@@ -282,7 +276,6 @@ metrics:
     scale: 1
     type: gauge
     ha_unit: "L"
-    ha_state_class: measurement
   - epc: 0xe3
     name: automatic_bath_water_heating_mode_setting
     help: "Automatic bath water heating mode setting"
@@ -369,4 +362,3 @@ metrics:
     scale: 1
     type: gauge
     ha_unit: "L"
-    ha_state_class: measurement

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.23
+
+- **Ecocute HA metadata**: Remove `ha_state_class: measurement` from constant/setting metrics (tank capacity, rated HP power consumption, temperature setpoints, bath volume setting) to prevent HA statistics averaging from introducing floating-point noise on values that never change. Actual sensor measurements (water temperature, remaining water volumes) retain `measurement` state class.
+
 ## 0.9.22
 
 - **Number entity bounds**: Add `number_min`/`number_max` spec fields for HA number entities, replacing hardcoded 0-100 range with size-aware defaults (0-255 for 1-byte, 0-65535 for 2-byte) and explicit overrides. Set ecocute `manual_water_heating_stop_days_setting` max to 30 days.
