@@ -70,6 +70,10 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    number_max: 30
+    pre_set:
+      epc: 0xb0
+      value: 0x43
   - epc: 0xb6
     name: tank_operation_mode_setting
     help: "Tank operation mode setting"

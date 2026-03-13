@@ -182,7 +182,7 @@ func (c *Commander) handleWritableMessage(_ pahomqtt.Client, msg pahomqtt.Messag
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	addr := dev.IP + ":3610"
-	c.executeWritableSet(ctx, addr, eoj, dev, ms, entityType, payload)
+	c.executeWritableSet(ctx, addr, eoj, dev, ms, metricSpecs, entityType, payload)
 }
 
 func metricSpecByName(specs []specs.MetricSpec, name string) *specs.MetricSpec {
@@ -194,7 +194,25 @@ func metricSpecByName(specs []specs.MetricSpec, name string) *specs.MetricSpec {
 	return nil
 }
 
-func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, ms *specs.MetricSpec, entityType, payload string) {
+func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, ms *specs.MetricSpec, metricSpecs []specs.MetricSpec, entityType, payload string) {
+	if ms.PreSetEPC != 0 {
+		preMs := metricSpecByEPC(metricSpecs, ms.PreSetEPC)
+		if preMs == nil {
+			mqttLog.Warnf("commander: pre-set EPC 0x%02x not found in specs for %s", ms.PreSetEPC, dev.Name)
+			return
+		}
+		preEDT, err := echonet.EncodeValueToEDT(float64(ms.PreSetValue), *preMs)
+		if err != nil {
+			mqttLog.Warnf("commander: pre-set encode failed for 0x%02x: %v", ms.PreSetEPC, err)
+			return
+		}
+		_, err = c.client.SendSet(ctx, addr, eoj, ms.PreSetEPC, preEDT)
+		if err != nil {
+			mqttLog.Warnf("commander: pre-set 0x%02x failed for %s: %v", ms.PreSetEPC, dev.Name, err)
+			return
+		}
+		mqttLog.Infof("commander: pre-set %s EPC 0x%02x = 0x%02x", dev.Name, ms.PreSetEPC, ms.PreSetValue)
+	}
 	var value float64
 	switch entityType {
 	case "switch":
@@ -243,7 +261,11 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 		return
 	}
 	mqttLog.Infof("commander: set %s %s = %s", dev.Name, ms.Name, payload)
-	c.triggerStateUpdate(dev, eoj, ms.EPC)
+	if ms.PreSetEPC != 0 {
+		c.triggerStateUpdate(dev, eoj, ms.PreSetEPC, ms.EPC)
+	} else {
+		c.triggerStateUpdate(dev, eoj, ms.EPC)
+	}
 }
 
 func (c *Commander) deviceByName(name string) *config.Device {

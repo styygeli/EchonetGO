@@ -51,6 +51,17 @@ type MetricSpec struct {
 	HAStateClass  string // "measurement", "total_increasing", or ""
 	HAUnit        string // e.g. "W", "kWh", "°C"
 
+	// NumberMin/NumberMax override the default HA number entity range.
+	// nil means use defaults (0 for min, 255/65535 for max depending on size).
+	NumberMin *float64
+	NumberMax *float64
+
+	// PreSetEPC, when non-zero, causes the commander to send a SET for this
+	// EPC with PreSetValue before executing the main SET for this metric.
+	// Used for linked settings (e.g. entering stop-mode before setting vacation days).
+	PreSetEPC   byte
+	PreSetValue int
+
 	// ExcludeSet if true suppresses publishing a switch/select/number for this writable EPC.
 	ExcludeSet bool
 }

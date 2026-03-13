@@ -67,6 +67,11 @@ type climateYAML struct {
 	Modes                 map[string]*int `yaml:"modes"`
 }
 
+type preSetYAML struct {
+	EPC   int `yaml:"epc"`
+	Value int `yaml:"value"`
+}
+
 type metricYAML struct {
 	EPC            int             `yaml:"epc"`
 	Name           string          `yaml:"name"`
@@ -82,6 +87,9 @@ type metricYAML struct {
 	HADeviceClass  string          `yaml:"ha_device_class"`
 	HAStateClass   string          `yaml:"ha_state_class"`
 	HAUnit         string          `yaml:"ha_unit"`
+	NumberMin      *float64        `yaml:"number_min"`
+	NumberMax      *float64        `yaml:"number_max"`
+	PreSet         *preSetYAML     `yaml:"pre_set"`
 	ExcludeSet     bool            `yaml:"exclude_set"`
 	MultiplierEPC  int             `yaml:"multiplier_epc"`
 	MultiplierMap  map[int]float64 `yaml:"multiplier_map"`
@@ -136,6 +144,14 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		if m.MultiplierEPC != 0 && len(m.MultiplierMap) == 0 {
 			return nil, fmt.Errorf("metric %s: multiplier_epc set but multiplier_map is empty", m.Name)
 		}
+		if m.NumberMin != nil && m.NumberMax != nil && *m.NumberMin >= *m.NumberMax {
+			return nil, fmt.Errorf("metric %s: number_min must be less than number_max", m.Name)
+		}
+		if m.PreSet != nil {
+			if m.PreSet.EPC < 0 || m.PreSet.EPC > 0xFF {
+				return nil, fmt.Errorf("metric %s: pre_set.epc must be in range 0..255, got %d", m.Name, m.PreSet.EPC)
+			}
+		}
 		scale := m.Scale
 		if scale == 0 {
 			scale = 1
@@ -179,6 +195,12 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		for raw, label := range enum {
 			reverseEnum[label] = raw
 		}
+		var preSetEPC byte
+		var preSetValue int
+		if m.PreSet != nil {
+			preSetEPC = byte(m.PreSet.EPC)
+			preSetValue = m.PreSet.Value
+		}
 		spec.Metrics = append(spec.Metrics, MetricSpec{
 			EPC:            byte(m.EPC),
 			Name:           m.Name,
@@ -197,6 +219,10 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 			HADeviceClass:  haDevice,
 			HAStateClass:   haState,
 			HAUnit:         haUnit,
+			NumberMin:      m.NumberMin,
+			NumberMax:      m.NumberMax,
+			PreSetEPC:      preSetEPC,
+			PreSetValue:    preSetValue,
 			ExcludeSet:     m.ExcludeSet,
 		})
 	}
@@ -254,6 +280,10 @@ func mergeSuperClass(spec *DeviceSpec) {
 			HADeviceClass:  haDevice,
 			HAStateClass:   haState,
 			HAUnit:         haUnit,
+			NumberMin:      m.NumberMin,
+			NumberMax:      m.NumberMax,
+			PreSetEPC:      m.PreSetEPC,
+			PreSetValue:    m.PreSetValue,
 			ExcludeSet:     m.ExcludeSet,
 		})
 	}

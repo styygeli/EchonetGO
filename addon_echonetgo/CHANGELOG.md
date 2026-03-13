@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.22
+
+- **Number entity bounds**: Add `number_min`/`number_max` spec fields for HA number entities, replacing hardcoded 0-100 range with size-aware defaults (0-255 for 1-byte, 0-65535 for 2-byte) and explicit overrides. Set ecocute `manual_water_heating_stop_days_setting` max to 30 days.
+- **Pre-set linked commands**: Add `pre_set` spec mechanism that automatically sends a prerequisite SET command before the main one. Ecocute vacation-days (0xB4) now auto-switches to stop-mode (0xB0=0x43) before setting the day count, so users don't need to manually change the heating mode first. Both EPCs are refreshed after the operation.
+
 ## 0.9.21
 
 - **Spec remediation (46 files)**: Set correct byte sizes for all metrics across 46 ECHONET device class specs imported from pychonet, fixing `size 0 (auto), cannot encode for SET` errors for every SET-capable EPC. Covers home AC, electric lock, 7 cover/actuator classes (blind, shutter, curtain, window, gate, sliding door, entrance door), hot water generator, floor heater, bathroom dryer, refrigerator, electric thermos, hybrid water heater, EV charger, storage battery, fuel cell, multiple-input PCS, 2 energy meters, 3 lighting classes, air cleaner, ceiling fan, and 19 sensor classes. Add HA display metadata (device_class, state_class, unit) for temperatures, energy, power, current, humidity, pressure, CO₂, and multi-value enum selects. Add missing open/close/stop enums on cover devices from pychonet. Only one known composite EPC (electric_energy_sensor 0xE4, 48×4B read-only log) remains at size: 0 by design.

@@ -292,12 +292,19 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				mqttLog.Debugf("published select discovery for %s/%s", dev.Name, ms.Name)
 			}
 		case "number":
-			minVal, maxVal := 0.0, 100.0
-			if ms.Scale != 0 {
-				maxVal = 100
+			minVal := 0.0
+			if ms.NumberMin != nil {
+				minVal = *ms.NumberMin
+			}
+			maxVal := 255.0
+			if ms.Size == 2 {
+				maxVal = 65535
+			}
+			if ms.NumberMax != nil {
+				maxVal = *ms.NumberMax
 			}
 			step := 1.0
-			if ms.Scale != 0 {
+			if ms.Scale != 0 && ms.Scale != 1 {
 				step = ms.Scale
 			}
 			payload := map[string]any{
