@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.17
+
+- **Super Class**: Add installation location (EPC 0x81) with ECHONET Lite standard location codes (living_room, kitchen, bathroom, etc.) to the super class, so all device types get a select dropdown instead of a useless numeric slider. Remove the per-device definition from the Mitsubishi home AC spec.
+
 ## 0.9.16
 
 - **MQTT discovery**: Wipe stale retained discovery topics on startup before publishing fresh discovery. Clears sensor, switch, select, number, and climate config topics for all metrics in the spec, then re-publishes only data-backed entities. Eliminates ghost entities from EPCs the device no longer reports or metrics renamed across versions.

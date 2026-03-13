@@ -11,13 +11,6 @@ description: "Home air conditioner (Mitsubishi MAC-900IF)"
 default_scrape_interval: 1m
 
 metrics:
-  - epc: 0x81
-    name: installation_location
-    help: "Installation location (1B or 17B per Appendix)."
-    size: 0
-    scale: 1
-    type: gauge
-    scrape_interval: 10m
   # Mitsubishi does NOT follow the standard [unit(1B), counter(3B)] format for 0x85.
   # Both tested units return first byte 0x00 (not a valid unit code), so we treat the
   # full 4 bytes as a plain counter. Unit is unknown; empirically appears to be minutes.

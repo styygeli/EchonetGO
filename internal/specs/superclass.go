@@ -12,6 +12,19 @@ import "time"
 func SuperClassMetrics() []MetricSpec {
 	opEnum := map[int]string{0x30: "on", 0x31: "off"}
 	opReverse := map[string]int{"on": 0x30, "off": 0x31}
+
+	locationEnum := map[int]string{
+		0x00: "not_specified", 0x08: "living_room", 0x10: "dining_room",
+		0x18: "kitchen", 0x20: "bathroom", 0x28: "washroom",
+		0x30: "changing_room", 0x38: "corridor", 0x40: "room",
+		0x48: "stairway", 0x50: "entrance", 0x58: "closet",
+		0x60: "garden", 0x68: "garage", 0x70: "veranda", 0x78: "other",
+	}
+	locationReverse := make(map[string]int, len(locationEnum))
+	for k, v := range locationEnum {
+		locationReverse[v] = k
+	}
+
 	faultEnum := map[int]string{0x41: "fault", 0x42: "no_fault"}
 	faultReverse := map[string]int{"fault": 0x41, "no_fault": 0x42}
 
@@ -26,6 +39,18 @@ func SuperClassMetrics() []MetricSpec {
 			Enum:           opEnum,
 			ReverseEnum:    opReverse,
 			ScrapeInterval: 0, // use device default
+		},
+		{
+			EPC:            0x81,
+			Name:           "installation_location",
+			Help:           "Installation location (1B bitmap per ECHONET Appendix).",
+			Size:           1,
+			Scale:          1,
+			Type:           "gauge",
+			Enum:           locationEnum,
+			ReverseEnum:    locationReverse,
+			HADeviceClass:  "enum",
+			ScrapeInterval: 10 * time.Minute,
 		},
 		{
 			EPC:            0x88,
