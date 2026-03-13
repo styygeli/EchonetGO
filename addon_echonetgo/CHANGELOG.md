@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.15
+
+- **MQTT discovery**: Only advertise sensors and writable entities for EPCs that the device actually returns data for. Devices sharing the same spec but with different capabilities (e.g. one Mitsubishi AC reports 0xA5, another does not) now get per-device discovery based on polling results. Discovery is deferred until the first successful poll with non-empty metrics.
+
 ## 0.9.14
 
 - **MQTT discovery**: Select entities with enum options now support a defined option order. For `air_flow_direction_horizontal` (0xA4), options are shown ceiling→floor: uppermost, upper_mid, middle, lower_mid, lowermost. Entity names follow ECHONET spec (0xA4 = horizontal, 0xA5 = vertical).

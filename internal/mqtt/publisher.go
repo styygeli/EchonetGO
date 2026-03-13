@@ -98,9 +98,9 @@ func (p *Publisher) Disconnect() {
 
 // PublishDeviceState publishes state for a device and ensures discovery has been sent.
 func (p *Publisher) PublishDeviceState(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, success bool) {
-	p.ensureDiscovery(dev, info, metricSpecs, writable, climateSpec)
 	p.publishAvailability(dev, success)
 	if success && len(metrics) > 0 {
+		p.ensureDiscovery(dev, info, metricSpecs, writable, climateSpec, metrics)
 		p.publishState(dev, metrics)
 		if climateSpec != nil {
 			p.publishClimateState(dev, metrics, metricSpecs, climateSpec)

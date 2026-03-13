@@ -62,7 +62,7 @@ type haDevice struct {
 	ViaDevice    string   `json:"via_device,omitempty"`
 }
 
-func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec) {
+func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, metrics map[string]echonet.MetricValue) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -87,7 +87,12 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 	availTopic := fmt.Sprintf("%s/%s/availability", p.topicPrefix, dev.Name)
 	stateTopic := fmt.Sprintf("%s/%s/state", p.topicPrefix, dev.Name)
 
+	var sensorCount int
 	for _, ms := range metricSpecs {
+		if _, ok := metrics[ms.Name]; !ok {
+			continue
+		}
+		sensorCount++
 		objectID := dev.Name + "_" + ms.Name
 		configTopic := fmt.Sprintf("%s/sensor/%s/config", p.discoveryPrefix, objectID)
 
@@ -144,13 +149,13 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 		}
 	}
 	if writable != nil {
-		p.publishWritableDiscovery(dev, device, availTopic, metricSpecs, writable, climateSpec)
+		p.publishWritableDiscovery(dev, device, availTopic, metricSpecs, writable, climateSpec, metrics)
 	}
 	if climateSpec != nil {
 		p.publishClimateDiscovery(dev, device, availTopic, climateSpec, metricSpecs)
 	}
 	p.published[key] = infoKey
-	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, len(metricSpecs), info.Manufacturer, info.ProductCode)
+	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, sensorCount, info.Manufacturer, info.ProductCode)
 }
 
 func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, availTopic string, cl *specs.ClimateSpec, metricSpecs []specs.MetricSpec) {
@@ -206,8 +211,11 @@ func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, 
 	mqttLog.Infof("published climate discovery for %s", dev.Name)
 }
 
-func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice, availTopic string, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec) {
+func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice, availTopic string, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, metrics map[string]echonet.MetricValue) {
 	for _, ms := range metricSpecs {
+		if _, ok := metrics[ms.Name]; !ok {
+			continue
+		}
 		if _, ok := writable[ms.EPC]; !ok {
 			continue
 		}
