@@ -24,7 +24,9 @@ import (
 )
 
 // version is set at build time via:
-//   -ldflags "-X main.version=<release-version>"
+//
+//	-ldflags "-X main.version=<release-version>"
+//
 // Defaults to "dev" for local builds.
 var version = "dev"
 
@@ -45,6 +47,9 @@ func main() {
 
 	cache := poller.NewCache()
 
+	readiness := api.NewReadiness()
+	readiness.Register("poller")
+
 	var mqttPub *mqttpub.Publisher
 	if cfg.MQTTEnabled() {
 		mqttPub, err = mqttpub.NewPublisher(cfg.MQTT, version)
@@ -55,6 +60,7 @@ func main() {
 			cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, success bool) {
 				mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, writable, climateSpec, success)
 			})
+			readiness.Register("commander")
 			// Commander will be started after ctx is created (below)
 		}
 	}
@@ -64,15 +70,16 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go cache.Start(ctx, cfg, deviceSpecs, transport)
+	go cache.Start(ctx, cfg, deviceSpecs, transport, func() { readiness.MarkReady("poller") })
 	if mqttPub != nil {
 		echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
 		commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
-		go commander.Run(ctx, mqttPub.Client())
+		go commander.Run(ctx, mqttPub.Client(), func() { readiness.MarkReady("commander") })
 	}
 
 	srv := &api.Server{
 		ListenAddr: cfg.ListenAddr,
+		Readiness:  readiness,
 	}
 	if cfg.MetricsEnabled {
 		registry := prometheus.NewRegistry()

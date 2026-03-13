@@ -22,11 +22,11 @@ const (
 
 // Commander subscribes to MQTT command topics and performs ECHONET SET requests.
 type Commander struct {
-	client     *echonet.Client
-	cache      *poller.Cache
-	cfg        *config.Config
+	client      *echonet.Client
+	cache       *poller.Cache
+	cfg         *config.Config
 	topicPrefix string
-	subscribed pahomqtt.Token
+	subscribed  pahomqtt.Token
 }
 
 // NewCommander creates a Commander. Call Run to subscribe and process commands.
@@ -40,7 +40,8 @@ func NewCommander(client *echonet.Client, cache *poller.Cache, cfg *config.Confi
 }
 
 // Run subscribes to command topics and blocks until ctx is cancelled.
-func (c *Commander) Run(ctx context.Context, mqttClient pahomqtt.Client) {
+// If readyFunc is non-nil, it is called once all subscriptions have succeeded.
+func (c *Commander) Run(ctx context.Context, mqttClient pahomqtt.Client, readyFunc func()) {
 	if c.topicPrefix == "" {
 		c.topicPrefix = "echonetgo"
 	}
@@ -65,6 +66,9 @@ func (c *Commander) Run(ctx context.Context, mqttClient pahomqtt.Client) {
 		}
 	}
 	mqttLog.Infof("commander subscribed to %s and switch/select/number", climateTopic)
+	if readyFunc != nil {
+		readyFunc()
+	}
 	<-ctx.Done()
 	_ = mqttClient.Unsubscribe(climateTopic)
 	for _, entityType := range []string{"switch", "select", "number"} {

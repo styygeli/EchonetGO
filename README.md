@@ -34,7 +34,8 @@ go build -o echonetgo ./cmd/echonetgo
 By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads device specs from `etc/specs/`, and serves HTTP on `:9191`. Endpoints:
 
 - `GET /` — brief info
-- `GET /health` — liveness
+- `GET /health` — **liveness** — always 200 while the process is running (use for Kubernetes liveness probes)
+- `GET /ready` — **readiness** — 200 when poller and (if enabled) commander have finished init; 503 otherwise with JSON `{"status":"not_ready","components":{...}}` (use for Kubernetes readiness probes). Does not depend on devices being configured or reachable.
 - `GET /metrics` — Prometheus/VictoriaMetrics text format (requires `metrics_enabled: true`)
 
 ## File layout
@@ -49,7 +50,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `internal/poller/` | Cache and scheduler: per-device/per-interval scrapers, parallel init per host IP, startup stagger, update callbacks |
 | `internal/mqtt/` | `publisher.go` (MQTT connection, state publishing), `discovery.go` (HA auto-discovery for sensor/climate/switch/select/number entities), `commander.go` (subscribes to command topics, routes SET requests to the ECHONET client) |
 | `internal/metrics/` | Prometheus collector: reads from poller cache, emits device metrics, enum one-hot gauges, scrape stats, device info |
-| `internal/api/` | HTTP mux: `/health`, `/metrics`, `/` |
+| `internal/api/` | HTTP mux: `/health` (liveness), `/ready` (readiness), `/metrics`, `/` |
 | `internal/logging/` | Leveled logger (`ECHONET_LOG_LEVEL`) |
 | `etc/config.example.yaml` | Example config (listen_addr, mqtt, devices) |
 | `etc/devices.example.yaml` | Example device list — copy to `etc/devices.yaml` and set your IPs |
@@ -65,7 +66,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 - **Poller** — For each configured device: load spec, optionally filter metrics by GETMAP, group by scrape interval, stagger startup, run per-interval scrapers and a device-info refresher; all results merged into a single cache. Device initialization is parallelized per host IP. After each scrape, an update callback notifies the MQTT publisher.
 - **MQTT** — The **publisher** sends HA auto-discovery config (retained) for sensors, climate, switch, select, and number entities, plus a bridge device ("EchonetGO"). State updates are published after each scrape with per-device availability. The **commander** subscribes to HA command topics and translates incoming payloads into ECHONET SetC requests with a 5-second timeout. On clean shutdown the bridge goes offline.
 - **Metrics** — When `metrics_enabled: true`, a `prometheus.Collector` reads cached device state and emits Prometheus text format on `/metrics`. Uses detached scraping: `/metrics` requests are cheap cache reads, independent of ECHONET polling schedules. Metric naming follows `echonet_{subsystem}_{metric_name}` with labels `device`, `ip`, `class`. Go runtime (`go_*`) and process (`process_*`) metrics are included automatically.
-- **API** — Read-only: health and metrics.
+- **API** — Read-only. **Liveness** (`/health`) always returns 200 while the process is up. **Readiness** (`/ready`) returns 200 only after the poller (and commander, if MQTT is enabled) have completed startup and report ready; returns 503 with per-component status until then. Readiness does not depend on user-supplied devices or their reachability. Optional `/metrics` in Prometheus text format when enabled.
 
 ## Tested devices
 

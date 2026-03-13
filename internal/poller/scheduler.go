@@ -23,7 +23,8 @@ type deviceWithEOJ struct {
 
 // Start begins background scrapers for all configured devices. Call with a context
 // that is cancelled on shutdown. Init (probe + GETMAP) runs in parallel per host IP.
-func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec, transport *echonet.Transport) {
+// If readyFunc is non-nil, it is called once init is complete and scrapers are launched.
+func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec, transport *echonet.Transport, readyFunc func()) {
 	client := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
 	probeTimeoutSec := cfg.ScrapeTimeoutSec
 	if probeTimeoutSec > 3 {
@@ -144,6 +145,9 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	}
 	wg.Wait()
 
+	if readyFunc != nil {
+		readyFunc()
+	}
 	for _, pairs := range hostDevicePairs {
 		go c.runDeviceInfoRefresher(ctx, client, pairs)
 	}
