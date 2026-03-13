@@ -27,6 +27,7 @@ type Commander struct {
 	cfg         *config.Config
 	topicPrefix string
 	subscribed  pahomqtt.Token
+	ctx         context.Context
 }
 
 // NewCommander creates a Commander. Call Run to subscribe and process commands.
@@ -42,6 +43,7 @@ func NewCommander(client *echonet.Client, cache *poller.Cache, cfg *config.Confi
 // Run subscribes to command topics and blocks until ctx is cancelled.
 // If readyFunc is non-nil, it is called once all subscriptions have succeeded.
 func (c *Commander) Run(ctx context.Context, mqttClient pahomqtt.Client, readyFunc func()) {
+	c.ctx = ctx
 	if c.topicPrefix == "" {
 		c.topicPrefix = "echonetgo"
 	}
@@ -400,11 +402,13 @@ func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
 }
 
 func (c *Commander) triggerStateUpdate(dev *config.Device, eoj [3]byte, epcs ...byte) {
-	// Spawns a background goroutine to wait a tiny bit, then read the state
 	go func() {
-		// Minimum wait is recommended to allow device internal state propagation
-		time.Sleep(500 * time.Millisecond)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		select {
+		case <-c.ctx.Done():
+			return
+		case <-time.After(500 * time.Millisecond):
+		}
+		ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
 		defer cancel()
 
 		props, err := c.client.GetProps(ctx, dev.IP, eoj, epcs)

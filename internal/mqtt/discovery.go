@@ -254,7 +254,11 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"expire_after":       300,
 				"device":             device,
 			}
-			data, _ := json.Marshal(payload)
+			data, err := json.Marshal(payload)
+			if err != nil {
+				mqttLog.Warnf("marshal switch discovery for %s/%s: %v", dev.Name, ms.Name, err)
+				continue
+			}
 			token := p.client.Publish(fmt.Sprintf("%s/switch/%s/config", p.discoveryPrefix, objectID), qos, true, data)
 			if token.WaitTimeout(publishTimeout) && token.Error() == nil {
 				mqttLog.Debugf("published switch discovery for %s/%s", dev.Name, ms.Name)
@@ -278,7 +282,11 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"expire_after":       300,
 				"device":             device,
 			}
-			data, _ := json.Marshal(payload)
+			data, err := json.Marshal(payload)
+			if err != nil {
+				mqttLog.Warnf("marshal select discovery for %s/%s: %v", dev.Name, ms.Name, err)
+				continue
+			}
 			token := p.client.Publish(fmt.Sprintf("%s/select/%s/config", p.discoveryPrefix, objectID), qos, true, data)
 			if token.WaitTimeout(publishTimeout) && token.Error() == nil {
 				mqttLog.Debugf("published select discovery for %s/%s", dev.Name, ms.Name)
@@ -307,7 +315,11 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 			if ms.HAUnit != "" {
 				payload["unit_of_measurement"] = ms.HAUnit
 			}
-			data, _ := json.Marshal(payload)
+			data, err := json.Marshal(payload)
+			if err != nil {
+				mqttLog.Warnf("marshal number discovery for %s/%s: %v", dev.Name, ms.Name, err)
+				continue
+			}
 			token := p.client.Publish(fmt.Sprintf("%s/number/%s/config", p.discoveryPrefix, objectID), qos, true, data)
 			if token.WaitTimeout(publishTimeout) && token.Error() == nil {
 				mqttLog.Debugf("published number discovery for %s/%s", dev.Name, ms.Name)

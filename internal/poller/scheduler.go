@@ -34,10 +34,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 		probeTimeoutSec = 1
 	}
 	probeClient := echonet.NewClient(transport, probeTimeoutSec)
-	// hostEOJCache is written per-IP inside a single goroutine per IP (the go func
-	// below groups devices by IP), so concurrent access across IPs is safe. If devices
-	// sharing an IP are ever split into separate goroutines, a mutex will be needed.
-	hostEOJCache := make(map[string][][3]byte)
+	var hostEOJCache sync.Map
 	hostDevicePairs := make(map[string][]deviceWithEOJ)
 	var hostDevicePairsMu sync.Mutex
 
@@ -53,7 +50,6 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 
 	var wg sync.WaitGroup
 	for ip, devices := range devicesByIP {
-		ip, devices := ip, devices
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -63,7 +59,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 				if spec == nil {
 					continue
 				}
-				activeEOJ := resolveEOJInstance(ctx, probeClient, dev, spec.EOJ, hostEOJCache)
+				activeEOJ := resolveEOJInstance(ctx, probeClient, dev, spec.EOJ, &hostEOJCache)
 				pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
 				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
 
@@ -153,7 +149,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	}
 }
 
-func resolveEOJInstance(ctx context.Context, client *echonet.Client, dev config.Device, configured [3]byte, hostEOJCache map[string][][3]byte) [3]byte {
+func resolveEOJInstance(ctx context.Context, client *echonet.Client, dev config.Device, configured [3]byte, hostEOJCache *sync.Map) [3]byte {
 	if eoj, ok := resolveEOJFromNodeProfile(ctx, client, dev, configured, hostEOJCache); ok {
 		return eoj
 	}
@@ -190,9 +186,11 @@ func resolveEOJInstance(ctx context.Context, client *echonet.Client, dev config.
 	return configured
 }
 
-func resolveEOJFromNodeProfile(ctx context.Context, client *echonet.Client, dev config.Device, configured [3]byte, hostEOJCache map[string][][3]byte) ([3]byte, bool) {
-	if instances, ok := hostEOJCache[dev.IP]; ok && len(instances) > 0 {
-		return selectEOJFromInstances(dev, configured, instances)
+func resolveEOJFromNodeProfile(ctx context.Context, client *echonet.Client, dev config.Device, configured [3]byte, hostEOJCache *sync.Map) ([3]byte, bool) {
+	if val, ok := hostEOJCache.Load(dev.IP); ok {
+		if instances := val.([][3]byte); len(instances) > 0 {
+			return selectEOJFromInstances(dev, configured, instances)
+		}
 	}
 	props, err := client.GetProps(ctx, dev.IP, [3]byte{0x0E, 0xF0, 0x01}, []byte{0xD6})
 	if err != nil {
@@ -211,7 +209,7 @@ func resolveEOJFromNodeProfile(ctx context.Context, client *echonet.Client, dev 
 		pollerLog.Warnf("device %s (%s): node profile instance list (D6) missing/empty", dev.Name, dev.IP)
 		return configured, false
 	}
-	hostEOJCache[dev.IP] = instances
+	hostEOJCache.Store(dev.IP, instances)
 	pollerLog.Infof("device %s (%s): discovered EOJs from node profile: %s", dev.Name, dev.IP, formatEOJList(instances))
 	return selectEOJFromInstances(dev, configured, instances)
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.19
+
+- **Concurrency**: Fix data race on shared EOJ cache during parallel device init by switching to `sync.Map`.
+- **Concurrency**: Fix leaked goroutines in MQTT commander `triggerStateUpdate` by deriving from the parent context instead of `context.Background()`; background state-refresh goroutines now exit promptly on shutdown.
+- **Error handling**: Check `json.Marshal` errors in writable entity (switch/select/number) discovery instead of silently discarding them.
+
 ## 0.9.18
 
 - **MQTT discovery**: Defer discovery publishing until device info (manufacturer/UID) has been fetched, preventing the double wipe/publish cycle on startup. Entities now appear once with correct manufacturer/model metadata from the start instead of briefly showing "unknown". Logs a warning if a device never returns identity properties after 5 polls.
