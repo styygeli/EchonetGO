@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.11
+
+- Add **readiness** endpoint `GET /ready`: returns 200 when poller and commander (if MQTT enabled) have finished init, 503 with per-component JSON until then. Use for Kubernetes readiness probes; does not depend on devices being configured or reachable.
+- Clarify **liveness** vs **readiness**: `/health` remains the liveness probe (always 200 while process is up); `/ready` is the readiness probe.
+
 ## 0.9.10
 
 - Trigger immediate GET polling to ECHONET devices after successful SET operations to update Home Assistant states rapidly without waiting for the next polling cycle.

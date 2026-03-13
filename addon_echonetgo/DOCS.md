@@ -33,6 +33,13 @@ mqtt:
 
 This add-on runs with **host networking** so ECHONET Lite UDP traffic can reliably reach devices on LAN/IoT subnets. The HTTP API listens on port **9191**.
 
+## Health endpoints
+
+The service exposes two HTTP endpoints for orchestration and load balancers:
+
+- **`GET /health`** — **Liveness.** Returns 200 with `{"status":"ok"}` whenever the process is running. Use this for Kubernetes liveness probes (or equivalent) to detect a hung process.
+- **`GET /ready`** — **Readiness.** Returns 200 with `{"status":"ready","components":{...}}` only after the poller and (if MQTT is enabled) the commander have finished startup. Returns 503 with `{"status":"not_ready","components":{...}}` until then. Use this for Kubernetes readiness probes so traffic is not sent to the add-on before it has completed initialization. Readiness does not depend on devices being configured or reachable.
+
 ## Troubleshooting
 
 - **Devices not responding** — Check that the device IP is reachable from the HA host. ECHONET Lite uses UDP port 3610. Some devices (like Mitsubishi MAC-900IF) require source port 3610.
