@@ -84,6 +84,8 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 		device.Identifiers = append(device.Identifiers, info.UID+"_"+dev.Name)
 	}
 
+	p.wipeDeviceDiscovery(dev, metricSpecs)
+
 	availTopic := fmt.Sprintf("%s/%s/availability", p.topicPrefix, dev.Name)
 	stateTopic := fmt.Sprintf("%s/%s/state", p.topicPrefix, dev.Name)
 
@@ -301,6 +303,19 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 			}
 		}
 	}
+}
+
+func (p *Publisher) wipeDeviceDiscovery(dev config.Device, metricSpecs []specs.MetricSpec) {
+	for _, ms := range metricSpecs {
+		objectID := dev.Name + "_" + ms.Name
+		for _, entityType := range []string{"sensor", "switch", "select", "number"} {
+			topic := fmt.Sprintf("%s/%s/%s/config", p.discoveryPrefix, entityType, objectID)
+			p.client.Publish(topic, qos, true, []byte{})
+		}
+	}
+	climateTopic := fmt.Sprintf("%s/climate/%s_climate/config", p.discoveryPrefix, dev.Name)
+	p.client.Publish(climateTopic, qos, true, []byte{})
+	mqttLog.Infof("wiped stale discovery for %s (%d metrics)", dev.Name, len(metricSpecs))
 }
 
 // publishBridgeDevice registers the EchonetGO bridge as a named device in HA

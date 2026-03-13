@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.16
+
+- **MQTT discovery**: Wipe stale retained discovery topics on startup before publishing fresh discovery. Clears sensor, switch, select, number, and climate config topics for all metrics in the spec, then re-publishes only data-backed entities. Eliminates ghost entities from EPCs the device no longer reports or metrics renamed across versions.
+
 ## 0.9.15
 
 - **MQTT discovery**: Only advertise sensors and writable entities for EPCs that the device actually returns data for. Devices sharing the same spec but with different capabilities (e.g. one Mitsubishi AC reports 0xA5, another does not) now get per-device discovery based on polling results. Discovery is deferred until the first successful poll with non-empty metrics.
