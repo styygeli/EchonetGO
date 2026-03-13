@@ -77,7 +77,7 @@ metrics:
       0x38: level_8
   - epc: 0xA1
     name: auto_air_flow_direction
-    help: "Auto air flow direction setting."
+    help: "Auto air flow direction setting. 0x42=manual position, 0x43=full auto (MAC-900IF)."
     size: 1
     scale: 1
     type: gauge
@@ -85,9 +85,11 @@ metrics:
     enum:
       0x41: auto
       0x42: non_auto
+      0x43: full_auto
+  # On MAC-900IF: vertical swing only. 0x31=off, 0x41=auto swing. Horizontal/both not used.
   - epc: 0xA3
     name: air_flow_swing
-    help: "Air flow swing setting."
+    help: "Air flow swing (on this device: vertical swing on/off)."
     size: 1
     scale: 1
     type: gauge
@@ -97,16 +99,25 @@ metrics:
       0x41: vertical
       0x42: horizontal
       0x43: both
+  # On MAC-900IF: 0xA4 = vertical blade position (ceiling→floor). Order: 41→44→43→45→42. Updates when blade
+  # reaches the position, not during movement. During vertical swing (0xA3=41), 0xA4 does not track live position.
   - epc: 0xA4
     name: air_flow_direction_horizontal
-    help: "Air flow direction (horizontal)."
+    help: "On MAC-900IF: vertical blade position (air toward ceiling → floor). Value updates on arrival, not while moving."
     size: 1
     scale: 1
     type: gauge
     scrape_interval: 10m
+    enum:
+      0x41: uppermost
+      0x44: upper_mid
+      0x43: middle
+      0x45: lower_mid
+      0x42: lowermost
+  # On MAC-900IF: Get returns empty EDT; vertical position is reported in 0xA4 instead.
   - epc: 0xA5
     name: air_flow_direction_vertical
-    help: "Air flow direction (vertical)."
+    help: "Air flow direction vertical (standard). On MAC-900IF: not reported (empty)."
     size: 1
     scale: 1
     type: gauge

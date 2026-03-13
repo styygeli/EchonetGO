@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.13
+
+- **MAC-900IF (home_ac_000006) spec**: Document vertical blade behaviour: 0xA3 = vertical swing (off/on), 0xA4 = vertical position (0x41 uppermost → 0x44, 0x43, 0x45, 0x42 lowermost); 0xA5 not reported. Add 0xA1=0x43 (full_auto). Note that 0xA4 updates on arrival only and does not track live position during swing; horizontal blade has no EPC change on this unit.
+- **echonet_probe.py**: Watch mode (`--watch`) now polls all climate EPCs (0x80, 0xB0, 0xB3, 0xBB, 0xA0, 0xA1, 0xA3, 0xA4, 0xA5) every `--interval` seconds with a dynamic banner; validate `--interval` when using `--watch`.
+
 ## 0.9.12
 
 - Post-SET refresh: only pass requested EPCs to ParsePropsToMetrics so we no longer log spurious "missing EPC" warnings for properties we didn't ask for (e.g. when setting AC mode to auto).
