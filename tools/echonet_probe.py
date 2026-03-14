@@ -96,18 +96,10 @@ def format_eoj(eoj: tuple[int, int, int]) -> str:
     return f"0x{eoj[0]:02x}{eoj[1]:02x}{eoj[2]:02x}"
 
 
-def decode_instance_list(edt: bytes) -> list[str]:
-    return [format_eoj(e) for e in extract_instances_from_edt(edt)]
-
-
 def route_local_ip_for_target(target_ip: str) -> str:
-    tmp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as tmp:
         tmp.connect((target_ip, 80))
-        local_ip, _ = tmp.getsockname()
-        return local_ip
-    finally:
-        tmp.close()
+        return tmp.getsockname()[0]
 
 
 def build_get(deoj: tuple[int, int, int], epcs: Iterable[int]) -> tuple[int, bytes]:
@@ -219,7 +211,7 @@ def receive_for_tid(
             lines.append(f"[{case_name}] Get_SNA (partial/not available) - showing returned props")
         for epc, edt in props:
             if epc == 0xD6:
-                lines.append(f"[{case_name}] D6 instances={decode_instance_list(edt)}")
+                lines.append(f"[{case_name}] D6 instances={[format_eoj(e) for e in extract_instances_from_edt(edt)]}")
             else:
                 lines.append(f"[{case_name}] EPC 0x{epc:02x} EDT {edt.hex()}")
         return True, "\n".join(lines), props
@@ -247,34 +239,25 @@ def _run_case_list(
     """Run a list of probe cases respecting socket-mode. Returns (any_success, collected_props)."""
     success = False
     all_props: list[tuple[int, bytes]] = []
-    mode_label = "bind3610" if source_port == ECHONET_PORT else "ephemeral"
-
-    if args.socket_mode == "shared":
+    shared = args.socket_mode == "shared"
+    shared_sock: socket.socket | None = None
+    if shared:
         try:
-            sock = create_socket(args.target_ip, args.timeout, source_port, args.pychonet_like)
+            shared_sock = create_socket(args.target_ip, args.timeout, source_port, args.pychonet_like)
         except OSError as exc:
-            print(f"[setup] failed to create shared socket for mode {mode_label}: {exc}")
+            print(f"[setup] socket error: {exc}")
             return False, []
-        try:
-            for case in cases:
-                for attempt in range(1, args.retries + 1):
-                    ok, props = run_case(sock, args.target_ip, args.timeout, case, args.verbose)
-                    if ok:
-                        success = True
-                        all_props.extend(props)
-                        break
-                    if attempt < args.retries:
-                        print(f"[{case.name}] retry {attempt + 1}/{args.retries}")
-        finally:
-            sock.close()
-    else:
+    try:
         for case in cases:
             for attempt in range(1, args.retries + 1):
-                try:
-                    sock = create_socket(args.target_ip, args.timeout, source_port, args.pychonet_like)
-                except OSError as exc:
-                    print(f"[setup] failed to create per-request socket for mode {mode_label}: {exc}")
-                    return success, all_props
+                if shared:
+                    sock = shared_sock
+                else:
+                    try:
+                        sock = create_socket(args.target_ip, args.timeout, source_port, args.pychonet_like)
+                    except OSError as exc:
+                        print(f"[setup] socket error: {exc}")
+                        return success, all_props
                 try:
                     ok, props = run_case(sock, args.target_ip, args.timeout, case, args.verbose)
                     if ok:
@@ -282,10 +265,13 @@ def _run_case_list(
                         all_props.extend(props)
                         break
                 finally:
-                    sock.close()
+                    if not shared:
+                        sock.close()
                 if attempt < args.retries:
                     print(f"[{case.name}] retry {attempt + 1}/{args.retries}")
-
+    finally:
+        if shared_sock:
+            shared_sock.close()
     return success, all_props
 
 
@@ -317,24 +303,41 @@ def run_port_mode(
 
 
 def auto_detect_eoj(args: argparse.Namespace) -> tuple[int, int, int] | None:
-    """Quick single-probe to discover first instance EOJ for watch mode."""
-    case = ProbeCase("auto_detect", DEOJ_NODE_PROFILE, (0xD6,))
-    try:
-        sock = create_socket(args.target_ip, args.timeout, ECHONET_PORT, args.pychonet_like)
-    except OSError as exc:
-        print(f"[auto-detect] failed to create socket: {exc}", file=sys.stderr)
-        return None
-    try:
-        ok, props = run_case(sock, args.target_ip, args.timeout, case, args.verbose)
-        if ok:
-            for epc, edt in props:
-                if epc == 0xD6:
-                    instances = extract_instances_from_edt(edt)
-                    if instances:
-                        return instances[0]
-    finally:
-        sock.close()
+    """Quick single-probe to discover first instance EOJ."""
+    _, props = _run_case_list(args, ECHONET_PORT, [ProbeCase("auto_detect", DEOJ_NODE_PROFILE, (0xD6,))])
+    for epc, edt in props:
+        if epc == 0xD6:
+            instances = extract_instances_from_edt(edt)
+            if instances:
+                return instances[0]
     return None
+
+
+def send_and_recv(
+    sock: socket.socket, target_ip: str, deoj: tuple[int, int, int], epcs: tuple[int, ...], timeout: float,
+) -> list[tuple[int, bytes]]:
+    """Send a GET and return the response properties, or [] on timeout."""
+    tid, payload = build_get(deoj, epcs)
+    try:
+        sock.sendto(payload, (target_ip, ECHONET_PORT))
+    except OSError:
+        return []
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        sock.settimeout(max(deadline - time.monotonic(), 0.01))
+        try:
+            data, addr = sock.recvfrom(4096)
+        except (socket.timeout, OSError):
+            break
+        if addr[0] != target_ip:
+            continue
+        try:
+            resp_tid, _, props = parse_get_res(data)
+        except ValueError:
+            continue
+        if resp_tid == tid:
+            return props
+    return []
 
 
 def watch_loop(args: argparse.Namespace, eoj: tuple[int, int, int], epcs: tuple[int, ...]) -> None:
@@ -344,44 +347,18 @@ def watch_loop(args: argparse.Namespace, eoj: tuple[int, int, int], epcs: tuple[
     except OSError as exc:
         print(f"watch: failed to create socket: {exc}", file=sys.stderr)
         sys.exit(1)
-    interval = args.interval
     epc_list = " ".join(f"0x{e:02x}" for e in epcs)
-    print(f"Watching {format_eoj(eoj)} EPCs {epc_list} every {interval}s (Ctrl+C to stop)", file=sys.stderr)
+    print(f"Watching {format_eoj(eoj)} EPCs {epc_list} every {args.interval}s (Ctrl+C to stop)", file=sys.stderr)
     try:
         while True:
-            tid, payload = build_get(eoj, epcs)
-            try:
-                sock.sendto(payload, (args.target_ip, ECHONET_PORT))
-            except OSError as exc:
-                print(f"{time.strftime('%H:%M:%S')} send error: {exc}")
-                time.sleep(interval)
-                continue
-            deadline = time.monotonic() + args.timeout
-            props_by_epc: dict[int, bytes] = {}
-            while time.monotonic() < deadline:
-                sock.settimeout(deadline - time.monotonic())
-                try:
-                    data, addr = sock.recvfrom(4096)
-                except socket.timeout:
-                    break
-                if addr[0] != args.target_ip:
-                    continue
-                try:
-                    resp_tid, esv, props = parse_get_res(data)
-                except ValueError:
-                    continue
-                if resp_tid != tid:
-                    continue
-                for epc, edt in props:
-                    props_by_epc[epc] = edt
-                break
-            ts = time.strftime("%H:%M:%S")
-            parts = [ts]
+            props = send_and_recv(sock, args.target_ip, eoj, epcs, args.timeout)
+            by_epc = {epc: edt for epc, edt in props}
+            parts = [time.strftime("%H:%M:%S")]
             for epc in epcs:
-                edt = props_by_epc.get(epc)
+                edt = by_epc.get(epc)
                 parts.append(f"0x{epc:02x}={edt.hex() if edt else '-'}")
             print(" ".join(parts))
-            time.sleep(interval)
+            time.sleep(args.interval)
     except KeyboardInterrupt:
         pass
     finally:
