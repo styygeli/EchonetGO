@@ -14,6 +14,21 @@ scrape_timeout_sec: 15
 # to requests sourced from port 3610).
 strict_source_port_3610: true
 
+# Listen for device-initiated INF/INFC multicast notifications (default true).
+# Devices that broadcast state changes are reflected immediately without waiting
+# for the next poll cycle.
+notifications_enabled: true
+
+# Always poll all EPCs even if recently pushed via notification (default false).
+# Useful for debugging or when you don't trust device push behavior.
+# force_polling: false
+
+# Network interfaces for multicast join. Leave empty (or omit) to auto-detect
+# all suitable IPv4 interfaces. Useful on multi-VLAN hosts.
+# multicast_interfaces:
+#   - eth0
+#   - eth0.3
+
 # Path to devices list (YAML or JSON). Optional if devices are listed below or in ECHONET_DEVICES.
 devices_path: "etc/devices.yaml"
 

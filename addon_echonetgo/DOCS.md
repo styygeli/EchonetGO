@@ -33,6 +33,18 @@ mqtt:
 
 This add-on runs with **host networking** so ECHONET Lite UDP traffic can reliably reach devices on LAN/IoT subnets. The HTTP API listens on port **9191**.
 
+### Multicast notifications
+
+EchonetGO automatically joins the ECHONET Lite multicast group (224.0.23.0) on all suitable IPv4 interfaces to receive device-initiated property notifications (INF/INFC). On multi-VLAN hosts, set `multicast_interfaces` in your config to restrict which interfaces are used:
+
+```yaml
+multicast_interfaces:
+  - eth0
+  - eth0.3
+```
+
+Bound interfaces are logged at INFO level on startup. To disable notifications entirely, set `notifications_enabled: false` in your config.
+
 ## Health endpoints
 
 The service exposes two HTTP endpoints for orchestration and load balancers:

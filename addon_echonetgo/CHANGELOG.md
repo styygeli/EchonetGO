@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.24
+
+- **INF/INFC notifications**: Receive device-initiated ECHONET Lite property notifications (ESV 0x73 INF, 0x74 INFC) in real time. Devices that broadcast state changes are reflected in Home Assistant immediately without waiting for the next poll cycle. INFC frames are automatically acknowledged (0x7A INFC_Res).
+- **STATMAP discovery**: Read each device's Status Change Announcement Property Map (EPC 0x9D) at init to learn which EPCs the device will push. Polling is automatically skipped for EPCs that have been pushed recently, reducing redundant UDP traffic.
+- **Multicast support**: Join the ECHONET Lite multicast group (224.0.23.0) on all suitable IPv4 interfaces by default, or restrict to specific interfaces via `multicast_interfaces`. Bound interfaces are logged at INFO level; failures are logged at WARN.
+- **New config options**: `notifications_enabled` (default `true`), `force_polling` (default `false`, disables poll-skip optimization), `multicast_interfaces` (list of interface names to bind).
+- **Notification listener tool**: New `tools/echonet_listen.py` standalone script for passively monitoring ECHONET Lite multicast traffic on the LAN.
+
 ## 0.9.23
 
 - **Ecocute HA metadata**: Remove `ha_state_class: measurement` from constant/setting metrics (tank capacity, rated HP power consumption, temperature setpoints, bath volume setting) to prevent HA statistics averaging from introducing floating-point noise on values that never change. Actual sensor measurements (water temperature, remaining water volumes) retain `measurement` state class.

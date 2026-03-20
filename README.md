@@ -9,6 +9,9 @@ Originally inspired by [echonetlite_homeassistant](https://github.com/scottyphil
 ## Features
 
 - **ECHONET Lite polling:** UDP-based Get/Get_Res with GETMAP filtering, adaptive chunking, and per-host concurrency.
+- **Real-time notifications:** Receives device-initiated INF/INFC property updates (ESV 0x73/0x74) via multicast, reflecting state changes instantly without waiting for the next poll. INFC frames are automatically acknowledged.
+- **Smart poll optimization:** Reads each device's STATMAP (EPC 0x9D) at init to learn which properties the device pushes. Polling is automatically skipped for recently-pushed EPCs, reducing redundant UDP traffic while maintaining a verification fallback.
+- **Multi-interface multicast:** Joins the ECHONET Lite multicast group (224.0.23.0) on all suitable IPv4 interfaces by default, or on a configured subset. Supports multi-VLAN setups.
 - **Bidirectional control:** Support for SET commands across climate, switches, selects, and numbers. Writable properties are auto-detected (EPC 0x9E).
 - **MQTT auto-discovery:** Publishes fully configured Home Assistant entities with `device_class`, `state_class`, and enum mapping.
 - **Energy Dashboard support:** Includes required HA metadata for power, energy, water, and gas sensors.
@@ -46,7 +49,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `internal/config/` | Config from `etc/config.yaml` and env (`ECHONET_CONFIG`, `ECHONET_DEVICES`, `MQTT_BROKER`, etc.) |
 | `internal/specs/` | Device class specs (EOJ, metrics with EPC/name/help/interval/HA metadata); loaders for `etc/specs/*.yaml` |
 | `internal/model/` | ECHONET Get_Res property types (EPC, PDC, EDT) |
-| `internal/echonet/` | ECHONET Lite client split across focused files: `client.go` (high-level API), `transport.go` (UDP connection pool, port fallback, per-host locking), `protocol.go` (frame parsing/building), `encoder.go` (EDT value encoding/decoding), `manufacturers.go` (manufacturer code lookup) |
+| `internal/echonet/` | ECHONET Lite client split across focused files: `client.go` (high-level API), `transport.go` (UDP connection pool, port fallback, per-host locking, multicast join), `protocol.go` (frame parsing/building), `notification.go` (INF/INFC handler), `encoder.go` (EDT value encoding/decoding), `manufacturers.go` (manufacturer code lookup) |
 | `internal/poller/` | Cache and scheduler: per-device/per-interval scrapers, parallel init per host IP, startup stagger, update callbacks |
 | `internal/mqtt/` | `publisher.go` (MQTT connection, state publishing), `discovery.go` (HA auto-discovery for sensor/climate/switch/select/number entities), `commander.go` (subscribes to command topics, routes SET requests to the ECHONET client) |
 | `internal/metrics/` | Prometheus collector: reads from poller cache, emits device metrics, enum one-hot gauges, scrape stats, device info |
@@ -56,14 +59,15 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `etc/devices.example.yaml` | Example device list — copy to `etc/devices.yaml` and set your IPs |
 | `etc/specs/*.yaml` | One file per device class (e.g. `home_ac`, `storage_battery`, `power_dist_board`); vendor-specific overrides named `{class}_{manufacturer_hex}.yaml` |
 | `addon_echonetgo/` | Home Assistant add-on: config.yaml, Dockerfile, run.sh, docs |
-| `tools/` | Standalone Python probe script for ECHONET Lite device testing |
+| `tools/` | Standalone Python scripts: `echonet_probe.py` (active device testing), `echonet_listen.py` (passive multicast notification listener) |
 
 ## Architecture
 
 - **Configuration:** Reads from `etc/config.yaml` and environment variables. When running as an HA add-on, Supervisor injects MQTT credentials automatically.
 - **Specs:** Device definitions live in `etc/specs/`. Each YAML specifies the EOJ, intervals, and metric details (EPC, size, scale, type, HA metadata). Vendor-specific specs like `home_ac_000006.yaml` load automatically if the manufacturer code matches (EPC 0x8A). Common EPCs (0x80-0x8F) are merged from a Super Class definition to reduce duplication.
-- **ECHONET Client:** Handles UDP Get and SetC requests on port 3610 with connection pooling, GETMAP filtering, adaptive payload splitting, and ephemeral-port fallback.
-- **Poller:** Initializes devices, schedules scrapes based on interval, caches the state, and triggers MQTT updates. Initialization is parallelized per host IP.
+- **ECHONET Client:** Handles UDP Get and SetC requests on port 3610 with connection pooling, GETMAP filtering, adaptive payload splitting, and ephemeral-port fallback. Joins the multicast group on all suitable interfaces for receiving device-initiated notifications.
+- **Notification Handler:** Listens for unsolicited INF/INFC frames on the multicast channel, matches them to configured devices, updates the cache, and acknowledges INFC frames. Works alongside the poller for a hybrid poll+push model.
+- **Poller:** Initializes devices, schedules scrapes based on interval, caches the state, and triggers MQTT updates. Initialization is parallelized per host IP. Skips polling for EPCs recently updated via push notifications.
 - **MQTT:** The publisher sends HA auto-discovery configs and state updates. The commander parses HA payloads into ECHONET SetC requests. A bridge device ("EchonetGO") tracks overall online/offline status.
 - **Metrics:** A detached Prometheus collector transforms the local cache state into the `/metrics` exposition format, preventing scrape delays from impacting device communication.
 - **API:** Provides `/health` and `/metrics` endpoints.
@@ -85,6 +89,9 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 - `scrape_timeout_sec` — UDP timeout for ECHONET requests (default 15).
 - `strict_source_port_3610` — Use local UDP source port `3610` only (default `true`). Set to `false` only if you explicitly need ephemeral-port fallback.
 - `metrics_enabled` — Enable the `/metrics` Prometheus endpoint (default `false`).
+- `notifications_enabled` — Listen for device-initiated INF/INFC multicast notifications (default `true`).
+- `force_polling` — Always poll all EPCs even if recently pushed via notification (default `false`).
+- `multicast_interfaces` — List of network interface names for multicast join (default: auto-detect all suitable IPv4 interfaces).
 - `devices_path` — Optional path to a YAML/JSON file with a `devices` list.
 - `specs_dir` — Directory of device class YAMLs (default `etc/specs`).
 - `devices` — Inline list of devices (see below).
@@ -125,6 +132,9 @@ When running as an HA add-on with `mqtt: auto`, the broker credentials are injec
 | `ECHONET_SCRAPE_TIMEOUT_SEC` | `scrape_timeout_sec` |
 | `ECHONET_STRICT_SOURCE_PORT_3610` | `strict_source_port_3610` |
 | `ECHONET_METRICS_ENABLED` | `metrics_enabled` |
+| `ECHONET_NOTIFICATIONS_ENABLED` | `notifications_enabled` |
+| `ECHONET_FORCE_POLLING` | `force_polling` |
+| `ECHONET_MULTICAST_INTERFACES` | `multicast_interfaces` (comma-separated) |
 | `ECHONET_DEVICES_PATH` | `devices_path` |
 | `ECHONET_SPECS_DIR` | `specs_dir` |
 | `ECHONET_DEVICES` | Devices as JSON array |
