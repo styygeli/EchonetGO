@@ -25,13 +25,15 @@ type Transport struct {
 	fixedConnMu  sync.Mutex
 	fixedConn    *net.UDPConn
 	waitersMu    sync.Mutex
-	waiters      map[string]chan udpFrame
+	waiters      map[string]chan UDPFrame
 	strictSource bool
+	infChan      chan UDPFrame
 }
 
-type udpFrame struct {
-	from *net.UDPAddr
-	data []byte
+// UDPFrame holds a raw UDP datagram and its source address.
+type UDPFrame struct {
+	From *net.UDPAddr
+	Data []byte
 }
 
 // NewTransport creates a Transport that manages ECHONET Lite UDP connections.
@@ -40,9 +42,144 @@ type udpFrame struct {
 func NewTransport(strictSourcePort3610 bool) *Transport {
 	return &Transport{
 		hostLocks:    make(map[string]*sync.Mutex),
-		waiters:      make(map[string]chan udpFrame),
+		waiters:      make(map[string]chan UDPFrame),
 		strictSource: strictSourcePort3610,
 	}
+}
+
+// SetNotificationChan sets the channel that receives unsolicited frames
+// (INF/INFC notifications) that have no matching request waiter.
+func (t *Transport) SetNotificationChan(ch chan UDPFrame) {
+	t.infChan = ch
+}
+
+// NotificationChan returns the channel for unsolicited frames.
+func (t *Transport) NotificationChan() chan UDPFrame {
+	return t.infChan
+}
+
+// JoinMulticast joins the ECHONET Lite multicast group (224.0.23.0) on
+// the shared port-3610 socket. If ips is empty, all suitable interfaces
+// are auto-detected. Returns the list of IPs that were successfully joined.
+func (t *Transport) JoinMulticast(ips []string) []string {
+	conn, err := t.getOrCreateFixedConn()
+	if err != nil {
+		clientLog.Warnf("multicast: cannot get shared socket: %v", err)
+		return nil
+	}
+	mcastIP := net.ParseIP(MulticastAddr)
+	if len(ips) > 0 {
+		return t.joinMulticastOnIPs(conn, mcastIP, ips)
+	}
+	return t.joinMulticastAutoDetect(conn, mcastIP)
+}
+
+func (t *Transport) joinMulticastOnIPs(conn *net.UDPConn, mcastIP net.IP, ips []string) []string {
+	var joined []string
+	for _, ipStr := range ips {
+		ip := net.ParseIP(ipStr)
+		if ip == nil {
+			clientLog.Warnf("multicast: invalid interface IP %q, skipping", ipStr)
+			continue
+		}
+		iface := findInterfaceByIP(ip)
+		ifName := ipStr
+		if iface != nil {
+			ifName = iface.Name + " (" + ipStr + ")"
+		}
+		if err := joinGroup(conn, iface, mcastIP); err != nil {
+			clientLog.Warnf("multicast: failed to join %s on %s: %v", MulticastAddr, ifName, err)
+			continue
+		}
+		clientLog.Infof("multicast: joined %s on %s", MulticastAddr, ifName)
+		joined = append(joined, ipStr)
+	}
+	return joined
+}
+
+func (t *Transport) joinMulticastAutoDetect(conn *net.UDPConn, mcastIP net.IP) []string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		clientLog.Warnf("multicast: cannot enumerate interfaces: %v", err)
+		return nil
+	}
+	var joined []string
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagMulticast == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			ipNet, ok := addr.(*net.IPNet)
+			if !ok || ipNet.IP.To4() == nil {
+				continue
+			}
+			ifCopy := iface
+			if err := joinGroup(conn, &ifCopy, mcastIP); err != nil {
+				clientLog.Warnf("multicast: failed to join %s on %s (%s): %v",
+					MulticastAddr, iface.Name, ipNet.IP, err)
+				continue
+			}
+			clientLog.Infof("multicast: joined %s on %s (%s)", MulticastAddr, iface.Name, ipNet.IP)
+			joined = append(joined, ipNet.IP.String())
+		}
+	}
+	return joined
+}
+
+func joinGroup(conn *net.UDPConn, iface *net.Interface, group net.IP) error {
+	rawConn, err := conn.SyscallConn()
+	if err != nil {
+		return fmt.Errorf("syscall conn: %w", err)
+	}
+	mreq := &syscall.IPMreq{}
+	copy(mreq.Multiaddr[:], group.To4())
+	if iface != nil {
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+				copy(mreq.Interface[:], ipNet.IP.To4())
+				break
+			}
+		}
+	}
+	var sockErr error
+	if ctrlErr := rawConn.Control(func(fd uintptr) {
+		sockErr = syscall.SetsockoptIPMreq(int(fd), syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
+	}); ctrlErr != nil {
+		return ctrlErr
+	}
+	return sockErr
+}
+
+func findInterfaceByIP(ip net.IP) *net.Interface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.Equal(ip) {
+				return &iface
+			}
+		}
+	}
+	return nil
+}
+
+// FixedConn returns the shared port-3610 connection for sending responses.
+// Used by the notification handler to send INFC_Res.
+func (t *Transport) FixedConn() *net.UDPConn {
+	t.fixedConnMu.Lock()
+	defer t.fixedConnMu.Unlock()
+	return t.fixedConn
 }
 
 // Close releases the shared UDP connection.
@@ -138,7 +275,7 @@ func (t *Transport) sendViaSharedFixedPort(ctx context.Context, remoteAddr *net.
 		return nil, err
 	}
 	key := waiterKey(remoteAddr.IP.String(), tid)
-	respCh := make(chan udpFrame, 1)
+	respCh := make(chan UDPFrame, 1)
 	t.addWaiter(key, respCh)
 	defer t.removeWaiter(key)
 
@@ -161,10 +298,10 @@ func (t *Transport) sendViaSharedFixedPort(ctx context.Context, remoteAddr *net.
 	defer timer.Stop()
 	select {
 	case frame := <-respCh:
-		if frame.from != nil && frame.from.Port != echonetPort {
-			clientLog.Debugf("accepted response from %s with non-standard source UDP port %d", hostKey, frame.from.Port)
+		if frame.From != nil && frame.From.Port != echonetPort {
+			clientLog.Debugf("accepted response from %s with non-standard source UDP port %d", hostKey, frame.From.Port)
 		}
-		return frame.data, nil
+		return frame.Data, nil
 	case <-timer.C:
 		return nil, fmt.Errorf("read udp %s->%s:%d: i/o timeout", conn.LocalAddr().String(), remoteAddr.IP.String(), remoteAddr.Port)
 	case <-ctx.Done():
@@ -216,12 +353,24 @@ func (t *Transport) startFixedConnReceiver(conn *net.UDPConn) {
 		ch := t.waiters[key]
 		t.waitersMu.Unlock()
 		if ch == nil {
-			clientLog.Debugf("ignoring stale UDP frame from %s:%d: tid=0x%04x has no waiter", addr.IP.String(), addr.Port, tid)
+			if t.infChan != nil {
+				frame := UDPFrame{
+					From: addr,
+					Data: append([]byte(nil), buf[:n]...),
+				}
+				select {
+				case t.infChan <- frame:
+				default:
+					clientLog.Warnf("notification channel full, dropping frame from %s:%d tid=0x%04x", addr.IP.String(), addr.Port, tid)
+				}
+			} else {
+				clientLog.Debugf("ignoring unsolicited UDP frame from %s:%d: tid=0x%04x", addr.IP.String(), addr.Port, tid)
+			}
 			continue
 		}
-		frame := udpFrame{
-			from: addr,
-			data: append([]byte(nil), buf[:n]...),
+		frame := UDPFrame{
+			From: addr,
+			Data: append([]byte(nil), buf[:n]...),
 		}
 		select {
 		case ch <- frame:
@@ -250,7 +399,7 @@ func (t *Transport) lockForHost(host string) *sync.Mutex {
 	return m
 }
 
-func (t *Transport) addWaiter(key string, ch chan udpFrame) {
+func (t *Transport) addWaiter(key string, ch chan UDPFrame) {
 	t.waitersMu.Lock()
 	t.waiters[key] = ch
 	t.waitersMu.Unlock()

@@ -116,31 +116,32 @@ def print_frame(addr: tuple[str, int], frame: dict, verbose: bool) -> None:
             print(f"         EPC=0x{epc:02x}  PDC={len(edt)}  EDT={edt.hex() if edt else '-'}")
 
 
-def create_socket(local_ip: str) -> socket.socket:
+def create_socket(local_ips: list[str]) -> socket.socket:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if hasattr(socket, "SO_REUSEPORT"):
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
     sock.bind(("0.0.0.0", ECHONET_PORT))
 
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(local_ip))
-    mreq = struct.pack("=4s4s", socket.inet_aton(MCAST_ADDR), socket.inet_aton(local_ip))
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    for ip in local_ips:
+        mreq = struct.pack("=4s4s", socket.inet_aton(MCAST_ADDR), socket.inet_aton(ip))
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
     return sock
 
 
 def listen(args: argparse.Namespace) -> int:
-    local_ip = args.interface or detect_local_ip()
+    local_ips = args.interface if args.interface else [detect_local_ip()]
     try:
-        sock = create_socket(local_ip)
+        sock = create_socket(local_ips)
     except OSError as exc:
         print(f"error: could not bind socket: {exc}", file=sys.stderr)
         return 1
 
     mode = "INF/INFC only" if args.inf_only else "all frames"
+    ifaces = ", ".join(local_ips)
     print(
         f"Listening on 0.0.0.0:{ECHONET_PORT}  multicast={MCAST_ADDR}  "
-        f"interface={local_ip}  filter={mode}",
+        f"interfaces={ifaces}  filter={mode}",
         file=sys.stderr,
     )
     print(f"respond-infc={args.respond_infc}  verbose={args.verbose}", file=sys.stderr)

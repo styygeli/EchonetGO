@@ -21,8 +21,11 @@ type Cache struct {
 	onUpdate      UpdateCallback
 	specsByDev    map[string][]specs.MetricSpec   // filtered specs per device key
 	climateByDev  map[string]*specs.ClimateSpec   // device key -> climate spec if AC
-	writableEPCs map[string]map[byte]struct{}     // device key -> set of writable EPCs (from 0x9E)
+	writableEPCs  map[string]map[byte]struct{}    // device key -> set of writable EPCs (from 0x9E)
 	eojByDev      map[string][3]byte              // device key -> EOJ for SET requests
+	notifyEPCs    map[string]map[byte]struct{}    // device key -> set of EPCs the device pushes (from 0x9D)
+	lastPush      map[string]map[byte]time.Time   // device key -> EPC -> last INF receive time
+	forcePolling  bool                             // ignore STATMAP, always poll everything
 }
 
 type deviceCache struct {
@@ -53,6 +56,8 @@ func NewCache() *Cache {
 		climateByDev: make(map[string]*specs.ClimateSpec),
 		writableEPCs: make(map[string]map[byte]struct{}),
 		eojByDev:     make(map[string][3]byte),
+		notifyEPCs:   make(map[string]map[byte]struct{}),
+		lastPush:     make(map[string]map[byte]time.Time),
 	}
 }
 
@@ -229,6 +234,125 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 	if cb != nil {
 		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, success)
 	}
+}
+
+// SetNotificationEPCs records the notification property map (0x9D / STATMAP) for a device.
+func (c *Cache) SetNotificationEPCs(dev config.Device, notify map[byte]struct{}) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.notifyEPCs[deviceKey(dev)] = notify
+}
+
+// GetNotificationEPCs returns the STATMAP (0x9D) for a device, if known.
+func (c *Cache) GetNotificationEPCs(dev config.Device) (map[byte]struct{}, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	n, ok := c.notifyEPCs[deviceKey(dev)]
+	return n, ok
+}
+
+// RecordPush records that an INF notification was received for the given EPCs.
+func (c *Cache) RecordPush(dev config.Device, epcs []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := deviceKey(dev)
+	if c.lastPush[key] == nil {
+		c.lastPush[key] = make(map[byte]time.Time)
+	}
+	now := time.Now()
+	for _, epc := range epcs {
+		c.lastPush[key][epc] = now
+	}
+}
+
+// SetForcePolling sets whether to ignore STATMAP and always poll.
+func (c *Cache) SetForcePolling(force bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.forcePolling = force
+}
+
+// ShouldSkipPoll returns true if the EPC is in the device's STATMAP and was
+// pushed via INF within the given freshness window.
+func (c *Cache) ShouldSkipPoll(dev config.Device, epc byte, freshness time.Duration) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.forcePolling {
+		return false
+	}
+	key := deviceKey(dev)
+	notify, ok := c.notifyEPCs[key]
+	if !ok {
+		return false
+	}
+	if _, inMap := notify[epc]; !inMap {
+		return false
+	}
+	pushTimes := c.lastPush[key]
+	if pushTimes == nil {
+		return false
+	}
+	lastT, ok := pushTimes[epc]
+	if !ok {
+		return false
+	}
+	return time.Since(lastT) < freshness
+}
+
+// UpdateFromINF merges properties received from an INF notification into
+// the cache and triggers the onUpdate callback.
+func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.MetricValue) {
+	c.mu.Lock()
+	key := deviceKey(dev)
+	dc := c.metrics[key]
+	if dc.metrics == nil {
+		dc.metrics = make(map[string]echonet.MetricValue)
+	}
+	for k, v := range metrics {
+		dc.metrics[k] = v
+	}
+	c.metrics[key] = dc
+
+	cb := c.onUpdate
+	var devSpecs []specs.MetricSpec
+	var writable map[byte]struct{}
+	var climateSpec *specs.ClimateSpec
+	if cb != nil {
+		devSpecs = c.specsByDev[key]
+		writable = c.writableEPCs[key]
+		climateSpec = c.climateByDev[key]
+	}
+	info := dc.info
+	allMetrics := make(map[string]echonet.MetricValue, len(dc.metrics))
+	for k, v := range dc.metrics {
+		allMetrics[k] = v
+	}
+	c.mu.Unlock()
+
+	if cb != nil {
+		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, true)
+	}
+}
+
+// FindDeviceByIPAndEOJ returns the configured device matching an IP and SEOJ class,
+// or ok=false if no match is found.
+func (c *Cache) FindDeviceByIPAndEOJ(ip string, seoj [3]byte, devices []config.Device) (config.Device, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	for _, dev := range devices {
+		if dev.IP != ip {
+			continue
+		}
+		key := deviceKey(dev)
+		eoj, ok := c.eojByDev[key]
+		if !ok {
+			continue
+		}
+		if eoj[0] == seoj[0] && eoj[1] == seoj[1] && eoj[2] == seoj[2] {
+			return dev, true
+		}
+	}
+	return config.Device{}, false
 }
 
 // UpdateInfo stores generic device identity properties.

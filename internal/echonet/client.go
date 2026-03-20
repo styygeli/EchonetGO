@@ -152,6 +152,22 @@ func (c *Client) GetWritablePropertyMap(ctx context.Context, addr string, eoj [3
 	return nil, fmt.Errorf("writable property map (0x9E) missing")
 }
 
+// GetNotificationPropertyMap reads EPC 0x9D (STATMAP) and decodes which properties
+// the device will push via unsolicited INF notifications.
+func (c *Client) GetNotificationPropertyMap(ctx context.Context, addr string, eoj [3]byte) (map[byte]struct{}, error) {
+	props, err := c.GetProps(ctx, addr, eoj, []byte{0x9D})
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range props {
+		if p.EPC == 0x9D && len(p.EDT) > 0 {
+			return decodePropertyMap(p.EDT), nil
+		}
+	}
+	clientLog.Warnf("device %s eoj=%s: notification property map (0x9D) missing/empty", normalizeHost(addr), formatEOJ(eoj))
+	return nil, fmt.Errorf("notification property map (0x9D) missing")
+}
+
 // GetManufacturerCode reads EPC 0x8A and returns the 3-byte manufacturer code as a
 // 6-digit lowercase hex string (e.g. "000006"). Used for vendor-specific spec lookup.
 // Falls back to node profile EOJ if the class EOJ returns Get_SNA.

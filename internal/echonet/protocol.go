@@ -18,10 +18,16 @@ const (
 	esvGet         = 0x62
 	esvGetRes      = 0x72
 	esvSetC        = 0x61
+	esvINF         = 0x73
+	esvINFC        = 0x74
+	esvINFCRes     = 0x7A
+	esvINFSNA      = 0x53
 	seojController = 0x05
 	seojClass      = 0xFF
 	seojInstance   = 0x01
 	minResponseLen = 12
+
+	MulticastAddr = "224.0.23.0"
 )
 
 // ESVError is returned when a response carries an unexpected service code.
@@ -164,6 +170,11 @@ func isGetSNA(err error) bool {
 
 func formatEOJ(eoj [3]byte) string { return fmt.Sprintf("0x%02x%02x%02x", eoj[0], eoj[1], eoj[2]) }
 
+// FormatEPCList formats a byte slice of EPC codes for logging.
+func FormatEPCList(epcs []byte) string {
+	return formatEPCList(epcs)
+}
+
 func formatEPCList(epcs []byte) string {
 	if len(epcs) == 0 {
 		return "[]"
@@ -173,4 +184,50 @@ func formatEPCList(epcs []byte) string {
 		parts = append(parts, fmt.Sprintf("0x%02x", epc))
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// INFFrame holds a parsed unsolicited ECHONET Lite notification frame.
+type INFFrame struct {
+	TID   uint16
+	SEOJ  [3]byte
+	DEOJ  [3]byte
+	ESV   byte
+	Props []model.GetResProperty
+}
+
+// IsNotification returns true if the ESV is INF, INFC, or INF_SNA.
+func (f *INFFrame) IsNotification() bool {
+	return f.ESV == esvINF || f.ESV == esvINFC || f.ESV == esvINFSNA
+}
+
+// ParseINFFrame parses a raw ECHONET Lite frame into an INFFrame,
+// extracting SEOJ, DEOJ, and properties regardless of ESV type.
+func ParseINFFrame(data []byte) (*INFFrame, error) {
+	tid, esv, props, err := parseFrame(data)
+	if err != nil {
+		return nil, err
+	}
+	return &INFFrame{
+		TID:  tid,
+		SEOJ: [3]byte{data[4], data[5], data[6]},
+		DEOJ: [3]byte{data[7], data[8], data[9]},
+		ESV:  esv,
+		Props: props,
+	}, nil
+}
+
+// BuildINFCRes builds an INFC_Res (0x7A) frame acknowledging an INFC notification.
+func BuildINFCRes(inf *INFFrame) []byte {
+	b := make([]byte, 0, 12+3*len(inf.Props))
+	b = append(b, ehd1, ehd2)
+	b = append(b, byte(inf.TID>>8), byte(inf.TID))
+	b = append(b, seojController, seojClass, seojInstance)
+	b = append(b, inf.SEOJ[0], inf.SEOJ[1], inf.SEOJ[2])
+	b = append(b, esvINFCRes)
+	b = append(b, byte(len(inf.Props)))
+	for _, p := range inf.Props {
+		b = append(b, p.EPC, p.PDC)
+		b = append(b, p.EDT...)
+	}
+	return b
 }

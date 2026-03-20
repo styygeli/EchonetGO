@@ -18,6 +18,7 @@ import (
 	"github.com/styygeli/echonetgo/internal/echonet"
 	"github.com/styygeli/echonetgo/internal/logging"
 	echonetmetrics "github.com/styygeli/echonetgo/internal/metrics"
+	"github.com/styygeli/echonetgo/internal/model"
 	mqttpub "github.com/styygeli/echonetgo/internal/mqtt"
 	"github.com/styygeli/echonetgo/internal/poller"
 	"github.com/styygeli/echonetgo/internal/specs"
@@ -68,8 +69,52 @@ func main() {
 	transport := echonet.NewTransport(cfg.StrictSourcePort3610)
 	defer transport.Close()
 
+	if cfg.NotificationsEnabled {
+		infChan := make(chan echonet.UDPFrame, 256)
+		transport.SetNotificationChan(infChan)
+		joined := transport.JoinMulticast(cfg.MulticastInterfaces)
+		if len(joined) > 0 {
+			log.Infof("multicast: listening on %d interface(s)", len(joined))
+		} else {
+			log.Warnf("multicast: no interfaces joined; INF notifications may not be received")
+		}
+	}
+	if cfg.ForcePolling {
+		cache.SetForcePolling(true)
+		log.Infof("force_polling enabled: STATMAP will be ignored, all EPCs polled normally")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
+	if cfg.NotificationsEnabled {
+		notifHandler := echonet.NewNotificationHandler(transport.NotificationChan(), transport,
+			func(ip string, seoj [3]byte, props []model.GetResProperty) {
+				dev, ok := cache.FindDeviceByIPAndEOJ(ip, seoj, cfg.Devices)
+				if !ok {
+					return
+				}
+				devSpecs, ok := cache.GetDeviceSpecs(dev)
+				if !ok {
+					return
+				}
+				metrics := echonet.ParsePropsToMetrics(props, devSpecs)
+				if len(metrics) == 0 {
+					return
+				}
+				epcs := make([]byte, 0, len(props))
+				for _, p := range props {
+					epcs = append(epcs, p.EPC)
+				}
+				cache.RecordPush(dev, epcs)
+				cache.UpdateFromINF(dev, metrics)
+			})
+		for _, dev := range cfg.Devices {
+			notifHandler.RegisterDevice(dev.IP)
+		}
+		go notifHandler.Run(ctx)
+	}
+
 	go cache.Start(ctx, cfg, deviceSpecs, transport, func() { readiness.MarkReady("poller") })
 	if mqttPub != nil {
 		echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)

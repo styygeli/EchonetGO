@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,9 @@ type Config struct {
 	DevicesPath          string     `yaml:"devices_path" json:"devices_path"`
 	SpecsDir             string     `yaml:"specs_dir" json:"specs_dir"`
 	MetricsEnabled       bool       `yaml:"metrics_enabled" json:"metrics_enabled"`
+	NotificationsEnabled bool       `yaml:"notifications_enabled" json:"notifications_enabled"`
+	ForcePolling         bool       `yaml:"force_polling" json:"force_polling"`
+	MulticastInterfaces  []string   `yaml:"multicast_interfaces" json:"multicast_interfaces"`
 	Devices              []Device   `yaml:"devices" json:"devices"`
 	MQTT                 MQTTConfig `yaml:"mqtt" json:"mqtt"`
 }
@@ -55,6 +59,9 @@ type fileConfig struct {
 	ScrapeTimeoutSec     int        `yaml:"scrape_timeout_sec"`
 	StrictSourcePort3610 *bool      `yaml:"strict_source_port_3610"`
 	MetricsEnabled       *bool      `yaml:"metrics_enabled"`
+	NotificationsEnabled *bool      `yaml:"notifications_enabled"`
+	ForcePolling         *bool      `yaml:"force_polling"`
+	MulticastInterfaces  []string   `yaml:"multicast_interfaces"`
 	DevicesPath          string     `yaml:"devices_path"`
 	SpecsDir             string     `yaml:"specs_dir"`
 	Devices              []Device   `yaml:"devices"`
@@ -69,6 +76,7 @@ func Load() (*Config, error) {
 		ListenAddr:           ":9191",
 		ScrapeTimeoutSec:     15,
 		StrictSourcePort3610: true,
+		NotificationsEnabled: true,
 	}
 
 	configPath := os.Getenv("ECHONET_CONFIG")
@@ -97,6 +105,15 @@ func Load() (*Config, error) {
 		}
 		if fc.MetricsEnabled != nil {
 			cfg.MetricsEnabled = *fc.MetricsEnabled
+		}
+		if fc.NotificationsEnabled != nil {
+			cfg.NotificationsEnabled = *fc.NotificationsEnabled
+		}
+		if fc.ForcePolling != nil {
+			cfg.ForcePolling = *fc.ForcePolling
+		}
+		if len(fc.MulticastInterfaces) > 0 {
+			cfg.MulticastInterfaces = fc.MulticastInterfaces
 		}
 		if fc.DevicesPath != "" {
 			cfg.DevicesPath = fc.DevicesPath
@@ -140,6 +157,23 @@ func Load() (*Config, error) {
 			return nil, fmt.Errorf("ECHONET_METRICS_ENABLED: %w", err)
 		}
 		cfg.MetricsEnabled = b
+	}
+	if v := os.Getenv("ECHONET_NOTIFICATIONS_ENABLED"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("ECHONET_NOTIFICATIONS_ENABLED: %w", err)
+		}
+		cfg.NotificationsEnabled = b
+	}
+	if v := os.Getenv("ECHONET_FORCE_POLLING"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("ECHONET_FORCE_POLLING: %w", err)
+		}
+		cfg.ForcePolling = b
+	}
+	if v := os.Getenv("ECHONET_MULTICAST_INTERFACES"); v != "" {
+		cfg.MulticastInterfaces = strings.Split(v, ",")
 	}
 	if v := os.Getenv("ECHONET_DEVICES_PATH"); v != "" {
 		cfg.DevicesPath = v

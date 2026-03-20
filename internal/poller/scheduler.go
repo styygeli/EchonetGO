@@ -87,12 +87,26 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 						pollerLog.Warnf("device %s (%s): skipping unsupported EPCs from GETMAP: %v", dev.Name, dev.IP, unsupported)
 					}
 				}
-				writable, err := client.GetWritablePropertyMap(ctx, dev.IP, activeEOJ)
+			writable, err := client.GetWritablePropertyMap(ctx, dev.IP, activeEOJ)
+			if err != nil {
+				pollerLog.Warnf("device %s (%s): failed to read writable property map (0x9E): %v", dev.Name, dev.IP, err)
+			} else {
+				c.SetWritableEPCs(dev, writable)
+			}
+			if cfg.NotificationsEnabled {
+				notify, err := client.GetNotificationPropertyMap(ctx, dev.IP, activeEOJ)
 				if err != nil {
-					pollerLog.Warnf("device %s (%s): failed to read writable property map (0x9E): %v", dev.Name, dev.IP, err)
+					pollerLog.Warnf("device %s (%s): failed to read STATMAP (0x9D): %v", dev.Name, dev.IP, err)
 				} else {
-					c.SetWritableEPCs(dev, writable)
+					c.SetNotificationEPCs(dev, notify)
+					epcs := make([]byte, 0, len(notify))
+					for epc := range notify {
+						epcs = append(epcs, epc)
+					}
+					pollerLog.Infof("device %s (%s): STATMAP has %d notification EPCs: %s",
+						dev.Name, dev.IP, len(notify), echonet.FormatEPCList(epcs))
 				}
+			}
 				if len(activeMetrics) == 0 {
 					pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
 					continue
@@ -336,10 +350,17 @@ func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev conf
 }
 
 func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval time.Duration) {
+	freshness := interval * 2
 	seen := make(map[byte]struct{}, len(metrics))
 	epcs := make([]byte, 0, len(metrics))
+	var skipped []byte
 	for _, m := range metrics {
 		if _, dup := seen[m.EPC]; !dup {
+			if c.ShouldSkipPoll(dev, m.EPC, freshness) {
+				skipped = append(skipped, m.EPC)
+				seen[m.EPC] = struct{}{}
+				continue
+			}
 			epcs = append(epcs, m.EPC)
 			seen[m.EPC] = struct{}{}
 		}
@@ -349,6 +370,13 @@ func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev conf
 				seen[m.MultiplierEPC] = struct{}{}
 			}
 		}
+	}
+	if len(skipped) > 0 {
+		pollerLog.Debugf("device %s (%s) group %s: skipping %d EPCs recently pushed via INF: %s",
+			dev.Name, dev.IP, groupID, len(skipped), echonet.FormatEPCList(skipped))
+	}
+	if len(epcs) == 0 {
+		return
 	}
 	start := time.Now()
 	props, err := client.GetProps(ctx, dev.IP, eoj, epcs)
