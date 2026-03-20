@@ -352,12 +352,14 @@ func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev conf
 func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval time.Duration) {
 	freshness := interval * 2
 	seen := make(map[byte]struct{}, len(metrics))
+	skippedEPCs := make(map[byte]struct{})
 	epcs := make([]byte, 0, len(metrics))
 	var skipped []byte
 	for _, m := range metrics {
 		if _, dup := seen[m.EPC]; !dup {
 			if c.ShouldSkipPoll(dev, m.EPC, freshness) {
 				skipped = append(skipped, m.EPC)
+				skippedEPCs[m.EPC] = struct{}{}
 				seen[m.EPC] = struct{}{}
 				continue
 			}
@@ -378,6 +380,13 @@ func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev conf
 	if len(epcs) == 0 {
 		return
 	}
+	// Build the subset of metric specs that were actually requested (not skipped).
+	polledMetrics := make([]specs.MetricSpec, 0, len(metrics))
+	for _, m := range metrics {
+		if _, wasSkipped := skippedEPCs[m.EPC]; !wasSkipped {
+			polledMetrics = append(polledMetrics, m)
+		}
+	}
 	start := time.Now()
 	props, err := client.GetProps(ctx, dev.IP, eoj, epcs)
 	durationSec := time.Since(start).Seconds()
@@ -386,10 +395,10 @@ func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev conf
 		c.Update(dev, groupID, interval, false, durationSec, nil, err.Error())
 		return
 	}
-	out := echonet.ParsePropsToMetrics(props, metrics)
-	if len(out) < len(metrics) {
+	out := echonet.ParsePropsToMetrics(props, polledMetrics)
+	if len(out) < len(polledMetrics) {
 		pollerLog.Warnf("device %s (%s): parsed %d/%d metrics for group %s; missing=%v",
-			dev.Name, dev.IP, len(out), len(metrics), groupID, missingMetricNames(metrics, out))
+			dev.Name, dev.IP, len(out), len(polledMetrics), groupID, missingMetricNames(polledMetrics, out))
 	}
 	c.Update(dev, groupID, interval, true, durationSec, out, "")
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.25
+- **Multicast fixes**: Suppress false "missing metric" warnings in the poller when an EPC was skipped due to a recent multicast INF push.
+- **Notification noise**: Filter device specs to relevant metrics in the notification handler to avoid a wall of warnings when receiving single-property INF frames.
+- **Multicast tests**: Add comprehensive unit tests for INF frame parsing, notification classification, and cache-level skip logic.
+- **Concurrency audit**: Audit and verify thread-safety across multicast, poller, and MQTT commander paths.
+
 ## 0.9.24
 
 - **INF/INFC notifications**: Receive device-initiated ECHONET Lite property notifications (ESV 0x73 INF, 0x74 INFC) in real time. Devices that broadcast state changes are reflected in Home Assistant immediately without waiting for the next poll cycle. INFC frames are automatically acknowledged (0x7A INFC_Res).

@@ -98,15 +98,27 @@ func main() {
 				if !ok {
 					return
 				}
-				metrics := echonet.ParsePropsToMetrics(props, devSpecs)
-				if len(metrics) == 0 {
-					return
-				}
 				epcs := make([]byte, 0, len(props))
 				for _, p := range props {
 					epcs = append(epcs, p.EPC)
 				}
 				cache.RecordPush(dev, epcs)
+				// Only pass specs for EPCs present in the INF frame to
+				// avoid "missing EPC" warnings for every other metric.
+				infEPCs := make(map[byte]struct{}, len(props))
+				for _, p := range props {
+					infEPCs[p.EPC] = struct{}{}
+				}
+				var relevantSpecs []specs.MetricSpec
+				for _, s := range devSpecs {
+					if _, ok := infEPCs[s.EPC]; ok {
+						relevantSpecs = append(relevantSpecs, s)
+					}
+				}
+				metrics := echonet.ParsePropsToMetrics(props, relevantSpecs)
+				if len(metrics) == 0 {
+					return
+				}
 				cache.UpdateFromINF(dev, metrics)
 			})
 		for _, dev := range cfg.Devices {
