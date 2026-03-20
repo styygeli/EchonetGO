@@ -1,28 +1,29 @@
 # EchonetGO
 
-A Go service for ECHONET Lite smart home devices. Polls devices over UDP, caches state, and publishes sensors, climate, switch, select, and number entities to Home Assistant via MQTT auto-discovery. Supports bidirectional control (SET commands) and exposes a diagnostic HTTP API. Device and metric definitions live in editable YAML specs so non-Go contributors can add devices without changing code.
+A Go service that connects ECHONET Lite smart home devices to Home Assistant via MQTT. It polls devices over UDP, caches their state locally, and uses HA's auto-discovery payload to expose them as sensors, climate, switch, select, and number entities. 
 
-Originally inspired by [echonetlite_homeassistant](https://github.com/scottyphillips/echonetlite_homeassistant) and [pychonet](https://github.com/scottyphillips/pychonet), reimplemented in Go for reliability and ease of deployment as a Home Assistant add-on.
+Device structures and metrics are defined entirely in YAML so you can add or modify device support without writing any Go code.
+
+Originally inspired by [echonetlite_homeassistant](https://github.com/scottyphillips/echonetlite_homeassistant), this is a from-scratch Go reimplementation designed to run as a reliable, standalone service or Home Assistant add-on.
 
 ## Features
 
-- **ECHONET Lite polling** — Get/Get_Res over UDP with GETMAP filtering, adaptive split retries, and per-host concurrency.
-- **Bidirectional control** — SET commands for climate (mode, temperature, fan speed), switches, selects, and numbers. Writable properties are auto-detected via the property map (EPC 0x9E).
-- **MQTT auto-discovery** — Publishes HA-compatible sensor, climate, switch, select, and number entities with device_class, state_class, unit_of_measurement, and enum support. Entities appear automatically in Home Assistant.
-- **Energy Dashboard ready** — Power, energy, water, and gas sensors include the correct HA metadata for the Energy Dashboard.
-- **Vendor-specific specs** — Auto-selects device-specific YAML specs based on manufacturer code (e.g. Mitsubishi MAC-900IF), falling back to generic class specs.
-- **YAML-driven** — All device classes, EPCs, metric names, scales, enums, climate mappings, and HA metadata are defined in `etc/specs/*.yaml`.
-- **Prometheus / VictoriaMetrics metrics** — Opt-in `/metrics` endpoint in Prometheus text exposition format with detached scraping (reads from cache, never blocks on device I/O). Includes Go runtime and process metrics.
-- **Home Assistant add-on** — Ships as a ready-to-install HA add-on with automatic MQTT broker credential injection.
+- **ECHONET Lite polling:** UDP-based Get/Get_Res with GETMAP filtering, adaptive chunking, and per-host concurrency.
+- **Bidirectional control:** Support for SET commands across climate, switches, selects, and numbers. Writable properties are auto-detected (EPC 0x9E).
+- **MQTT auto-discovery:** Publishes fully configured Home Assistant entities with `device_class`, `state_class`, and enum mapping.
+- **Energy Dashboard support:** Includes required HA metadata for power, energy, water, and gas sensors.
+- **Vendor-specific specs:** Automatically detects and loads manufacturer-specific formats (e.g., Mitsubishi MAC-900IF).
+- **YAML-driven:** All device classes, EPCs, mapping rules, and HA metadata are defined in `etc/specs/*.yaml`.
+- **Prometheus metrics:** Opt-in `/metrics` endpoint exports device, Go runtime, and process metrics without blocking device I/O.
+- **Home Assistant add-on:** Ready-to-install HA add-on with automatic MQTT broker credential injection.
 
 ## Attribution
 
-This project builds on ideas and protocol behavior from the following projects and standards:
+Thanks to the following projects for the inspiration and references:
 
-- **[echonetlite_homeassistant](https://github.com/scottyphillips/echonetlite_homeassistant)** — Home Assistant integration for ECHONET Lite (MIT, Copyright © 2019 Scott Phillips). Device support, entity mapping, and integration patterns inspired this reimplementation.
-- **[pychonet](https://github.com/scottyphillips/pychonet)** — Python ECHONET Lite library used by the integration (MIT/GPL, Copyright © 2018 Scott Phillips). Protocol semantics and EPC handling reference pychonet's implementation.
-- **[echonet-exporter](https://github.com/styygeli/echonet-exporter)** — Prometheus/VictoriaMetrics exporter for ECHONET Lite. Detached scraping, GETMAP filtering, adaptive split retries, and YAML device/spec layout were adapted from this codebase.
-- **ECHONET Lite** — [ECHONET Consortium](https://echonet.jp/) specification; implementation follows the published ECHONET Lite standard for UDP frames and property codes.
+- **[echonetlite_homeassistant](https://github.com/scottyphillips/echonetlite_homeassistant)** & **[pychonet](https://github.com/scottyphillips/pychonet)** — The original HA integration and Python library. Provided the entity mapping patterns and protocol behaviors.
+- **[echonet-exporter](https://github.com/styygeli/echonet-exporter)** — Provided the foundation for detached Prometheus scraping, UDP chunking, and the YAML spec layout.
+- **ECHONET Lite** — The official [ECHONET Consortium](https://echonet.jp/) standard.
 
 ## Quick start
 
@@ -34,8 +35,7 @@ go build -o echonetgo ./cmd/echonetgo
 By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads device specs from `etc/specs/`, and serves HTTP on `:9191`. Endpoints:
 
 - `GET /` — brief info
-- `GET /health` — **liveness** — always 200 while the process is running (use for Kubernetes liveness probes)
-- `GET /ready` — **readiness** — 200 when poller and (if enabled) commander have finished init; 503 otherwise with JSON `{"status":"not_ready","components":{...}}` (use for Kubernetes readiness probes). Does not depend on devices being configured or reachable.
+- `GET /health` — liveness
 - `GET /metrics` — Prometheus/VictoriaMetrics text format (requires `metrics_enabled: true`)
 
 ## File layout
@@ -50,7 +50,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `internal/poller/` | Cache and scheduler: per-device/per-interval scrapers, parallel init per host IP, startup stagger, update callbacks |
 | `internal/mqtt/` | `publisher.go` (MQTT connection, state publishing), `discovery.go` (HA auto-discovery for sensor/climate/switch/select/number entities), `commander.go` (subscribes to command topics, routes SET requests to the ECHONET client) |
 | `internal/metrics/` | Prometheus collector: reads from poller cache, emits device metrics, enum one-hot gauges, scrape stats, device info |
-| `internal/api/` | HTTP mux: `/health` (liveness), `/ready` (readiness), `/metrics`, `/` |
+| `internal/api/` | HTTP mux: `/health`, `/metrics`, `/` |
 | `internal/logging/` | Leveled logger (`ECHONET_LOG_LEVEL`) |
 | `etc/config.example.yaml` | Example config (listen_addr, mqtt, devices) |
 | `etc/devices.example.yaml` | Example device list — copy to `etc/devices.yaml` and set your IPs |
@@ -60,13 +60,13 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 
 ## Architecture
 
-- **Config** — Single source: optional `etc/config.yaml` plus env overrides. Devices can be in the config file, in a file at `devices_path`, or in `ECHONET_DEVICES` JSON. MQTT broker settings can be provided via config or env vars, and are automatically injected by the HA Supervisor when running as an add-on (`mqtt: auto`).
-- **Specs** — One YAML per device class in `etc/specs/`; filename (without `.yaml`) is the class id. Each spec defines EOJ, default scrape interval, and metrics (EPC, name, help, size/scale/type, optional enum, per-metric scrape_interval, optional HA metadata: `ha_device_class`, `ha_state_class`, `ha_unit`). HA metadata is inferred from naming conventions when not explicitly set. **Vendor-specific specs** are named `{class}_{manufacturer_hex}.yaml` (e.g. `home_ac_000006.yaml`) and are auto-selected at runtime when the device reports that manufacturer code (EPC 0x8A); otherwise the generic class spec is used. **Super Class merge** — Common ECHONET Super Class properties (e.g. operation status 0x80, fault status 0x88 in the 0x80–0x8F range) are defined once and automatically merged into every loaded class spec by the loader. If a class or vendor YAML defines the same EPC, that definition takes precedence. Property map EPCs 0x9E/0x9F are used only at runtime for GETMAP and are not added as sensor metrics.
-- **ECHONET client** — Sends Get and SetC requests over UDP via a shared `Transport` that owns port 3610, per-host serialization, and connection pooling. Supports GETMAP (0x9F/0x9E) for readable and writable properties, adaptive split on partial responses, and ephemeral-port fallback. IPv4 only.
-- **Poller** — For each configured device: load spec, optionally filter metrics by GETMAP, group by scrape interval, stagger startup, run per-interval scrapers and a device-info refresher; all results merged into a single cache. Device initialization is parallelized per host IP. After each scrape, an update callback notifies the MQTT publisher.
-- **MQTT** — The **publisher** sends HA auto-discovery config (retained) for sensors, climate, switch, select, and number entities, plus a bridge device ("EchonetGO"). State updates are published after each scrape with per-device availability. The **commander** subscribes to HA command topics and translates incoming payloads into ECHONET SetC requests with a 5-second timeout. On clean shutdown the bridge goes offline.
-- **Metrics** — When `metrics_enabled: true`, a `prometheus.Collector` reads cached device state and emits Prometheus text format on `/metrics`. Uses detached scraping: `/metrics` requests are cheap cache reads, independent of ECHONET polling schedules. Metric naming follows `echonet_{subsystem}_{metric_name}` with labels `device`, `ip`, `class`. Go runtime (`go_*`) and process (`process_*`) metrics are included automatically.
-- **API** — Read-only. **Liveness** (`/health`) always returns 200 while the process is up. **Readiness** (`/ready`) returns 200 only after the poller (and commander, if MQTT is enabled) have completed startup and report ready; returns 503 with per-component status until then. Readiness does not depend on user-supplied devices or their reachability. Optional `/metrics` in Prometheus text format when enabled.
+- **Configuration:** Reads from `etc/config.yaml` and environment variables. When running as an HA add-on, Supervisor injects MQTT credentials automatically.
+- **Specs:** Device definitions live in `etc/specs/`. Each YAML specifies the EOJ, intervals, and metric details (EPC, size, scale, type, HA metadata). Vendor-specific specs like `home_ac_000006.yaml` load automatically if the manufacturer code matches (EPC 0x8A). Common EPCs (0x80-0x8F) are merged from a Super Class definition to reduce duplication.
+- **ECHONET Client:** Handles UDP Get and SetC requests on port 3610 with connection pooling, GETMAP filtering, adaptive payload splitting, and ephemeral-port fallback.
+- **Poller:** Initializes devices, schedules scrapes based on interval, caches the state, and triggers MQTT updates. Initialization is parallelized per host IP.
+- **MQTT:** The publisher sends HA auto-discovery configs and state updates. The commander parses HA payloads into ECHONET SetC requests. A bridge device ("EchonetGO") tracks overall online/offline status.
+- **Metrics:** A detached Prometheus collector transforms the local cache state into the `/metrics` exposition format, preventing scrape delays from impacting device communication.
+- **API:** Provides `/health` and `/metrics` endpoints.
 
 ## Tested devices
 
