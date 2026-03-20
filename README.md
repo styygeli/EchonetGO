@@ -74,7 +74,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 |--------|-------------|-------|-------|
 | EP Cube (battery + inverter) | Eternalplanet Energy (0x000131) | `storage_battery`, `home_solar` | Vendor-specific spec auto-detected. Does not report product code (0x8C). |
 | MAC-900IF AC adapter | Mitsubishi Electric (0x000006) | `home_ac` | Vendor-specific spec `home_ac_000006.yaml`. Non-standard cumulative_operating_time format. |
-| Ecocute wireless adapter | Daikin Industries (0x000008) | `home_ac` | Does not report manufacturer/model EPCs; use config fallback fields. |
+| Ecocute wireless adapter | Daikin Industries (0x000008) | `electric_water_heater` | Does not report manufacturer/model EPCs; use config fallback fields. |
 | Smart Cosmo MKN7350S1 | Panasonic (0x00000B) | `power_dist_board`, `home_solar`, `water_flow_meter`, `gas_meter` | Multi-EOJ device on single IP. Power in deciwatts (scale: 0.1). |
 
 ## Configuration
