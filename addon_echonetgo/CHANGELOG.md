@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.26
+- **Protocol validation**: Add explicit validation of ECHONET Lite response ESV for SET commands. Rejections from devices (SetC_SNA, 0x51) are now correctly identified as errors.
+- **HA UI Consistency**: When a SET command is rejected by a device, the commander now triggers an immediate (0ms delay) state update to fetch the actual device values. This forces the Home Assistant UI to revert its optimistic state update, keeping the UI in sync with the hardware.
+- **Code cleanup**: Consolidate ESV parsing and error handling into generic protocol helpers.
+
 ## 0.9.25
 - **Multicast fixes**: Suppress false "missing metric" warnings in the poller when an EPC was skipped due to a recent multicast INF push.
 - **Notification noise**: Filter device specs to relevant metrics in the notification handler to avoid a wall of warnings when receiving single-property INF frames.
