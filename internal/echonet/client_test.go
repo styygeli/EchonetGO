@@ -166,8 +166,8 @@ func TestParseGetRes(t *testing.T) {
 		if esvErr.ESV != 0x71 {
 			t.Fatalf("ESV = 0x%02x, want 0x71", esvErr.ESV)
 		}
-		if !strings.Contains(err.Error(), "not Get_Res") {
-			t.Fatalf("error = %q, want 'not Get_Res' substring", err)
+		if !strings.Contains(err.Error(), "unexpected ESV") {
+			t.Fatalf("error = %q, want 'unexpected ESV' substring", err)
 		}
 	})
 }

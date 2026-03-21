@@ -58,7 +58,15 @@ func (c *Client) SendGet(ctx context.Context, addr string, eoj [3]byte, epcs []b
 func (c *Client) SendSet(ctx context.Context, addr string, eoj [3]byte, epc byte, edt []byte) ([]byte, error) {
 	tid := c.transport.NextTID()
 	req := SetRequest(tid, eoj, epc, edt)
-	return c.transport.Send(ctx, addr, req, tid, c.timeout)
+	raw, err := c.transport.Send(ctx, addr, req, tid, c.timeout)
+	if err != nil {
+		return nil, err
+	}
+	_, _, parseErr := ParseSetRes(raw)
+	if parseErr != nil {
+		return raw, parseErr
+	}
+	return raw, nil
 }
 
 // GetProps fetches requested EPCs and adaptively splits when devices return partial responses.

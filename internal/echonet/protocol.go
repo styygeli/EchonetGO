@@ -18,6 +18,8 @@ const (
 	esvGet         = 0x62
 	esvGetRes      = 0x72
 	esvSetC        = 0x61
+	esvSetRes      = 0x71
+	esvSetCSNA     = 0x51
 	esvINF         = 0x73
 	esvINFC        = 0x74
 	esvINFCRes     = 0x7A
@@ -36,7 +38,7 @@ type ESVError struct {
 }
 
 func (e *ESVError) Error() string {
-	return fmt.Sprintf("not Get_Res: ESV=0x%02x", e.ESV)
+	return fmt.Sprintf("unexpected ESV: 0x%02x", e.ESV)
 }
 
 // GetRequest builds an ECHONET Lite Get frame.
@@ -78,6 +80,19 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 		return 0, nil, err
 	}
 	if esv != esvGetRes {
+		return tid, props, &ESVError{ESV: esv}
+	}
+	return tid, props, nil
+}
+
+// ParseSetRes parses an ECHONET Lite frame and returns properties if it is a Set_Res.
+// Note: Set_Res frames typically have PDC=0 for the properties, but we parse them anyway.
+func ParseSetRes(data []byte) (tid uint16, props []model.GetResProperty, err error) {
+	tid, esv, props, err := parseFrame(data)
+	if err != nil {
+		return 0, nil, err
+	}
+	if esv != esvSetRes {
 		return tid, props, &ESVError{ESV: esv}
 	}
 	return tid, props, nil
@@ -166,6 +181,11 @@ func prop(props []model.GetResProperty, epc byte) ([]byte, bool) {
 func isGetSNA(err error) bool {
 	var esvErr *ESVError
 	return errors.As(err, &esvErr) && esvErr.ESV == 0x52
+}
+
+func isSetSNA(err error) bool {
+	var esvErr *ESVError
+	return errors.As(err, &esvErr) && esvErr.ESV == 0x51
 }
 
 func formatEOJ(eoj [3]byte) string { return fmt.Sprintf("0x%02x%02x%02x", eoj[0], eoj[1], eoj[2]) }

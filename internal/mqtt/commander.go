@@ -258,13 +258,14 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 	_, err = c.client.SendSet(ctx, addr, eoj, ms.EPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set %s (0x%02x) failed for %s: %v", ms.Name, ms.EPC, dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, ms.EPC)
 		return
 	}
 	mqttLog.Infof("commander: set %s %s = %s", dev.Name, ms.Name, payload)
 	if ms.PreSetEPC != 0 {
-		c.triggerStateUpdate(dev, eoj, ms.PreSetEPC, ms.EPC)
+		c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, ms.PreSetEPC, ms.EPC)
 	} else {
-		c.triggerStateUpdate(dev, eoj, ms.EPC)
+		c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, ms.EPC)
 	}
 }
 
@@ -295,10 +296,11 @@ func (c *Commander) handleClimatePower(ctx context.Context, addr string, eoj [3]
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set 0x80 failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
 		return
 	}
 	mqttLog.Infof("commander: set %s power %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, eoj, operationStatusEPC)
+	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, operationStatusEPC)
 }
 
 func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec) {
@@ -311,16 +313,18 @@ func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]b
 		_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, []byte{offStatus})
 		if err != nil {
 			mqttLog.Warnf("commander: Set 0x80=off failed for %s: %v", dev.Name, err)
+			c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
 			return
 		}
 		mqttLog.Infof("commander: set %s mode off", dev.Name)
-		c.triggerStateUpdate(dev, eoj, operationStatusEPC)
+		c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, operationStatusEPC)
 		return
 	}
 	// Turn on first, then set operation mode
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, []byte{onStatus})
 	if err != nil {
 		mqttLog.Warnf("commander: Set 0x80=on failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
 		return
 	}
 	raw, ok := climateSpec.Modes[payload]
@@ -342,10 +346,11 @@ func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]b
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set mode failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s mode %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, eoj, operationStatusEPC, epc)
+	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, operationStatusEPC, epc)
 }
 
 func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
@@ -375,10 +380,11 @@ func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, e
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set temperature failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s temperature %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, eoj, epc)
+	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, epc)
 }
 
 func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
@@ -408,10 +414,11 @@ func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set fan_mode failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s fan_mode %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, eoj, epc)
+	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, epc)
 }
 
 func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
@@ -423,12 +430,18 @@ func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
 	return nil
 }
 
-func (c *Commander) triggerStateUpdate(dev *config.Device, eoj [3]byte, epcs ...byte) {
+func (c *Commander) triggerStateUpdate(dev *config.Device, delay time.Duration, eoj [3]byte, epcs ...byte) {
 	go func() {
-		select {
-		case <-c.ctx.Done():
-			return
-		case <-time.After(500 * time.Millisecond):
+		if delay > 0 {
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-time.After(delay):
+			}
+		} else {
+			if c.ctx.Err() != nil {
+				return
+			}
 		}
 		ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
 		defer cancel()
