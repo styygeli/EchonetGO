@@ -172,6 +172,56 @@ func TestParseGetRes(t *testing.T) {
 	})
 }
 
+func TestParseSetRes(t *testing.T) {
+	t.Run("valid Set_Res", func(t *testing.T) {
+		frame := []byte{
+			0x10, 0x81,
+			0x00, 0x01,
+			0x01, 0x30, 0x01,
+			0x05, 0xFF, 0x01,
+			0x71, // Set_Res
+			0x01, // OPC=1
+			0x80, 0x00, // EPC=0x80, PDC=0
+		}
+		tid, props, err := ParseSetRes(frame)
+		if err != nil {
+			t.Fatalf("ParseSetRes() error = %v", err)
+		}
+		if tid != 1 {
+			t.Fatalf("tid = %+v, want 1", tid)
+		}
+		if len(props) != 1 {
+			t.Fatalf("len(props) = %d, want 1", len(props))
+		}
+		if props[0].EPC != 0x80 {
+			t.Fatalf("unexpected EPC: 0x%02x", props[0].EPC)
+		}
+	})
+
+	t.Run("SetC_SNA returns ESVError", func(t *testing.T) {
+		frame := []byte{
+			0x10, 0x81,
+			0x00, 0x01,
+			0x01, 0x30, 0x01,
+			0x05, 0xFF, 0x01,
+			0x51, // SetC_SNA
+			0x01,
+			0x80, 0x00,
+		}
+		_, _, err := ParseSetRes(frame)
+		if err == nil {
+			t.Fatal("ParseSetRes() expected error for SNA, got nil")
+		}
+		var esvErr *ESVError
+		if !errors.As(err, &esvErr) {
+			t.Fatalf("error type = %T, want *ESVError", err)
+		}
+		if esvErr.ESV != 0x51 {
+			t.Fatalf("ESV = 0x%02x, want 0x51", esvErr.ESV)
+		}
+	})
+}
+
 func TestDecodePropertyMap(t *testing.T) {
 	t.Run("short list format", func(t *testing.T) {
 		got := decodePropertyMap([]byte{0x02, 0x80, 0xB3})
@@ -286,6 +336,30 @@ func TestIsGetSNA(t *testing.T) {
 	t.Run("nil error", func(t *testing.T) {
 		if isGetSNA(nil) {
 			t.Fatal("expected isGetSNA to return false for nil")
+		}
+	})
+}
+
+func TestIsSetSNA(t *testing.T) {
+	t.Run("ESV 0x51 is Set_SNA", func(t *testing.T) {
+		err := &ESVError{ESV: 0x51}
+		if !isSetSNA(err) {
+			t.Fatal("expected isSetSNA to return true for ESV 0x51")
+		}
+	})
+
+	t.Run("other ESV is not Set_SNA", func(t *testing.T) {
+		err := &ESVError{ESV: 0x71}
+		if isSetSNA(err) {
+			t.Fatal("expected isSetSNA to return false for ESV 0x71")
+		}
+	})
+
+	t.Run("wrapped ESVError is detected", func(t *testing.T) {
+		inner := &ESVError{ESV: 0x51}
+		err := fmt.Errorf("wrapped: %w", inner)
+		if !isSetSNA(err) {
+			t.Fatal("expected isSetSNA to return true for wrapped ESV 0x51")
 		}
 	})
 }
