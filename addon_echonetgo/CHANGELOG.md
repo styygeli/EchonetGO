@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.27
+- **Multi-stage verification**: Implement a robust verification loop for SET commands. Instead of a single 500ms delay, the service now polls the device at 1s, 4s, and 7s intervals after a successful command acknowledgment.
+- **Real data priority**: Replaces the previous verification logic to ensure Home Assistant reflects real device registers rather than optimistic assumptions. If the device takes several seconds to apply a change (common in Ecocute units), EchonetGO will eventually see the change and solidify the UI.
+- **Automatic UI sync**: If a device silently ignores a command or the hardware registers never update after 3 attempts, EchonetGO publishes the actual device state to MQTT, forcing the HA UI to revert the unapplied change.
+
 ## 0.9.26
 - **Protocol validation**: Add explicit validation of ECHONET Lite response ESV for SET commands. Rejections from devices (SetC_SNA, 0x51) are now correctly identified as errors.
 - **HA UI Consistency**: When a SET command is rejected by a device, the commander now triggers an immediate (0ms delay) state update to fetch the actual device values. This forces the Home Assistant UI to revert its optimistic state update, keeping the UI in sync with the hardware.

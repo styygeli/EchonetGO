@@ -1,6 +1,7 @@
 package mqtt
 
 import (
+	"bytes"
 	"context"
 	"strconv"
 	"strings"
@@ -195,13 +196,15 @@ func metricSpecByName(specs []specs.MetricSpec, name string) *specs.MetricSpec {
 }
 
 func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, ms *specs.MetricSpec, metricSpecs []specs.MetricSpec, entityType, payload string) {
+	var preEDT []byte
 	if ms.PreSetEPC != 0 {
 		preMs := metricSpecByEPC(metricSpecs, ms.PreSetEPC)
 		if preMs == nil {
 			mqttLog.Warnf("commander: pre-set EPC 0x%02x not found in specs for %s", ms.PreSetEPC, dev.Name)
 			return
 		}
-		preEDT, err := echonet.EncodeValueToEDT(float64(ms.PreSetValue), *preMs)
+		var err error
+		preEDT, err = echonet.EncodeValueToEDT(float64(ms.PreSetValue), *preMs)
 		if err != nil {
 			mqttLog.Warnf("commander: pre-set encode failed for 0x%02x: %v", ms.PreSetEPC, err)
 			return
@@ -262,11 +265,11 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 		return
 	}
 	mqttLog.Infof("commander: set %s %s = %s", dev.Name, ms.Name, payload)
+	updates := []pendingUpdate{{epc: ms.EPC, edt: edt}}
 	if ms.PreSetEPC != 0 {
-		c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, ms.PreSetEPC, ms.EPC)
-	} else {
-		c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, ms.EPC)
+		updates = append(updates, pendingUpdate{epc: ms.PreSetEPC, edt: preEDT})
 	}
+	c.verifyStateUpdate(dev, eoj, updates)
 }
 
 func (c *Commander) deviceByName(name string) *config.Device {
@@ -300,7 +303,7 @@ func (c *Commander) handleClimatePower(ctx context.Context, addr string, eoj [3]
 		return
 	}
 	mqttLog.Infof("commander: set %s power %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, operationStatusEPC)
+	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: edt}})
 }
 
 func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec) {
@@ -317,7 +320,7 @@ func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]b
 			return
 		}
 		mqttLog.Infof("commander: set %s mode off", dev.Name)
-		c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, operationStatusEPC)
+		c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: []byte{offStatus}}})
 		return
 	}
 	// Turn on first, then set operation mode
@@ -350,7 +353,7 @@ func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]b
 		return
 	}
 	mqttLog.Infof("commander: set %s mode %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, operationStatusEPC, epc)
+	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: []byte{onStatus}}, {epc: epc, edt: edt}})
 }
 
 func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
@@ -384,7 +387,7 @@ func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, e
 		return
 	}
 	mqttLog.Infof("commander: set %s temperature %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, epc)
+	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 
 func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
@@ -418,7 +421,7 @@ func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [
 		return
 	}
 	mqttLog.Infof("commander: set %s fan_mode %s", dev.Name, payload)
-	c.triggerStateUpdate(dev, 500*time.Millisecond, eoj, epc)
+	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 
 func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
@@ -428,6 +431,80 @@ func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
 		}
 	}
 	return nil
+}
+
+type pendingUpdate struct {
+	epc byte
+	edt []byte
+}
+
+func (c *Commander) verifyStateUpdate(dev *config.Device, eoj [3]byte, updates []pendingUpdate) {
+	go func() {
+		delays := []time.Duration{1 * time.Second, 3 * time.Second, 3 * time.Second}
+		for attempt, delay := range delays {
+			select {
+			case <-c.ctx.Done():
+				return
+			case <-time.After(delay):
+			}
+
+			ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
+			epcs := make([]byte, len(updates))
+			for i, u := range updates {
+				epcs[i] = u.epc
+			}
+			props, err := c.client.GetProps(ctx, dev.IP, eoj, epcs)
+			cancel()
+
+			if err != nil {
+				mqttLog.Warnf("commander: failed verify read for %s (attempt %d): %v", dev.Name, attempt+1, err)
+				continue
+			}
+
+			allMatched := true
+			for _, u := range updates {
+				found := false
+				for _, p := range props {
+					if p.EPC == u.epc {
+						found = true
+						if !bytes.Equal(p.EDT, u.edt) {
+							allMatched = false
+						}
+						break
+					}
+				}
+				if !found {
+					allMatched = false
+				}
+				if !allMatched {
+					break
+				}
+			}
+
+			if allMatched || attempt == len(delays)-1 {
+				deviceSpecs, ok := c.cache.GetDeviceSpecs(*dev)
+				if !ok {
+					return
+				}
+				var specsForRequested []specs.MetricSpec
+				for _, p := range props {
+					if ms := metricSpecByEPC(deviceSpecs, p.EPC); ms != nil {
+						specsForRequested = append(specsForRequested, *ms)
+					}
+				}
+				metrics := echonet.ParsePropsToMetrics(props, specsForRequested)
+				if len(metrics) > 0 {
+					c.cache.Update(*dev, "verify_update", 0, true, 0, metrics, "")
+					if !allMatched {
+						mqttLog.Warnf("commander: device %s did not reflect requested state after retries", dev.Name)
+					} else {
+						mqttLog.Infof("commander: verified device %s updated successfully on attempt %d", dev.Name, attempt+1)
+					}
+				}
+				return
+			}
+		}
+	}()
 }
 
 func (c *Commander) triggerStateUpdate(dev *config.Device, delay time.Duration, eoj [3]byte, epcs ...byte) {

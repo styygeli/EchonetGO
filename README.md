@@ -13,7 +13,8 @@ Originally inspired by [echonetlite_homeassistant](https://github.com/scottyphil
 - **Smart poll optimization:** Reads each device's STATMAP (EPC 0x9D) at init to learn which properties the device pushes. Polling is automatically skipped for recently-pushed EPCs, reducing redundant UDP traffic while maintaining a verification fallback.
 - **Multi-interface multicast:** Joins the ECHONET Lite multicast group (224.0.23.0) on all suitable IPv4 interfaces by default, or on a configured subset. Supports multi-VLAN setups.
 - **Bidirectional control:** Support for SET commands across climate, switches, selects, and numbers. Writable properties are auto-detected (EPC 0x9E).
-- **Protocol-level validation:** SET commands are explicitly validated against device responses (Set_Res vs SetC_SNA). If a device rejects a command, EchonetGO detects it immediately and forces a rapid UI sync in Home Assistant to revert the optimistic state change.
+- **Protocol-level validation:** SET commands are explicitly validated against device responses (Set_Res vs SetC_SNA).
+- **Multi-stage state verification:** To ensure UI consistency without "optimistic lies", EchonetGO verifies that the device registers reflect the requested value after a successful command acknowledgment. It polls at 1s, 4s, and 7s intervals; if the state matches at any point, the update is published and the loop ends. If the device silently ignores the command, the UI is eventually synced to the actual (unchanged) device state.
 - **MQTT auto-discovery:** Publishes fully configured Home Assistant entities with `device_class`, `state_class`, and enum mapping.
 - **Energy Dashboard support:** Includes required HA metadata for power, energy, water, and gas sensors.
 - **Vendor-specific specs:** Automatically detects and loads manufacturer-specific formats (e.g., Mitsubishi MAC-900IF).
