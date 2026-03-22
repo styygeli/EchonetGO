@@ -64,3 +64,5 @@ etc/config.yaml
 
 .gemini/
 gha-creds-*.json
+GEMINI.md
+
