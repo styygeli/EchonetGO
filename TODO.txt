@@ -1,0 +1,9 @@
+Multicast device discovery -- Instead of manually configuring every device in YAML, you could send a Get for instance list (0xD6) to 224.0.23.0 and devices respond with their node profiles. EchonetGO currently requires manual devices.yaml config for every device. This would be a nice "auto-discover" mode.
+
+Instance list notification (0xD5) -- A push from the node profile when a device's instance list changes (e.g., a new module is added to the EP Cube). The spec says inf: required for this property, meaning devices must push it. Would be useful if you ever hot-add devices.
+
+Set_Res (0x71) proper parsing -- EchonetGO sends SetC and gets a response back, but doesn't actually parse the Set_Res to confirm the write succeeded or extract the updated values. Would improve reliability of MQTT commands.
+
+SetC_SNA / SetI_SNA (0x51/0x50) handling -- When a device can't process a write, it responds with these. EchonetGO currently doesn't distinguish "write succeeded" from "write not available." Would give better error reporting.
+
+INF_REQ (0x63) -- Explicitly ask a device to start sending notifications for specific properties. Devices seem to just push on their own once someone is listening on multicast, but the spec defines it. Might be needed if you discover devices that don't push spontaneously.
