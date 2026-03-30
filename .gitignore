@@ -65,4 +65,7 @@ etc/config.yaml
 .gemini/
 gha-creds-*.json
 GEMINI.md
+.claude/
+.ai/
 
+TODO.txt
