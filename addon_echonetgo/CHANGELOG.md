@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.32
+- **Docs**: Updated README to reflect light entity support across feature descriptions and file layout.
+- **MRA reference**: Added download reference for the ECHONET Lite Machine Readable Appendix (`echonet_specs/MRA_README.md`). MRA data itself is gitignored.
+
 ## 0.9.31
 - **Device names in protocol logs**: ECHONET Lite client and transport log messages now include the configured device name alongside the IP address (e.g. `timeout waiting for response from ac_av (192.168.3.249)` instead of just the IP). Uses an optional name resolver wired from the device config at startup.
 - **Device name sanitization**: Device names from config are sanitized at load time to prevent log injection (control characters stripped) and MQTT topic corruption (`/`, `+`, `#` replaced with `_`). All printable Unicode including CJK characters is preserved.
