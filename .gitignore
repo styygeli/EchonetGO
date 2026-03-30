@@ -69,4 +69,7 @@ GEMINI.md
 .ai/
 CLAUDE.md
 
+# MRA data (download from https://echonet.jp/spec_mra_rr3/)
+echonet_specs/MRA_*/
+
 TODO.txt
