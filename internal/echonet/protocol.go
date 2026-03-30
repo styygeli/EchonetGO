@@ -15,11 +15,13 @@ const (
 	echonetPort    = 3610
 	ehd1           = 0x10
 	ehd2           = 0x81
-	esvGet         = 0x62
-	esvGetRes      = 0x72
+	esvSetI        = 0x60
 	esvSetC        = 0x61
-	esvSetRes      = 0x71
+	esvGet         = 0x62
+	esvSetISNA     = 0x50
 	esvSetCSNA     = 0x51
+	esvGetRes      = 0x72
+	esvSetRes      = 0x71
 	esvINF         = 0x73
 	esvINFC        = 0x74
 	esvINFCRes     = 0x7A
@@ -54,6 +56,22 @@ func GetRequest(tid uint16, eoj [3]byte, epcs []byte) []byte {
 	for _, epc := range epcs {
 		b = append(b, epc, 0)
 	}
+	return b
+}
+
+// SetIRequest builds an ECHONET Lite SetI frame (single property, no response expected).
+func SetIRequest(tid uint16, eoj [3]byte, epc byte, edt []byte) []byte {
+	pdc := byte(len(edt))
+	n := 4 + 2 + 3 + 3 + 1 + 1 + 2 + len(edt)
+	b := make([]byte, 0, n)
+	b = append(b, ehd1, ehd2)
+	b = append(b, byte(tid>>8), byte(tid))
+	b = append(b, seojController, seojClass, seojInstance)
+	b = append(b, eoj[0], eoj[1], eoj[2])
+	b = append(b, esvSetI)
+	b = append(b, 1)
+	b = append(b, epc, pdc)
+	b = append(b, edt...)
 	return b
 }
 
@@ -186,6 +204,11 @@ func isGetSNA(err error) bool {
 func isSetSNA(err error) bool {
 	var esvErr *ESVError
 	return errors.As(err, &esvErr) && esvErr.ESV == 0x51
+}
+
+func isSetISNA(err error) bool {
+	var esvErr *ESVError
+	return errors.As(err, &esvErr) && esvErr.ESV == 0x50
 }
 
 func formatEOJ(eoj [3]byte) string { return fmt.Sprintf("0x%02x%02x%02x", eoj[0], eoj[1], eoj[2]) }

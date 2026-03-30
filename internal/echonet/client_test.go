@@ -222,6 +222,75 @@ func TestParseSetRes(t *testing.T) {
 	})
 }
 
+func TestSetIRequest(t *testing.T) {
+	eoj := [3]byte{0x01, 0x30, 0x01}
+	edt := []byte{0x30}
+	frame := SetIRequest(0x0001, eoj, 0x80, edt)
+
+	// Verify header
+	if frame[0] != 0x10 || frame[1] != 0x81 {
+		t.Fatalf("EHD = %02x %02x, want 10 81", frame[0], frame[1])
+	}
+	// Verify TID
+	if frame[2] != 0x00 || frame[3] != 0x01 {
+		t.Fatalf("TID = %02x%02x, want 0001", frame[2], frame[3])
+	}
+	// Verify SEOJ (controller)
+	if frame[4] != 0x05 || frame[5] != 0xFF || frame[6] != 0x01 {
+		t.Fatalf("SEOJ = %02x%02x%02x, want 05FF01", frame[4], frame[5], frame[6])
+	}
+	// Verify DEOJ
+	if frame[7] != 0x01 || frame[8] != 0x30 || frame[9] != 0x01 {
+		t.Fatalf("DEOJ = %02x%02x%02x, want 013001", frame[7], frame[8], frame[9])
+	}
+	// Verify ESV = SetI (0x60)
+	if frame[10] != 0x60 {
+		t.Fatalf("ESV = 0x%02x, want 0x60 (SetI)", frame[10])
+	}
+	// Verify OPC=1, EPC=0x80, PDC=1, EDT=0x30
+	if frame[11] != 0x01 {
+		t.Fatalf("OPC = %d, want 1", frame[11])
+	}
+	if frame[12] != 0x80 {
+		t.Fatalf("EPC = 0x%02x, want 0x80", frame[12])
+	}
+	if frame[13] != 0x01 {
+		t.Fatalf("PDC = %d, want 1", frame[13])
+	}
+	if frame[14] != 0x30 {
+		t.Fatalf("EDT = 0x%02x, want 0x30", frame[14])
+	}
+	if len(frame) != 15 {
+		t.Fatalf("frame length = %d, want 15", len(frame))
+	}
+}
+
+func TestSetISNA(t *testing.T) {
+	frame := []byte{
+		0x10, 0x81,
+		0x00, 0x01,
+		0x01, 0x30, 0x01,
+		0x05, 0xFF, 0x01,
+		0x50, // SetI_SNA
+		0x01,
+		0x80, 0x01, 0x30,
+	}
+	_, esv, _, err := parseFrame(frame)
+	if err != nil {
+		t.Fatalf("parseFrame() error = %v", err)
+	}
+	if esv != 0x50 {
+		t.Fatalf("ESV = 0x%02x, want 0x50", esv)
+	}
+	esvErr := &ESVError{ESV: esv}
+	if !isSetISNA(esvErr) {
+		t.Fatal("isSetISNA() = false, want true")
+	}
+	if isSetSNA(esvErr) {
+		t.Fatal("isSetSNA() = true for SetI_SNA, want false")
+	}
+}
+
 func TestDecodePropertyMap(t *testing.T) {
 	t.Run("short list format", func(t *testing.T) {
 		got := decodePropertyMap([]byte{0x02, 0x80, 0xB3})

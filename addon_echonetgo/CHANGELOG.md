@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.28
+- **SETI protocol support**: Add SetI (ESV 0x60) fire-and-forget write support to the ECHONET Lite protocol layer. New `SendSetI` client method sends SET commands without waiting for a device response, useful for non-critical property writes. Includes `SendFireAndForget` transport method with per-host serialization, frame builder, and SetI_SNA (0x50) detection.
+
 ## 0.9.27
 - **Multi-stage verification**: Implement a robust verification loop for SET commands. Instead of a single 500ms delay, the service now polls the device at 1s, 4s, and 7s intervals after a successful command acknowledgment.
 - **Real data priority**: Replaces the previous verification logic to ensure Home Assistant reflects real device registers rather than optimistic assumptions. If the device takes several seconds to apply a change (common in Ecocute units), EchonetGO will eventually see the change and solidify the UI.
