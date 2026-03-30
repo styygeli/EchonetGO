@@ -69,6 +69,13 @@ func (c *Client) SendSet(ctx context.Context, addr string, eoj [3]byte, epc byte
 	return raw, nil
 }
 
+// SendSetI sends a SetI request (fire-and-forget, no response expected).
+func (c *Client) SendSetI(ctx context.Context, addr string, eoj [3]byte, epc byte, edt []byte) error {
+	tid := c.transport.NextTID()
+	req := SetIRequest(tid, eoj, epc, edt)
+	return c.transport.SendFireAndForget(ctx, addr, req)
+}
+
 // GetProps fetches requested EPCs and adaptively splits when devices return partial responses.
 func (c *Client) GetProps(ctx context.Context, addr string, eoj [3]byte, epcs []byte) ([]model.GetResProperty, error) {
 	return c.getPropsAdaptive(ctx, addr, eoj, epcs, 0)

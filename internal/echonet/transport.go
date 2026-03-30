@@ -233,6 +233,34 @@ func (t *Transport) Send(ctx context.Context, addr string, req []byte, tid uint1
 	return resp, nil
 }
 
+// SendFireAndForget sends a raw ECHONET frame without waiting for a response.
+// Used for SetI (ESV 0x60) where the device is not expected to reply.
+// Per-host serialization is still enforced to avoid interleaving with other requests.
+func (t *Transport) SendFireAndForget(ctx context.Context, addr string, req []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	hostKey := normalizeHost(addr)
+	hostLock := t.lockForHost(hostKey)
+	hostLock.Lock()
+	defer hostLock.Unlock()
+
+	host := addr
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		host = net.JoinHostPort(addr, fmt.Sprint(echonetPort))
+	}
+	remoteAddr, err := net.ResolveUDPAddr("udp4", host)
+	if err != nil {
+		return err
+	}
+	conn, err := t.getOrCreateFixedConn()
+	if err != nil {
+		return err
+	}
+	_, err = conn.WriteToUDP(req, remoteAddr)
+	return err
+}
+
 func (t *Transport) sendWithRetry(ctx context.Context, host string, req []byte, tid uint16, hostKey string, localPort int, timeout time.Duration) ([]byte, error) {
 	var lastErr error
 	for attempt := 1; attempt <= maxSendAttempts; attempt++ {
