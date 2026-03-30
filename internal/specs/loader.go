@@ -54,6 +54,15 @@ type deviceYAML struct {
 	DefaultScrapeInterval string       `yaml:"default_scrape_interval"`
 	Metrics               []metricYAML `yaml:"metrics"`
 	Climate               *climateYAML `yaml:"climate"`
+	Light                 *lightYAML   `yaml:"light"`
+}
+
+type lightYAML struct {
+	BrightnessEPC   int            `yaml:"brightness_epc"`
+	ColorSettingEPC int            `yaml:"color_setting_epc"`
+	ColorSettings   map[string]int `yaml:"color_settings"`
+	SceneEPC        int            `yaml:"scene_epc"`
+	MaxScenes       int            `yaml:"max_scenes"`
 }
 
 type climateYAML struct {
@@ -238,6 +247,13 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		}
 		spec.Climate = cl
 	}
+	if raw.Light != nil {
+		lt, err := parseLightYAML(raw.Light)
+		if err != nil {
+			return nil, err
+		}
+		spec.Light = lt
+	}
 	return spec, nil
 }
 
@@ -329,6 +345,37 @@ func parseClimateYAML(raw *climateYAML) (*ClimateSpec, error) {
 		MaxTemp:               raw.MaxTemp,
 		TempStep:              raw.TempStep,
 		Modes:                 raw.Modes,
+	}, nil
+}
+
+func parseLightYAML(raw *lightYAML) (*LightSpec, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	if raw.BrightnessEPC < 0 || raw.BrightnessEPC > 0xFF {
+		return nil, fmt.Errorf("light.brightness_epc must be 0..255, got %d", raw.BrightnessEPC)
+	}
+	if raw.BrightnessEPC == 0 {
+		return nil, fmt.Errorf("light.brightness_epc is required (a light without brightness is just a switch)")
+	}
+	if raw.ColorSettingEPC < 0 || raw.ColorSettingEPC > 0xFF {
+		return nil, fmt.Errorf("light.color_setting_epc must be 0..255, got %d", raw.ColorSettingEPC)
+	}
+	if raw.ColorSettingEPC != 0 && len(raw.ColorSettings) == 0 {
+		return nil, fmt.Errorf("light.color_settings must be non-empty when color_setting_epc is set")
+	}
+	if raw.SceneEPC < 0 || raw.SceneEPC > 0xFF {
+		return nil, fmt.Errorf("light.scene_epc must be 0..255, got %d", raw.SceneEPC)
+	}
+	if raw.SceneEPC != 0 && raw.MaxScenes <= 0 {
+		return nil, fmt.Errorf("light.max_scenes must be positive when scene_epc is set")
+	}
+	return &LightSpec{
+		BrightnessEPC:   byte(raw.BrightnessEPC),
+		ColorSettingEPC: byte(raw.ColorSettingEPC),
+		ColorSettings:   raw.ColorSettings,
+		SceneEPC:        byte(raw.SceneEPC),
+		MaxScenes:       raw.MaxScenes,
 	}, nil
 }
 

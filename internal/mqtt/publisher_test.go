@@ -215,6 +215,82 @@ func TestIsClimateEPC(t *testing.T) {
 	}
 }
 
+func TestIsLightEPC(t *testing.T) {
+	lt := &specs.LightSpec{BrightnessEPC: 0xB0, ColorSettingEPC: 0xB1}
+	tests := []struct {
+		epc  byte
+		lt   *specs.LightSpec
+		want bool
+	}{
+		{0x80, lt, true},
+		{0xB0, lt, true},
+		{0xB1, lt, true},
+		{0x88, lt, false},
+		{0xB3, lt, false},
+		{0x80, nil, false},
+	}
+	for _, tt := range tests {
+		got := isLightEPC(tt.epc, tt.lt)
+		if got != tt.want {
+			t.Errorf("isLightEPC(0x%02x, lt) = %v, want %v", tt.epc, got, tt.want)
+		}
+	}
+}
+
+func TestIsLightEPC_WithScenes(t *testing.T) {
+	lt := &specs.LightSpec{BrightnessEPC: 0xB0, SceneEPC: 0xC0, MaxScenes: 16}
+	if !isLightEPC(0xC0, lt) {
+		t.Error("isLightEPC(0xC0, lt) = false, want true for SceneEPC")
+	}
+	if isLightEPC(0xC1, lt) {
+		t.Error("isLightEPC(0xC1, lt) = true, want false (max_scene is read-only, not claimed)")
+	}
+}
+
+func TestHaLightDiscoveryPayload_JSONStructure(t *testing.T) {
+	payload := haLightDiscoveryPayload{
+		Name:                   "Living Room",
+		UniqueID:               "echonetgo_living_room_light",
+		CommandTopic:           "echonetgo/living_room/light/power/set",
+		StateTopic:             "echonetgo/living_room/light/power/state",
+		BrightnessCommandTopic: "echonetgo/living_room/light/brightness/set",
+		BrightnessStateTopic:   "echonetgo/living_room/light/brightness/state",
+		BrightnessScale:        100,
+		EffectCommandTopic:     "echonetgo/living_room/light/effect/set",
+		EffectStateTopic:       "echonetgo/living_room/light/effect/state",
+		EffectList:             []string{"daylight_color", "daylight_white", "incandescent_lamp_color", "white"},
+		AvailabilityTopic:      "echonetgo/living_room/availability",
+		ExpireAfter:            300,
+		Device: haDevice{
+			Identifiers: []string{"echonetgo_living_room"},
+			Name:        "Living Room",
+			ViaDevice:   "echonetgo",
+		},
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if decoded["command_topic"] != "echonetgo/living_room/light/power/set" {
+		t.Fatalf("command_topic = %v", decoded["command_topic"])
+	}
+	if decoded["brightness_scale"] != float64(100) {
+		t.Fatalf("brightness_scale = %v, want 100", decoded["brightness_scale"])
+	}
+	effects, _ := decoded["effect_list"].([]interface{})
+	if len(effects) != 4 {
+		t.Fatalf("effect_list len = %d, want 4", len(effects))
+	}
+	device, _ := decoded["device"].(map[string]interface{})
+	if device == nil {
+		t.Fatal("device missing")
+	}
+}
+
 func TestClimateModesList(t *testing.T) {
 	i41, i42, i43 := 0x41, 0x42, 0x43
 	modes := map[string]*int{"off": nil, "auto": &i41, "cool": &i42, "heat": &i43}

@@ -3,6 +3,7 @@ package mqtt
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +61,12 @@ func (c *Commander) Run(ctx context.Context, mqttClient pahomqtt.Client, readyFu
 		mqttLog.Warnf("commander subscribe failed: %v", err)
 		return
 	}
+	// Subscribe to light command topics: {prefix}/{device}/light/#
+	lightTopic := c.topicPrefix + "/+/light/#"
+	tok := mqttClient.Subscribe(lightTopic, 1, c.handleLightMessage)
+	if !tok.WaitTimeout(connectTimeout) || tok.Error() != nil {
+		mqttLog.Warnf("commander subscribe failed for %s", lightTopic)
+	}
 	// Subscribe to switch/select/number command topics
 	for _, entityType := range []string{"switch", "select", "number"} {
 		topic := c.topicPrefix + "/+/" + entityType + "/+/set"
@@ -68,12 +75,13 @@ func (c *Commander) Run(ctx context.Context, mqttClient pahomqtt.Client, readyFu
 			mqttLog.Warnf("commander subscribe failed for %s", topic)
 		}
 	}
-	mqttLog.Infof("commander subscribed to %s and switch/select/number", climateTopic)
+	mqttLog.Infof("commander subscribed to %s, %s, and switch/select/number", climateTopic, lightTopic)
 	if readyFunc != nil {
 		readyFunc()
 	}
 	<-ctx.Done()
 	_ = mqttClient.Unsubscribe(climateTopic)
+	_ = mqttClient.Unsubscribe(lightTopic)
 	for _, entityType := range []string{"switch", "select", "number"} {
 		_ = mqttClient.Unsubscribe(c.topicPrefix + "/+/" + entityType + "/+/set")
 	}
@@ -165,6 +173,7 @@ func (c *Commander) handleWritableMessage(_ pahomqtt.Client, msg pahomqtt.Messag
 	}
 	writable, _ := c.cache.GetWritableEPCs(*dev)
 	climateSpec := c.cache.GetDeviceClimate(*dev)
+	lightSpec := c.cache.GetDeviceLight(*dev)
 	ms := metricSpecByName(metricSpecs, metricName)
 	if ms == nil {
 		mqttLog.Warnf("commander: unknown metric %q for device %s", metricName, deviceName)
@@ -175,6 +184,9 @@ func (c *Commander) handleWritableMessage(_ pahomqtt.Client, msg pahomqtt.Messag
 		return
 	}
 	if isClimateEPC(ms.EPC, climateSpec) {
+		return
+	}
+	if isLightEPC(ms.EPC, lightSpec) {
 		return
 	}
 	if ms.ExcludeSet {
@@ -430,6 +442,169 @@ func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [
 		return
 	}
 	mqttLog.Infof("commander: set %s fan_mode %s", dev.Name, payload)
+	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
+}
+
+func (c *Commander) handleLightMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
+	topic := msg.Topic()
+	payload := strings.TrimSpace(string(msg.Payload()))
+	if payload == "" {
+		return
+	}
+	parts := strings.Split(topic, "/")
+	if len(parts) < 4 {
+		return
+	}
+	deviceName := parts[1]
+	if parts[2] != "light" {
+		return
+	}
+	attr := parts[3]
+	isSet := len(parts) > 4 && parts[4] == "set"
+	if !isSet {
+		return
+	}
+	dev := c.deviceByName(deviceName)
+	if dev == nil {
+		mqttLog.Warnf("commander: unknown device %q", deviceName)
+		return
+	}
+	eoj, ok := c.cache.GetDeviceEOJ(*dev)
+	if !ok {
+		mqttLog.Warnf("commander: no EOJ for device %s", deviceName)
+		return
+	}
+	metricSpecs, _ := c.cache.GetDeviceSpecs(*dev)
+	lightSpec := c.cache.GetDeviceLight(*dev)
+	writable, _ := c.cache.GetWritableEPCs(*dev)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	addr := dev.IP + ":3610"
+
+	switch attr {
+	case "power":
+		c.handleLightPower(ctx, addr, eoj, dev, payload, writable)
+	case "brightness":
+		c.handleLightBrightness(ctx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
+	case "effect":
+		c.handleLightEffect(ctx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
+	default:
+		mqttLog.Debugf("commander: ignored light attribute %q", attr)
+	}
+}
+
+func (c *Commander) handleLightPower(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}) {
+	if _, ok := writable[operationStatusEPC]; !ok {
+		mqttLog.Warnf("commander: device %s operation_status (0x80) not writable", dev.Name)
+		return
+	}
+	var edt []byte
+	switch strings.ToUpper(payload) {
+	case "ON", "1", "TRUE":
+		edt = []byte{onStatus}
+	case "OFF", "0", "FALSE":
+		edt = []byte{offStatus}
+	default:
+		mqttLog.Warnf("commander: invalid light power payload %q", payload)
+		return
+	}
+	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, edt)
+	if err != nil {
+		mqttLog.Warnf("commander: Set 0x80 failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
+		return
+	}
+	mqttLog.Infof("commander: set %s light power %s", dev.Name, payload)
+	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: edt}})
+}
+
+func (c *Commander) handleLightBrightness(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+	if lightSpec == nil || lightSpec.BrightnessEPC == 0 {
+		return
+	}
+	epc := lightSpec.BrightnessEPC
+	if _, ok := writable[epc]; !ok {
+		mqttLog.Warnf("commander: device %s brightness EPC 0x%02x not writable", dev.Name, epc)
+		return
+	}
+	brightness, err := strconv.ParseFloat(payload, 64)
+	if err != nil {
+		mqttLog.Warnf("commander: invalid brightness payload %q: %v", payload, err)
+		return
+	}
+	ms := metricSpecByEPC(metricSpecs, epc)
+	if ms == nil {
+		mqttLog.Warnf("commander: no metric spec for brightness EPC 0x%02x", epc)
+		return
+	}
+	edt, err := echonet.EncodeValueToEDT(brightness, *ms)
+	if err != nil {
+		mqttLog.Warnf("commander: encode brightness failed: %v", err)
+		return
+	}
+	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
+	if err != nil {
+		mqttLog.Warnf("commander: Set brightness failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, epc)
+		return
+	}
+	mqttLog.Infof("commander: set %s brightness %s", dev.Name, payload)
+	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
+}
+
+func (c *Commander) handleLightEffect(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+	if lightSpec == nil {
+		return
+	}
+	var epc byte
+	var value float64
+
+	if lightSpec.ColorSettingEPC != 0 {
+		epc = lightSpec.ColorSettingEPC
+		raw, ok := lightSpec.ColorSettings[payload]
+		if !ok {
+			mqttLog.Warnf("commander: unknown light effect %q for %s", payload, dev.Name)
+			return
+		}
+		value = float64(raw)
+	} else if lightSpec.SceneEPC != 0 {
+		epc = lightSpec.SceneEPC
+		var sceneNum int
+		if _, err := fmt.Sscanf(payload, "scene_%d", &sceneNum); err != nil {
+			mqttLog.Warnf("commander: invalid scene effect %q for %s: %v", payload, dev.Name, err)
+			return
+		}
+		if sceneNum < 1 || (lightSpec.MaxScenes > 0 && sceneNum > lightSpec.MaxScenes) {
+			mqttLog.Warnf("commander: scene %d out of range for %s (max %d)", sceneNum, dev.Name, lightSpec.MaxScenes)
+			return
+		}
+		value = float64(sceneNum)
+	} else {
+		return
+	}
+
+	if _, ok := writable[epc]; !ok {
+		mqttLog.Warnf("commander: device %s effect EPC 0x%02x not writable", dev.Name, epc)
+		return
+	}
+	ms := metricSpecByEPC(metricSpecs, epc)
+	if ms == nil {
+		mqttLog.Warnf("commander: no metric spec for effect EPC 0x%02x", epc)
+		return
+	}
+	edt, err := echonet.EncodeValueToEDT(value, *ms)
+	if err != nil {
+		mqttLog.Warnf("commander: encode effect failed: %v", err)
+		return
+	}
+	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
+	if err != nil {
+		mqttLog.Warnf("commander: Set effect failed for %s: %v", dev.Name, err)
+		c.triggerStateUpdate(dev, 0, eoj, epc)
+		return
+	}
+	mqttLog.Infof("commander: set %s effect %s", dev.Name, payload)
 	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 

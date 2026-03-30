@@ -93,7 +93,7 @@ func TestUpdateFromINF_MergesAndCallsCallback(t *testing.T) {
 
 	var cbCalled int
 	var cbMetrics map[string]echonet.MetricValue
-	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, success bool) {
+	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ *specs.LightSpec, success bool) {
 		cbCalled++
 		cbMetrics = m
 		if !success {

@@ -31,3 +31,8 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+
+light:
+  brightness_epc: 0xB0
+  scene_epc: 0xC0
+  max_scenes: 16

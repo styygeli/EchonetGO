@@ -407,6 +407,231 @@ metrics:
 	})
 }
 
+func TestParseDeviceYAML_LightSpec_FullFeatures(t *testing.T) {
+	data := []byte(`
+eoj: [0x02, 0x90, 0x01]
+description: "general lighting"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+    enum:
+      0x30: on
+      0x31: off
+  - epc: 0xB0
+    name: illuminance_level
+    size: 1
+    type: gauge
+  - epc: 0xB1
+    name: light_color_setting
+    size: 1
+    type: gauge
+    enum:
+      0x41: incandescent_lamp_color
+      0x42: white
+      0x43: daylight_white
+      0x44: daylight_color
+light:
+  brightness_epc: 0xB0
+  color_setting_epc: 0xB1
+  color_settings:
+    incandescent_lamp_color: 0x41
+    white: 0x42
+    daylight_white: 0x43
+    daylight_color: 0x44
+`)
+	spec, err := parseDeviceYAML(data)
+	if err != nil {
+		t.Fatalf("parseDeviceYAML() error = %v", err)
+	}
+	if spec.Light == nil {
+		t.Fatal("expected LightSpec, got nil")
+	}
+	lt := spec.Light
+	if lt.BrightnessEPC != 0xB0 {
+		t.Fatalf("BrightnessEPC = 0x%02x, want 0xB0", lt.BrightnessEPC)
+	}
+	if lt.ColorSettingEPC != 0xB1 {
+		t.Fatalf("ColorSettingEPC = 0x%02x, want 0xB1", lt.ColorSettingEPC)
+	}
+	if len(lt.ColorSettings) != 4 {
+		t.Fatalf("len(ColorSettings) = %d, want 4", len(lt.ColorSettings))
+	}
+	if lt.ColorSettings["white"] != 0x42 {
+		t.Fatalf("ColorSettings[white] = 0x%02x, want 0x42", lt.ColorSettings["white"])
+	}
+	if lt.SceneEPC != 0 {
+		t.Fatalf("SceneEPC = 0x%02x, want 0", lt.SceneEPC)
+	}
+}
+
+func TestParseDeviceYAML_LightSpec_BrightnessOnly(t *testing.T) {
+	data := []byte(`
+eoj: [0x02, 0x91, 0x01]
+description: "single function lighting"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+  - epc: 0xB0
+    name: illuminance_level_setting
+    size: 1
+    type: gauge
+light:
+  brightness_epc: 0xB0
+`)
+	spec, err := parseDeviceYAML(data)
+	if err != nil {
+		t.Fatalf("parseDeviceYAML() error = %v", err)
+	}
+	if spec.Light == nil {
+		t.Fatal("expected LightSpec, got nil")
+	}
+	if spec.Light.BrightnessEPC != 0xB0 {
+		t.Fatalf("BrightnessEPC = 0x%02x, want 0xB0", spec.Light.BrightnessEPC)
+	}
+	if spec.Light.ColorSettingEPC != 0 {
+		t.Fatalf("ColorSettingEPC = 0x%02x, want 0", spec.Light.ColorSettingEPC)
+	}
+	if spec.Light.SceneEPC != 0 {
+		t.Fatalf("SceneEPC = 0x%02x, want 0", spec.Light.SceneEPC)
+	}
+}
+
+func TestParseDeviceYAML_LightSpec_WithScenes(t *testing.T) {
+	data := []byte(`
+eoj: [0x02, 0xA3, 0x01]
+description: "lighting system"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+  - epc: 0xB0
+    name: illuminance_level_setting
+    size: 1
+    type: gauge
+  - epc: 0xC0
+    name: scene_control_setting
+    size: 1
+    type: gauge
+light:
+  brightness_epc: 0xB0
+  scene_epc: 0xC0
+  max_scenes: 16
+`)
+	spec, err := parseDeviceYAML(data)
+	if err != nil {
+		t.Fatalf("parseDeviceYAML() error = %v", err)
+	}
+	if spec.Light == nil {
+		t.Fatal("expected LightSpec, got nil")
+	}
+	lt := spec.Light
+	if lt.SceneEPC != 0xC0 {
+		t.Fatalf("SceneEPC = 0x%02x, want 0xC0", lt.SceneEPC)
+	}
+	if lt.MaxScenes != 16 {
+		t.Fatalf("MaxScenes = %d, want 16", lt.MaxScenes)
+	}
+}
+
+func TestParseDeviceYAML_LightSpec_RejectsNoBrightness(t *testing.T) {
+	data := []byte(`
+eoj: [0x02, 0x90, 0x01]
+description: "test"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+light:
+  color_setting_epc: 0xB1
+  color_settings:
+    white: 0x42
+`)
+	_, err := parseDeviceYAML(data)
+	if err == nil {
+		t.Fatal("expected error for light without brightness_epc")
+	}
+	if !strings.Contains(err.Error(), "brightness_epc is required") {
+		t.Fatalf("error = %q, want brightness_epc validation", err)
+	}
+}
+
+func TestParseDeviceYAML_LightSpec_RejectsColorWithoutSettings(t *testing.T) {
+	data := []byte(`
+eoj: [0x02, 0x90, 0x01]
+description: "test"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+  - epc: 0xB0
+    name: illuminance_level
+    size: 1
+    type: gauge
+light:
+  brightness_epc: 0xB0
+  color_setting_epc: 0xB1
+`)
+	_, err := parseDeviceYAML(data)
+	if err == nil {
+		t.Fatal("expected error for color_setting_epc without color_settings")
+	}
+	if !strings.Contains(err.Error(), "color_settings must be non-empty") {
+		t.Fatalf("error = %q, want color_settings validation", err)
+	}
+}
+
+func TestParseDeviceYAML_LightSpec_RejectsSceneWithoutMaxScenes(t *testing.T) {
+	data := []byte(`
+eoj: [0x02, 0xA3, 0x01]
+description: "test"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+  - epc: 0xB0
+    name: illuminance_level
+    size: 1
+    type: gauge
+light:
+  brightness_epc: 0xB0
+  scene_epc: 0xC0
+`)
+	_, err := parseDeviceYAML(data)
+	if err == nil {
+		t.Fatal("expected error for scene_epc without max_scenes")
+	}
+	if !strings.Contains(err.Error(), "max_scenes must be positive") {
+		t.Fatalf("error = %q, want max_scenes validation", err)
+	}
+}
+
+func TestParseDeviceYAML_NoLightSpec(t *testing.T) {
+	data := []byte(`
+eoj: [0x01, 0x30, 0x01]
+description: "ac"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+`)
+	spec, err := parseDeviceYAML(data)
+	if err != nil {
+		t.Fatalf("parseDeviceYAML() error = %v", err)
+	}
+	if spec.Light != nil {
+		t.Fatal("expected nil LightSpec for non-lighting device")
+	}
+}
+
 // TestLoad_NoUnexpectedAutoSize scans all curated spec files and asserts that
 // size: 0 (auto-detect) only appears on known composite/log EPCs that cannot be
 // represented as a single scalar metric. Any new size: 0 must be added to the

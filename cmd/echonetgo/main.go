@@ -58,8 +58,8 @@ func main() {
 			log.Warnf("MQTT disabled: %v", err)
 		} else {
 			log.Infof("MQTT publishing to %s", cfg.MQTT.Broker)
-			cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, success bool) {
-				mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, writable, climateSpec, success)
+			cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool) {
+				mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, writable, climateSpec, lightSpec, success)
 			})
 			readiness.Register("commander")
 			// Commander will be started after ctx is created (below)
