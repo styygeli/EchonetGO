@@ -9,6 +9,7 @@ type DeviceSpec struct {
 	DefaultScrapeInterval time.Duration
 	Metrics               []MetricSpec
 	Climate               *ClimateSpec // optional: for Home AC climate entity
+	Light                 *LightSpec   // optional: for lighting device light entity
 }
 
 // ClimateSpec defines HA climate entity mapping for a device class (e.g. home_ac).
@@ -22,6 +23,16 @@ type ClimateSpec struct {
 	MaxTemp                 float64
 	TempStep                float64
 	Modes                   map[string]*int // HA mode label -> ECHONET raw value; nil for "off"
+}
+
+// LightSpec defines HA light entity mapping for lighting device classes.
+// Power on/off is always via operation_status (0x80).
+type LightSpec struct {
+	BrightnessEPC   byte           // 0 = no brightness support
+	ColorSettingEPC byte           // 0 = no color setting (enum-based effects)
+	ColorSettings   map[string]int // effect label -> ECHONET raw value
+	SceneEPC        byte           // 0 = no scene support
+	MaxScenes       int            // max scene number
 }
 
 // MetricSpec defines one EPC to poll and how to interpret it.

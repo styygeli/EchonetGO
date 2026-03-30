@@ -99,16 +99,19 @@ func (p *Publisher) Disconnect() {
 }
 
 // PublishDeviceState publishes state for a device and ensures discovery has been sent.
-func (p *Publisher) PublishDeviceState(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, success bool) {
+func (p *Publisher) PublishDeviceState(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool) {
 	p.publishAvailability(dev, success)
 	if success && len(metrics) > 0 {
-		p.ensureDiscovery(dev, info, metricSpecs, writable, climateSpec, metrics)
+		p.ensureDiscovery(dev, info, metricSpecs, writable, climateSpec, lightSpec, metrics)
 		p.publishState(dev, metrics)
 		if climateSpec != nil {
 			p.publishClimateState(dev, metrics, metricSpecs, climateSpec)
 		}
+		if lightSpec != nil {
+			p.publishLightState(dev, metrics, metricSpecs, lightSpec)
+		}
 		if writable != nil {
-			p.publishWritableState(dev, metrics, metricSpecs, writable, climateSpec)
+			p.publishWritableState(dev, metrics, metricSpecs, writable, climateSpec, lightSpec)
 		}
 	}
 }
@@ -163,12 +166,61 @@ func (p *Publisher) publishClimateState(dev config.Device, metrics map[string]ec
 	}
 }
 
-func (p *Publisher) publishWritableState(dev config.Device, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec) {
+func (p *Publisher) publishLightState(dev config.Device, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, lt *specs.LightSpec) {
+	base := fmt.Sprintf("%s/%s/light", p.topicPrefix, dev.Name)
+
+	// Power state from operation_status (0x80).
+	opName := metricNameForEPC(metricSpecs, 0x80)
+	if opName != "" {
+		if mv, ok := metrics[opName]; ok {
+			if int(mv.Value) == 0x30 {
+				p.client.Publish(base+"/power/state", qos, false, "ON")
+			} else {
+				p.client.Publish(base+"/power/state", qos, false, "OFF")
+			}
+		}
+	}
+
+	// Brightness state.
+	if lt.BrightnessEPC != 0 {
+		brightnessName := metricNameForEPC(metricSpecs, lt.BrightnessEPC)
+		if brightnessName != "" {
+			if mv, ok := metrics[brightnessName]; ok {
+				p.client.Publish(base+"/brightness/state", qos, false, fmt.Sprintf("%.0f", mv.Value))
+			}
+		}
+	}
+
+	// Effect state from color setting or scene.
+	if lt.ColorSettingEPC != 0 {
+		colorName := metricNameForEPC(metricSpecs, lt.ColorSettingEPC)
+		if colorName != "" {
+			if mv, ok := metrics[colorName]; ok && mv.EnumLabel != "" {
+				// Only publish if the label is in our color_settings map.
+				if _, inSettings := lt.ColorSettings[mv.EnumLabel]; inSettings {
+					p.client.Publish(base+"/effect/state", qos, false, mv.EnumLabel)
+				}
+			}
+		}
+	} else if lt.SceneEPC != 0 {
+		sceneName := metricNameForEPC(metricSpecs, lt.SceneEPC)
+		if sceneName != "" {
+			if mv, ok := metrics[sceneName]; ok && mv.Value >= 1 {
+				p.client.Publish(base+"/effect/state", qos, false, fmt.Sprintf("scene_%.0f", mv.Value))
+			}
+		}
+	}
+}
+
+func (p *Publisher) publishWritableState(dev config.Device, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec) {
 	for _, ms := range metricSpecs {
 		if _, ok := writable[ms.EPC]; !ok {
 			continue
 		}
 		if isClimateEPC(ms.EPC, climateSpec) {
+			continue
+		}
+		if isLightEPC(ms.EPC, lightSpec) {
 			continue
 		}
 		entityType := writableEntityType(ms)

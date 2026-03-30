@@ -113,6 +113,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 				}
 				c.SetDeviceSpecs(dev, activeMetrics)
 				c.SetDeviceClimate(dev, spec.Climate)
+				c.SetDeviceLight(dev, spec.Light)
 
 				devDefaultInterval := spec.DefaultScrapeInterval
 				if dev.ScrapeInterval != "" {

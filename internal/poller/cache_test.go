@@ -18,7 +18,7 @@ func TestSetOnUpdate_CallbackFiresOnUpdate(t *testing.T) {
 	var lastDev config.Device
 	var lastSuccess bool
 	var lastMetrics map[string]echonet.MetricValue
-	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, success bool) {
+	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ *specs.LightSpec, success bool) {
 		callCount++
 		lastDev = d
 		lastSuccess = success
@@ -63,7 +63,7 @@ func TestSetDeviceSpecs_OnUpdateReceivesSpecs(t *testing.T) {
 	c.SetDeviceSpecs(dev, metricSpecs)
 
 	var receivedSpecs []specs.MetricSpec
-	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, ms []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, success bool) {
+	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, ms []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ *specs.LightSpec, success bool) {
 		receivedSpecs = ms
 	})
 
@@ -82,6 +82,45 @@ func TestSetDeviceSpecs_OnUpdateReceivesSpecs(t *testing.T) {
 	}
 }
 
+func TestSetDeviceLight_CallbackReceivesLightSpec(t *testing.T) {
+	c := NewCache()
+	dev := config.Device{Name: "ceiling_light", IP: "192.168.1.50", Class: "general_lighting"}
+	lightSpec := &specs.LightSpec{
+		BrightnessEPC:   0xB0,
+		ColorSettingEPC: 0xB1,
+		ColorSettings:   map[string]int{"white": 0x42, "daylight_white": 0x43},
+	}
+	c.SetDeviceLight(dev, lightSpec)
+	c.SetDeviceSpecs(dev, []specs.MetricSpec{
+		{EPC: 0xB0, Name: "illuminance_level", Type: "gauge"},
+	})
+
+	var receivedLight *specs.LightSpec
+	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, _ map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, lt *specs.LightSpec, _ bool) {
+		receivedLight = lt
+	})
+
+	c.Update(dev, "1m", time.Minute, true, 0.1, map[string]echonet.MetricValue{
+		"illuminance_level": {Value: 80, Type: "gauge"},
+	}, "")
+
+	if receivedLight == nil {
+		t.Fatal("callback should receive non-nil LightSpec")
+	}
+	if receivedLight.BrightnessEPC != 0xB0 {
+		t.Fatalf("BrightnessEPC = 0x%02x, want 0xB0", receivedLight.BrightnessEPC)
+	}
+	if len(receivedLight.ColorSettings) != 2 {
+		t.Fatalf("len(ColorSettings) = %d, want 2", len(receivedLight.ColorSettings))
+	}
+
+	// Verify GetDeviceLight also works.
+	got := c.GetDeviceLight(dev)
+	if got == nil || got.BrightnessEPC != 0xB0 {
+		t.Fatalf("GetDeviceLight() = %v, want non-nil with BrightnessEPC=0xB0", got)
+	}
+}
+
 func TestSetOnUpdate_CallbackReceivesAggregatedMetrics(t *testing.T) {
 	c := NewCache()
 	dev := config.Device{Name: "battery", IP: "10.0.0.1", Class: "storage_battery"}
@@ -89,7 +128,7 @@ func TestSetOnUpdate_CallbackReceivesAggregatedMetrics(t *testing.T) {
 
 	var mu sync.Mutex
 	var lastMetrics map[string]echonet.MetricValue
-	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ bool) {
+	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ *specs.LightSpec, _ bool) {
 		mu.Lock()
 		lastMetrics = make(map[string]echonet.MetricValue, len(m))
 		for k, v := range m {

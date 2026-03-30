@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.30
+- **Light entity type**: Expose lighting devices (general_lighting 0x0290, single_function_lighting 0x0291, lighting_system 0x02A3) as proper HA `light` entities with brightness and effect controls, instead of decomposed switch/number entities. Brightness uses `brightness_scale: 100` mapping ECHONET's 0-100 illuminance range. Color presets (incandescent, white, daylight_white, daylight_color) and scene selection map to HA effects. New `light:` YAML spec section defines brightness_epc, color_setting_epc/color_settings, and scene_epc/max_scenes per device class.
+
 ## 0.9.29
 - **SETI spec wiring**: Add `set_mode: seti` YAML field for metrics. When set, the commander uses fire-and-forget SetI (ESV 0x60) instead of SetC, skipping response validation and multi-stage verification. Useful for non-critical property writes where blocking on device acknowledgment is unnecessary.
 

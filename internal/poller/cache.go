@@ -12,7 +12,8 @@ import (
 // UpdateCallback is called after a scrape with the device's current state.
 // writable is the set of EPCs the device reports as writable (0x9E); may be nil.
 // climateSpec is non-nil for device classes that support HA climate (e.g. home_ac).
-type UpdateCallback func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, success bool)
+// lightSpec is non-nil for device classes that support HA light (e.g. general_lighting).
+type UpdateCallback func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool)
 
 // Cache holds the latest scraped metrics per device. Safe for concurrent use.
 type Cache struct {
@@ -21,6 +22,7 @@ type Cache struct {
 	onUpdate      UpdateCallback
 	specsByDev    map[string][]specs.MetricSpec   // filtered specs per device key
 	climateByDev  map[string]*specs.ClimateSpec   // device key -> climate spec if AC
+	lightByDev    map[string]*specs.LightSpec    // device key -> light spec if lighting
 	writableEPCs  map[string]map[byte]struct{}    // device key -> set of writable EPCs (from 0x9E)
 	eojByDev      map[string][3]byte              // device key -> EOJ for SET requests
 	notifyEPCs    map[string]map[byte]struct{}    // device key -> set of EPCs the device pushes (from 0x9D)
@@ -54,6 +56,7 @@ func NewCache() *Cache {
 		metrics:      make(map[string]deviceCache),
 		specsByDev:   make(map[string][]specs.MetricSpec),
 		climateByDev: make(map[string]*specs.ClimateSpec),
+		lightByDev:   make(map[string]*specs.LightSpec),
 		writableEPCs: make(map[string]map[byte]struct{}),
 		eojByDev:     make(map[string][3]byte),
 		notifyEPCs:   make(map[string]map[byte]struct{}),
@@ -85,6 +88,25 @@ func (c *Cache) SetDeviceClimate(dev config.Device, climate *specs.ClimateSpec) 
 		return
 	}
 	c.climateByDev[key] = climate
+}
+
+// SetDeviceLight records the light spec for a device (e.g. general_lighting).
+func (c *Cache) SetDeviceLight(dev config.Device, light *specs.LightSpec) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := deviceKey(dev)
+	if light == nil {
+		delete(c.lightByDev, key)
+		return
+	}
+	c.lightByDev[key] = light
+}
+
+// GetDeviceLight returns the light spec for a device, if any.
+func (c *Cache) GetDeviceLight(dev config.Device) *specs.LightSpec {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.lightByDev[deviceKey(dev)]
 }
 
 // SetWritableEPCs records the writable property map (0x9E) for a device.
@@ -219,10 +241,12 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 	var devSpecs []specs.MetricSpec
 	var writable map[byte]struct{}
 	var climateSpec *specs.ClimateSpec
+	var lightSpec *specs.LightSpec
 	if cb != nil {
 		devSpecs = c.specsByDev[key]
 		writable = c.writableEPCs[key]
 		climateSpec = c.climateByDev[key]
+		lightSpec = c.lightByDev[key]
 	}
 	info := dc.info
 	allMetrics := make(map[string]echonet.MetricValue, len(dc.metrics))
@@ -232,7 +256,7 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 	c.mu.Unlock()
 
 	if cb != nil {
-		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, success)
+		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, lightSpec, success)
 	}
 }
 
@@ -317,10 +341,12 @@ func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.Metr
 	var devSpecs []specs.MetricSpec
 	var writable map[byte]struct{}
 	var climateSpec *specs.ClimateSpec
+	var lightSpec *specs.LightSpec
 	if cb != nil {
 		devSpecs = c.specsByDev[key]
 		writable = c.writableEPCs[key]
 		climateSpec = c.climateByDev[key]
+		lightSpec = c.lightByDev[key]
 	}
 	info := dc.info
 	allMetrics := make(map[string]echonet.MetricValue, len(dc.metrics))
@@ -330,7 +356,7 @@ func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.Metr
 	c.mu.Unlock()
 
 	if cb != nil {
-		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, true)
+		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, lightSpec, true)
 	}
 }
 

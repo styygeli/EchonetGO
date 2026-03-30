@@ -31,3 +31,12 @@ metrics:
       0x42: white
       0x43: daylight_white
       0x44: daylight_color
+
+light:
+  brightness_epc: 0xB0
+  color_setting_epc: 0xB1
+  color_settings:
+    incandescent_lamp_color: 0x41
+    white: 0x42
+    daylight_white: 0x43
+    daylight_color: 0x44

@@ -53,6 +53,23 @@ type haClimateDiscoveryPayload struct {
 	FanModes                []string `json:"fan_modes,omitempty"`
 }
 
+// haLightDiscoveryPayload is the JSON structure for HA MQTT light auto-discovery.
+type haLightDiscoveryPayload struct {
+	Name                   string   `json:"name"`
+	UniqueID               string   `json:"unique_id"`
+	CommandTopic           string   `json:"command_topic"`
+	StateTopic             string   `json:"state_topic"`
+	BrightnessCommandTopic string   `json:"brightness_command_topic,omitempty"`
+	BrightnessStateTopic   string   `json:"brightness_state_topic,omitempty"`
+	BrightnessScale        int      `json:"brightness_scale,omitempty"`
+	EffectCommandTopic     string   `json:"effect_command_topic,omitempty"`
+	EffectStateTopic       string   `json:"effect_state_topic,omitempty"`
+	EffectList             []string `json:"effect_list,omitempty"`
+	AvailabilityTopic      string   `json:"availability_topic"`
+	ExpireAfter            int      `json:"expire_after"`
+	Device                 haDevice `json:"device"`
+}
+
 type haDevice struct {
 	Identifiers  []string `json:"identifiers"`
 	Name         string   `json:"name"`
@@ -62,7 +79,7 @@ type haDevice struct {
 	ViaDevice    string   `json:"via_device,omitempty"`
 }
 
-func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, metrics map[string]echonet.MetricValue) {
+func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, metrics map[string]echonet.MetricValue) {
 	if info.Manufacturer == "" && info.UID == "" {
 		p.mu.Lock()
 		p.infoSkips[dev.Name]++
@@ -162,10 +179,13 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 		}
 	}
 	if writable != nil {
-		p.publishWritableDiscovery(dev, device, availTopic, metricSpecs, writable, climateSpec, metrics)
+		p.publishWritableDiscovery(dev, device, availTopic, metricSpecs, writable, climateSpec, lightSpec, metrics)
 	}
 	if climateSpec != nil {
 		p.publishClimateDiscovery(dev, device, availTopic, climateSpec, metricSpecs)
+	}
+	if lightSpec != nil {
+		p.publishLightDiscovery(dev, device, availTopic, lightSpec, metricSpecs)
 	}
 	p.published[key] = infoKey
 	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, sensorCount, info.Manufacturer, info.ProductCode)
@@ -224,7 +244,7 @@ func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, 
 	mqttLog.Infof("published climate discovery for %s", dev.Name)
 }
 
-func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice, availTopic string, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, metrics map[string]echonet.MetricValue) {
+func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice, availTopic string, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, metrics map[string]echonet.MetricValue) {
 	for _, ms := range metricSpecs {
 		if _, ok := metrics[ms.Name]; !ok {
 			continue
@@ -233,6 +253,9 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 			continue
 		}
 		if isClimateEPC(ms.EPC, climateSpec) {
+			continue
+		}
+		if isLightEPC(ms.EPC, lightSpec) {
 			continue
 		}
 		entityType := writableEntityType(ms)
@@ -345,6 +368,8 @@ func (p *Publisher) wipeDeviceDiscovery(dev config.Device, metricSpecs []specs.M
 	}
 	climateTopic := fmt.Sprintf("%s/climate/%s_climate/config", p.discoveryPrefix, dev.Name)
 	p.client.Publish(climateTopic, qos, true, []byte{})
+	lightTopic := fmt.Sprintf("%s/light/%s_light/config", p.discoveryPrefix, dev.Name)
+	p.client.Publish(lightTopic, qos, true, []byte{})
 	mqttLog.Infof("wiped stale discovery for %s (%d metrics)", dev.Name, len(metricSpecs))
 }
 
@@ -490,6 +515,74 @@ func metricNameForEPC(specs []specs.MetricSpec, epc byte) string {
 		}
 	}
 	return ""
+}
+
+func (p *Publisher) publishLightDiscovery(dev config.Device, device haDevice, availTopic string, lt *specs.LightSpec, metricSpecs []specs.MetricSpec) {
+	base := fmt.Sprintf("%s/%s/light", p.topicPrefix, dev.Name)
+	powerCmd := base + "/power/set"
+	powerState := base + "/power/state"
+
+	payload := haLightDiscoveryPayload{
+		Name:              friendlyName(dev.Name),
+		UniqueID:          "echonetgo_" + dev.Name + "_light",
+		CommandTopic:      powerCmd,
+		StateTopic:        powerState,
+		AvailabilityTopic: availTopic,
+		ExpireAfter:       300,
+		Device:            device,
+	}
+	if lt.BrightnessEPC != 0 {
+		payload.BrightnessCommandTopic = base + "/brightness/set"
+		payload.BrightnessStateTopic = base + "/brightness/state"
+		payload.BrightnessScale = 100
+	}
+	if lt.ColorSettingEPC != 0 && len(lt.ColorSettings) > 0 {
+		payload.EffectCommandTopic = base + "/effect/set"
+		payload.EffectStateTopic = base + "/effect/state"
+		effects := make([]string, 0, len(lt.ColorSettings))
+		for label := range lt.ColorSettings {
+			effects = append(effects, label)
+		}
+		sortStrings(effects)
+		payload.EffectList = effects
+	} else if lt.SceneEPC != 0 && lt.MaxScenes > 0 {
+		payload.EffectCommandTopic = base + "/effect/set"
+		payload.EffectStateTopic = base + "/effect/state"
+		effects := make([]string, 0, lt.MaxScenes)
+		for i := 1; i <= lt.MaxScenes; i++ {
+			effects = append(effects, fmt.Sprintf("scene_%d", i))
+		}
+		payload.EffectList = effects
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		mqttLog.Warnf("marshal light discovery for %s: %v", dev.Name, err)
+		return
+	}
+	configTopic := fmt.Sprintf("%s/light/%s_light/config", p.discoveryPrefix, dev.Name)
+	token := p.client.Publish(configTopic, qos, true, data)
+	if !token.WaitTimeout(publishTimeout) {
+		mqttLog.Warnf("publish light discovery timeout for %s", dev.Name)
+		return
+	}
+	if err := token.Error(); err != nil {
+		mqttLog.Warnf("publish light discovery for %s: %v", dev.Name, err)
+		return
+	}
+	mqttLog.Infof("published light discovery for %s", dev.Name)
+}
+
+func isLightEPC(epc byte, lt *specs.LightSpec) bool {
+	if lt == nil {
+		return false
+	}
+	if epc == 0x80 {
+		return true
+	}
+	if epc == lt.BrightnessEPC || epc == lt.ColorSettingEPC || epc == lt.SceneEPC {
+		return true
+	}
+	return false
 }
 
 func isClimateEPC(epc byte, cl *specs.ClimateSpec) bool {
