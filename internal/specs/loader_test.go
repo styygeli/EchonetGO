@@ -326,6 +326,87 @@ metrics:
 	}
 }
 
+func TestParseDeviceYAML_SetMode(t *testing.T) {
+	t.Run("seti", func(t *testing.T) {
+		data := []byte(`
+eoj: [0x01, 0x30, 0x01]
+description: "test"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+    set_mode: seti
+`)
+		spec, err := parseDeviceYAML(data)
+		if err != nil {
+			t.Fatalf("parseDeviceYAML() error = %v", err)
+		}
+		if spec.Metrics[0].SetMode != "seti" {
+			t.Fatalf("SetMode = %q, want \"seti\"", spec.Metrics[0].SetMode)
+		}
+	})
+
+	t.Run("setc explicit", func(t *testing.T) {
+		data := []byte(`
+eoj: [0x01, 0x30, 0x01]
+description: "test"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+    set_mode: setc
+`)
+		spec, err := parseDeviceYAML(data)
+		if err != nil {
+			t.Fatalf("parseDeviceYAML() error = %v", err)
+		}
+		if spec.Metrics[0].SetMode != "setc" {
+			t.Fatalf("SetMode = %q, want \"setc\"", spec.Metrics[0].SetMode)
+		}
+	})
+
+	t.Run("default empty", func(t *testing.T) {
+		data := []byte(`
+eoj: [0x01, 0x30, 0x01]
+description: "test"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+`)
+		spec, err := parseDeviceYAML(data)
+		if err != nil {
+			t.Fatalf("parseDeviceYAML() error = %v", err)
+		}
+		if spec.Metrics[0].SetMode != "" {
+			t.Fatalf("SetMode = %q, want \"\"", spec.Metrics[0].SetMode)
+		}
+	})
+
+	t.Run("invalid rejected", func(t *testing.T) {
+		data := []byte(`
+eoj: [0x01, 0x30, 0x01]
+description: "test"
+metrics:
+  - epc: 0x80
+    name: operation_status
+    size: 1
+    type: gauge
+    set_mode: invalid
+`)
+		_, err := parseDeviceYAML(data)
+		if err == nil {
+			t.Fatal("expected error for invalid set_mode")
+		}
+		if !strings.Contains(err.Error(), "set_mode") {
+			t.Fatalf("error = %q, want set_mode validation", err)
+		}
+	})
+}
+
 // TestLoad_NoUnexpectedAutoSize scans all curated spec files and asserts that
 // size: 0 (auto-detect) only appears on known composite/log EPCs that cannot be
 // represented as a single scalar metric. Any new size: 0 must be added to the

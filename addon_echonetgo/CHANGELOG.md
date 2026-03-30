@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.29
+- **SETI spec wiring**: Add `set_mode: seti` YAML field for metrics. When set, the commander uses fire-and-forget SetI (ESV 0x60) instead of SetC, skipping response validation and multi-stage verification. Useful for non-critical property writes where blocking on device acknowledgment is unnecessary.
+
 ## 0.9.28
 - **SETI protocol support**: Add SetI (ESV 0x60) fire-and-forget write support to the ECHONET Lite protocol layer. New `SendSetI` client method sends SET commands without waiting for a device response, useful for non-critical property writes. Includes `SendFireAndForget` transport method with per-host serialization, frame builder, and SetI_SNA (0x50) detection.
 

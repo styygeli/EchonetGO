@@ -93,6 +93,7 @@ type metricYAML struct {
 	ExcludeSet     bool            `yaml:"exclude_set"`
 	MultiplierEPC  int             `yaml:"multiplier_epc"`
 	MultiplierMap  map[int]float64 `yaml:"multiplier_map"`
+	SetMode        string          `yaml:"set_mode"`
 }
 
 func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
@@ -146,6 +147,9 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		}
 		if m.NumberMin != nil && m.NumberMax != nil && *m.NumberMin >= *m.NumberMax {
 			return nil, fmt.Errorf("metric %s: number_min must be less than number_max", m.Name)
+		}
+		if m.SetMode != "" && m.SetMode != "setc" && m.SetMode != "seti" {
+			return nil, fmt.Errorf("metric %s: set_mode must be \"setc\" or \"seti\", got %q", m.Name, m.SetMode)
 		}
 		if m.PreSet != nil {
 			if m.PreSet.EPC < 0 || m.PreSet.EPC > 0xFF {
@@ -224,6 +228,7 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 			PreSetEPC:      preSetEPC,
 			PreSetValue:    preSetValue,
 			ExcludeSet:     m.ExcludeSet,
+			SetMode:        m.SetMode,
 		})
 	}
 	if raw.Climate != nil {
@@ -285,6 +290,7 @@ func mergeSuperClass(spec *DeviceSpec) {
 			PreSetEPC:      m.PreSetEPC,
 			PreSetValue:    m.PreSetValue,
 			ExcludeSet:     m.ExcludeSet,
+			SetMode:        m.SetMode,
 		})
 	}
 }
