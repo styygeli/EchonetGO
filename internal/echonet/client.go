@@ -44,6 +44,12 @@ func NewClient(transport *Transport, timeoutSec int) *Client {
 	}
 }
 
+// hostLabel returns a human-friendly label for an address, including the
+// configured device name when available.
+func (c *Client) hostLabel(addr string) string {
+	return c.transport.hostLabel(normalizeHost(addr))
+}
+
 // SendGet sends a Get request to addr and returns the raw response.
 func (c *Client) SendGet(ctx context.Context, addr string, eoj [3]byte, epcs []byte) ([]byte, error) {
 	if len(epcs) == 0 {
@@ -104,15 +110,15 @@ func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte,
 		return props, nil
 	}
 	if len(epcs) <= 1 {
-		clientLog.Warnf("device %s returned no data for requested EPC(s): %s", normalizeHost(addr), formatEPCList(missing))
+		clientLog.Warnf("device %s returned no data for requested EPC(s): %s", c.hostLabel(addr), formatEPCList(missing))
 		return props, nil
 	}
 	if depth >= maxAdaptiveSplitDepth {
-		clientLog.Warnf("max adaptive split depth reached for %s eoj=%s missing=%s", normalizeHost(addr), formatEOJ(eoj), formatEPCList(missing))
+		clientLog.Warnf("max adaptive split depth reached for %s eoj=%s missing=%s", c.hostLabel(addr), formatEOJ(eoj), formatEPCList(missing))
 		return props, nil
 	}
 	clientLog.Warnf("partial response from %s eoj=%s requested=%d returned=%d missing=%s; retrying split batches",
-		normalizeHost(addr), formatEOJ(eoj), len(epcs), len(props), formatEPCList(missing))
+		c.hostLabel(addr), formatEOJ(eoj), len(epcs), len(props), formatEPCList(missing))
 	left, right := splitEPCs(epcs)
 	merged := propsToMap(props)
 	for _, part := range [][]byte{left, right} {
@@ -121,7 +127,7 @@ func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte,
 		}
 		partProps, err := c.getPropsAdaptive(ctx, addr, eoj, part, depth+1)
 		if err != nil {
-			clientLog.Warnf("split batch request failed for %s eoj=%s epcs=%s: %v", normalizeHost(addr), formatEOJ(eoj), formatEPCList(part), err)
+			clientLog.Warnf("split batch request failed for %s eoj=%s epcs=%s: %v", c.hostLabel(addr), formatEOJ(eoj), formatEPCList(part), err)
 			continue
 		}
 		mergeProps(merged, partProps)
@@ -129,7 +135,7 @@ func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte,
 	out := mapToProps(merged)
 	finalMissing := missingEPCs(epcs, out)
 	if len(finalMissing) > 0 {
-		clientLog.Warnf("after retries, still missing EPC(s) from %s eoj=%s: %s", normalizeHost(addr), formatEOJ(eoj), formatEPCList(finalMissing))
+		clientLog.Warnf("after retries, still missing EPC(s) from %s eoj=%s: %s", c.hostLabel(addr), formatEOJ(eoj), formatEPCList(finalMissing))
 	}
 	if len(out) == 0 {
 		return nil, fmt.Errorf("no properties returned for requested EPCs")
@@ -148,7 +154,7 @@ func (c *Client) GetReadablePropertyMap(ctx context.Context, addr string, eoj [3
 			return decodePropertyMap(p.EDT), nil
 		}
 	}
-	clientLog.Warnf("device %s eoj=%s: readable property map (0x9F) missing/empty", normalizeHost(addr), formatEOJ(eoj))
+	clientLog.Warnf("device %s eoj=%s: readable property map (0x9F) missing/empty", c.hostLabel(addr), formatEOJ(eoj))
 	return nil, fmt.Errorf("readable property map (0x9F) missing")
 }
 
@@ -163,7 +169,7 @@ func (c *Client) GetWritablePropertyMap(ctx context.Context, addr string, eoj [3
 			return decodePropertyMap(p.EDT), nil
 		}
 	}
-	clientLog.Warnf("device %s eoj=%s: writable property map (0x9E) missing/empty", normalizeHost(addr), formatEOJ(eoj))
+	clientLog.Warnf("device %s eoj=%s: writable property map (0x9E) missing/empty", c.hostLabel(addr), formatEOJ(eoj))
 	return nil, fmt.Errorf("writable property map (0x9E) missing")
 }
 
@@ -179,7 +185,7 @@ func (c *Client) GetNotificationPropertyMap(ctx context.Context, addr string, eo
 			return decodePropertyMap(p.EDT), nil
 		}
 	}
-	clientLog.Warnf("device %s eoj=%s: notification property map (0x9D) missing/empty", normalizeHost(addr), formatEOJ(eoj))
+	clientLog.Warnf("device %s eoj=%s: notification property map (0x9D) missing/empty", c.hostLabel(addr), formatEOJ(eoj))
 	return nil, fmt.Errorf("notification property map (0x9D) missing")
 }
 
@@ -235,7 +241,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 	for _, p := range props {
 		switch p.EPC {
 		case 0x83:
-			info.UID = decodeUID(p.EDT, normalizeHost(addr))
+			info.UID = decodeUID(p.EDT, c.hostLabel(addr))
 		case 0x8A:
 			info.Manufacturer = decodeManufacturer(p.EDT)
 		case 0x8C:
@@ -255,7 +261,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 			missing = append(missing, 0x8C)
 		}
 
-		clientLog.Debugf("device %s eoj=%s: missing identity properties %x, retrying via node profile", normalizeHost(addr), formatEOJ(eoj), missing)
+		clientLog.Debugf("device %s eoj=%s: missing identity properties %x, retrying via node profile", c.hostLabel(addr), formatEOJ(eoj), missing)
 		npProps, err := c.GetProps(ctx, addr, nodeProfileEOJ, missing)
 		if err != nil && !isGetSNA(err) {
 			return DeviceInfo{}, err
@@ -263,7 +269,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 		for _, p := range npProps {
 			switch p.EPC {
 			case 0x83:
-				info.UID = decodeUID(p.EDT, normalizeHost(addr))
+				info.UID = decodeUID(p.EDT, c.hostLabel(addr))
 			case 0x8A:
 				info.Manufacturer = decodeManufacturer(p.EDT)
 			case 0x8C:
@@ -274,7 +280,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 
 	if info.UID == "" || info.Manufacturer == "" || info.ProductCode == "" {
 		clientLog.Warnf("device %s eoj=%s: incomplete device info uid=%q manufacturer=%q product_code=%q",
-			normalizeHost(addr), formatEOJ(eoj), info.UID, info.Manufacturer, info.ProductCode)
+			c.hostLabel(addr), formatEOJ(eoj), info.UID, info.Manufacturer, info.ProductCode)
 	}
 	return info, nil
 }

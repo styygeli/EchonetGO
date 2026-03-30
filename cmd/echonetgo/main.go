@@ -69,6 +69,17 @@ func main() {
 	transport := echonet.NewTransport(cfg.StrictSourcePort3610)
 	defer transport.Close()
 
+	// Map device IPs to configured names for human-friendly log messages.
+	if len(cfg.Devices) > 0 {
+		ipToName := make(map[string]string, len(cfg.Devices))
+		for _, d := range cfg.Devices {
+			ipToName[d.IP] = d.Name
+		}
+		transport.SetNameResolver(func(ip string) string {
+			return ipToName[ip]
+		})
+	}
+
 	if cfg.NotificationsEnabled {
 		infChan := make(chan echonet.UDPFrame, 256)
 		transport.SetNotificationChan(infChan)

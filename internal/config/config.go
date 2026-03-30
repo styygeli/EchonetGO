@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -225,6 +226,10 @@ func Load() (*Config, error) {
 		if d.Class == "" {
 			return nil, fmt.Errorf("device %q: class is required", d.Name)
 		}
+		sanitized := sanitizeDeviceName(d.Name)
+		if sanitized != d.Name {
+			cfg.Devices[i].Name = sanitized
+		}
 	}
 
 	return cfg, nil
@@ -249,4 +254,24 @@ func loadDevicesFile(path string) ([]Device, error) {
 		}
 	}
 	return out.Devices, nil
+}
+
+// sanitizeDeviceName strips characters that are unsafe in log output, MQTT
+// topics, or Prometheus labels. Keeps all printable Unicode (including CJK,
+// accented Latin, etc.) but removes:
+//   - C0/C1 control characters (U+0000–U+001F, U+007F–U+009F) — prevents
+//     log injection and ANSI escape sequences
+//   - MQTT topic separator '/' — would break topic structure
+//   - MQTT wildcards '+' and '#' — could cause unexpected subscriptions
+func sanitizeDeviceName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		switch r {
+		case '/', '+', '#':
+			return '_'
+		}
+		return r
+	}, name)
 }

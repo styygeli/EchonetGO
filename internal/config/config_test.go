@@ -309,6 +309,52 @@ mqtt:
 	}
 }
 
+func TestSanitizeDeviceName(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"ascii clean", "ac_av", "ac_av"},
+		{"kanji", "リビングエアコン", "リビングエアコン"},
+		{"mixed kanji ascii", "ac_リビング", "ac_リビング"},
+		{"emoji", "living🏠room", "living🏠room"},
+		{"newline injection", "dev\nfake_log_line", "devfake_log_line"},
+		{"carriage return", "dev\r\ninjection", "devinjection"},
+		{"null byte", "dev\x00name", "devname"},
+		{"ansi escape", "dev\x1b[31mred", "dev[31mred"},
+		{"tab", "dev\tname", "devname"},
+		{"mqtt slash", "floor1/ac", "floor1_ac"},
+		{"mqtt wildcard plus", "dev+name", "dev_name"},
+		{"mqtt wildcard hash", "dev#name", "dev_name"},
+		{"C1 control", "dev\u0085name", "devname"},
+		{"accented latin", "café_device", "café_device"},
+		{"korean", "에어컨", "에어컨"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeDeviceName(tt.in)
+			if got != tt.want {
+				t.Errorf("sanitizeDeviceName(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoad_SanitizesDeviceName(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("ECHONET_CONFIG", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+	t.Setenv("ECHONET_DEVICES", `[{"name":"my/dev\u000aice","ip":"10.0.0.1","class":"home_ac"}]`)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Devices[0].Name != "my_device" {
+		t.Fatalf("device name = %q, want %q", cfg.Devices[0].Name, "my_device")
+	}
+}
+
 func TestMQTTEnabled(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("ECHONET_CONFIG", filepath.Join(t.TempDir(), "nonexistent.yaml"))

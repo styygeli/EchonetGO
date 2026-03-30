@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.31
+- **Device names in protocol logs**: ECHONET Lite client and transport log messages now include the configured device name alongside the IP address (e.g. `timeout waiting for response from ac_av (192.168.3.249)` instead of just the IP). Uses an optional name resolver wired from the device config at startup.
+- **Device name sanitization**: Device names from config are sanitized at load time to prevent log injection (control characters stripped) and MQTT topic corruption (`/`, `+`, `#` replaced with `_`). All printable Unicode including CJK characters is preserved.
+
 ## 0.9.30
 - **Light entity type**: Expose lighting devices (general_lighting 0x0290, single_function_lighting 0x0291, lighting_system 0x02A3) as proper HA `light` entities with brightness and effect controls, instead of decomposed switch/number entities. Brightness uses `brightness_scale: 100` mapping ECHONET's 0-100 illuminance range. Color presets (incandescent, white, daylight_white, daylight_color) and scene selection map to HA effects. New `light:` YAML spec section defines brightness_epc, color_setting_epc/color_settings, and scene_epc/max_scenes per device class.
 

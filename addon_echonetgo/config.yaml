@@ -1,6 +1,6 @@
 # https://developers.home-assistant.io/docs/add-ons/configuration
 name: EchonetGO
-version: "0.9.30"
+version: "0.9.31"
 slug: echonetgo
 description: ECHONET Lite polling service in Go. Polls devices, publishes HA entities via MQTT, and serves Prometheus metrics.
 url: "https://github.com/styygeli/EchonetGO"
