@@ -28,6 +28,7 @@ type Transport struct {
 	waiters      map[string]chan UDPFrame
 	strictSource bool
 	infChan      chan UDPFrame
+	nameResolver func(ip string) string // optional: IP -> device name
 }
 
 // UDPFrame holds a raw UDP datagram and its source address.
@@ -51,6 +52,24 @@ func NewTransport(strictSourcePort3610 bool) *Transport {
 // (INF/INFC notifications) that have no matching request waiter.
 func (t *Transport) SetNotificationChan(ch chan UDPFrame) {
 	t.infChan = ch
+}
+
+// SetNameResolver registers an optional function that maps an IP address to a
+// configured device name. When set, log messages include the device name
+// alongside the IP for easier identification.
+func (t *Transport) SetNameResolver(fn func(ip string) string) {
+	t.nameResolver = fn
+}
+
+// hostLabel returns "name (ip)" if a name resolver is set and knows the IP,
+// otherwise just the IP.
+func (t *Transport) hostLabel(ip string) string {
+	if t.nameResolver != nil {
+		if name := t.nameResolver(ip); name != "" {
+			return name + " (" + ip + ")"
+		}
+	}
+	return ip
 }
 
 // NotificationChan returns the channel for unsolicited frames.
@@ -224,7 +243,7 @@ func (t *Transport) Send(ctx context.Context, addr string, req []byte, tid uint1
 		return nil, err
 	}
 	clientLog.Warnf("failed to bind local UDP port %d for %s; falling back to ephemeral source port: %v",
-		echonetPort, hostKey, err)
+		echonetPort, t.hostLabel(hostKey), err)
 	resp, fallbackErr := t.sendFromPort(ctx, host, req, tid, hostKey, 0, timeout)
 	if fallbackErr != nil {
 		return nil, fmt.Errorf("failed local UDP port %d (%v), ephemeral fallback also failed: %w",
@@ -276,7 +295,7 @@ func (t *Transport) sendWithRetry(ctx context.Context, host string, req []byte, 
 			return nil, err
 		}
 		clientLog.Warnf("timeout waiting for response from %s via local UDP port %d (attempt %d/%d), retrying",
-			hostKey, localPort, attempt, maxSendAttempts)
+			t.hostLabel(hostKey), localPort, attempt, maxSendAttempts)
 	}
 	return nil, lastErr
 }
@@ -327,7 +346,7 @@ func (t *Transport) sendViaSharedFixedPort(ctx context.Context, remoteAddr *net.
 	select {
 	case frame := <-respCh:
 		if frame.From != nil && frame.From.Port != echonetPort {
-			clientLog.Debugf("accepted response from %s with non-standard source UDP port %d", hostKey, frame.From.Port)
+			clientLog.Debugf("accepted response from %s with non-standard source UDP port %d", t.hostLabel(hostKey), frame.From.Port)
 		}
 		return frame.Data, nil
 	case <-timer.C:
