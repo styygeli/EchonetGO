@@ -1,6 +1,6 @@
 # EchonetGO
 
-A Go service that connects ECHONET Lite smart home devices to Home Assistant via MQTT. It polls devices over UDP, caches their state locally, and uses HA's auto-discovery payload to expose them as sensors, climate, switch, select, and number entities. 
+A Go service that connects ECHONET Lite smart home devices to Home Assistant via MQTT. It polls devices over UDP, caches their state locally, and uses HA's auto-discovery payload to expose them as sensors, climate, light, switch, select, and number entities. 
 
 Device structures and metrics are defined entirely in YAML so you can add or modify device support without writing any Go code.
 
@@ -12,10 +12,10 @@ Originally inspired by [echonetlite_homeassistant](https://github.com/scottyphil
 - **Real-time notifications:** Receives device-initiated INF/INFC property updates (ESV 0x73/0x74) via multicast, reflecting state changes instantly without waiting for the next poll. INFC frames are automatically acknowledged.
 - **Smart poll optimization:** Reads each device's STATMAP (EPC 0x9D) at init to learn which properties the device pushes. Polling is automatically skipped for recently-pushed EPCs, reducing redundant UDP traffic while maintaining a verification fallback.
 - **Multi-interface multicast:** Joins the ECHONET Lite multicast group (224.0.23.0) on all suitable IPv4 interfaces by default, or on a configured subset. Supports multi-VLAN setups.
-- **Bidirectional control:** Support for SET commands across climate, switches, selects, and numbers. Writable properties are auto-detected (EPC 0x9E).
+- **Bidirectional control:** Support for SET commands across climate, light, switches, selects, and numbers. Writable properties are auto-detected (EPC 0x9E).
 - **Protocol-level validation:** SET commands are explicitly validated against device responses (Set_Res vs SetC_SNA).
 - **Multi-stage state verification:** To ensure UI consistency without "optimistic lies", EchonetGO verifies that the device registers reflect the requested value after a successful command acknowledgment. It polls at 1s, 4s, and 7s intervals; if the state matches at any point, the update is published and the loop ends. If the device silently ignores the command, the UI is eventually synced to the actual (unchanged) device state.
-- **MQTT auto-discovery:** Publishes fully configured Home Assistant entities with `device_class`, `state_class`, and enum mapping.
+- **MQTT auto-discovery:** Publishes fully configured Home Assistant entities with `device_class`, `state_class`, and enum mapping. Lighting devices appear as native `light` entities with brightness and effect controls.
 - **Energy Dashboard support:** Includes required HA metadata for power, energy, water, and gas sensors.
 - **Vendor-specific specs:** Automatically detects and loads manufacturer-specific formats (e.g., Mitsubishi MAC-900IF).
 - **YAML-driven:** All device classes, EPCs, mapping rules, and HA metadata are defined in `etc/specs/*.yaml`.
@@ -53,7 +53,7 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 | `internal/model/` | ECHONET Get_Res property types (EPC, PDC, EDT) |
 | `internal/echonet/` | ECHONET Lite client split across focused files: `client.go` (high-level API), `transport.go` (UDP connection pool, port fallback, per-host locking, multicast join), `protocol.go` (frame parsing/building), `notification.go` (INF/INFC handler), `encoder.go` (EDT value encoding/decoding), `manufacturers.go` (manufacturer code lookup) |
 | `internal/poller/` | Cache and scheduler: per-device/per-interval scrapers, parallel init per host IP, startup stagger, update callbacks |
-| `internal/mqtt/` | `publisher.go` (MQTT connection, state publishing), `discovery.go` (HA auto-discovery for sensor/climate/switch/select/number entities), `commander.go` (subscribes to command topics, routes SET requests to the ECHONET client) |
+| `internal/mqtt/` | `publisher.go` (MQTT connection, state publishing), `discovery.go` (HA auto-discovery for sensor/climate/light/switch/select/number entities), `commander.go` (subscribes to command topics, routes SET requests to the ECHONET client) |
 | `internal/metrics/` | Prometheus collector: reads from poller cache, emits device metrics, enum one-hot gauges, scrape stats, device info |
 | `internal/api/` | HTTP mux: `/health`, `/metrics`, `/` |
 | `internal/logging/` | Leveled logger (`ECHONET_LOG_LEVEL`) |
