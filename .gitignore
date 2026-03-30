@@ -67,5 +67,6 @@ gha-creds-*.json
 GEMINI.md
 .claude/
 .ai/
+CLAUDE.md
 
 TODO.txt
