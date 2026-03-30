@@ -64,4 +64,9 @@ type MetricSpec struct {
 
 	// ExcludeSet if true suppresses publishing a switch/select/number for this writable EPC.
 	ExcludeSet bool
+
+	// SetMode controls which ECHONET SET ESV is used for this metric.
+	// "" or "setc" (default) uses SetC (0x61) with response validation.
+	// "seti" uses SetI (0x60) fire-and-forget without response or verification.
+	SetMode string
 }

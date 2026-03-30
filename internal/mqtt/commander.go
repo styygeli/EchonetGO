@@ -258,6 +258,15 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 		mqttLog.Warnf("commander: encode failed for %s: %v", ms.Name, err)
 		return
 	}
+	if ms.SetMode == "seti" {
+		err = c.client.SendSetI(ctx, addr, eoj, ms.EPC, edt)
+		if err != nil {
+			mqttLog.Warnf("commander: SetI %s (0x%02x) failed for %s: %v", ms.Name, ms.EPC, dev.Name, err)
+			return
+		}
+		mqttLog.Infof("commander: seti %s %s = %s (fire-and-forget)", dev.Name, ms.Name, payload)
+		return
+	}
 	_, err = c.client.SendSet(ctx, addr, eoj, ms.EPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set %s (0x%02x) failed for %s: %v", ms.Name, ms.EPC, dev.Name, err)
