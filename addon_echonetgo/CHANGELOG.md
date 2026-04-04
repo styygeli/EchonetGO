@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.36
+- **Process**: Formalized the release workflow to include mandatory PR reviews and verification steps.
+
 ## 0.9.35
 - **Metrics**: Improved HELP text and fixed redundant _state suffix for metrics already ending in state.
 
