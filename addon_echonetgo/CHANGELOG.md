@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.34
+- **Performance**: Pre-process enum metadata to optimize metrics collection loop and prevent slice allocations on the hot path.
+- **Test coverage**: Add coverage for enum metrics collection.
+
+## 0.9.33
+- **Metrics Enum State Labels**: Refactored the metrics collector to use the standard Prometheus convention for enumerations via state labels. This collapses metrics like `echonet_ac_installation_location_is_bathroom` into `echonet_ac_installation_location_state{state="bathroom"}`, reducing cardinality and simplifying queries.
+
 ## 0.9.32
 - **Docs**: Updated README to reflect light entity support across feature descriptions and file layout.
 - **MRA reference**: Added download reference for the ECHONET Lite Machine Readable Appendix (`echonet_specs/MRA_README.md`). MRA data itself is gitignored.
