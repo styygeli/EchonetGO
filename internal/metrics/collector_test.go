@@ -82,6 +82,50 @@ func TestCollectorEmitsDeviceMetrics(t *testing.T) {
 	}
 }
 
+func TestCollectorEmitsEnumMetrics(t *testing.T) {
+	cfg := &config.Config{
+		Devices: []config.Device{
+			{Name: "test_ac", IP: "192.168.1.11", Class: "home_ac"},
+		},
+	}
+	deviceSpecs := map[string]*specs.DeviceSpec{
+		"home_ac": {
+			Metrics: []specs.MetricSpec{
+				{
+					EPC:  0xB0,
+					Name: "operation_mode",
+					Help: "Current operation mode.",
+					Type: "gauge",
+					Enum: map[int]string{
+						0x41: "Auto",
+						0x42: "Cool",
+						0x43: "Heat",
+					},
+				},
+			},
+		},
+	}
+
+	cache := poller.NewCache()
+	dev := cfg.Devices[0]
+	cache.Update(dev, "g1", 0, true, 0.5, map[string]echonet.MetricValue{
+		"operation_mode": {Value: 0x42, Type: "gauge"},
+	}, "")
+
+	collector := NewCollector(cfg, cache, deviceSpecs)
+
+	expected := `
+		# HELP echonet_ac_operation_mode_state 1 if operation_mode is in this state, else 0.
+		# TYPE echonet_ac_operation_mode_state gauge
+		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="auto"} 0
+		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="cool"} 1
+		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="heat"} 0
+	`
+	if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), "echonet_ac_operation_mode_state"); err != nil {
+		t.Errorf("enum metric mismatch: %v", err)
+	}
+}
+
 func TestSubsystemForClass(t *testing.T) {
 	tests := []struct {
 		class, want string
