@@ -115,7 +115,7 @@ func TestCollectorEmitsEnumMetrics(t *testing.T) {
 	collector := NewCollector(cfg, cache, deviceSpecs)
 
 	expected := `
-		# HELP echonet_ac_operation_mode_state 1 if operation_mode is in this state, else 0.
+		# HELP echonet_ac_operation_mode_state Current operation mode (1 if active, else 0)
 		# TYPE echonet_ac_operation_mode_state gauge
 		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="auto"} 0
 		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="cool"} 1
