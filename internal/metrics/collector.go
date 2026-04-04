@@ -178,12 +178,14 @@ func (c *Collector) collectDeviceMetrics(ch chan<- prometheus.Metric, class stri
 		}
 		raw := int(math.Round(mv.Value))
 		
+		enumLabels := make([]string, len(labels)+1)
+		copy(enumLabels, labels)
 		for _, valMeta := range meta.values {
 			v := 0.0
 			if raw == valMeta.rawInt {
 				v = 1
 			}
-			enumLabels := append(append([]string{}, labels...), valMeta.stateLabel)
+			enumLabels[len(labels)] = valMeta.stateLabel
 			ch <- prometheus.MustNewConstMetric(meta.desc, prometheus.GaugeValue, v, enumLabels...)
 		}
 	}
