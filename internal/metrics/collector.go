@@ -15,9 +15,14 @@ import (
 
 const namespace = "echonet"
 
+type enumValueMeta struct {
+	rawInt     int
+	stateLabel string
+}
+
 type enumMeta struct {
-	desc *prometheus.Desc
-	enum map[int]string
+	desc   *prometheus.Desc
+	values []enumValueMeta
 }
 
 // Collector implements prometheus.Collector and serves cached metrics
@@ -173,20 +178,12 @@ func (c *Collector) collectDeviceMetrics(ch chan<- prometheus.Metric, class stri
 		}
 		raw := int(math.Round(mv.Value))
 		
-		keys := make([]int, 0, len(meta.enum))
-		for value := range meta.enum {
-			keys = append(keys, value)
-		}
-		sort.Ints(keys)
-		
-		for _, enumValue := range keys {
-			label := meta.enum[enumValue]
+		for _, valMeta := range meta.values {
 			v := 0.0
-			if raw == enumValue {
+			if raw == valMeta.rawInt {
 				v = 1
 			}
-			stateLabel := sanitizeEnumLabel(label)
-			enumLabels := append(append([]string{}, labels...), stateLabel)
+			enumLabels := append(append([]string{}, labels...), valMeta.stateLabel)
 			ch <- prometheus.MustNewConstMetric(meta.desc, prometheus.GaugeValue, v, enumLabels...)
 		}
 	}
@@ -256,13 +253,37 @@ func sanitizeEnumLabel(s string) string {
 
 func buildEnumMeta(subsystem string, m specs.MetricSpec, labels []string) enumMeta {
 	descLabels := append(append([]string{}, labels...), "state")
+	desc := prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, subsystem, m.Name+"_state"),
+		fmt.Sprintf("1 if %s is in this state, else 0.", m.Name),
+		descLabels,
+		nil,
+	)
+
+	keys := make([]int, 0, len(m.Enum))
+	for value := range m.Enum {
+		keys = append(keys, value)
+	}
+	sort.Ints(keys)
+
+	var values []enumValueMeta
+	usedLabels := make(map[string]struct{}, len(m.Enum))
+
+	for _, value := range keys {
+		label := m.Enum[value]
+		stateLabel := sanitizeEnumLabel(label)
+		if _, exists := usedLabels[stateLabel]; exists {
+			stateLabel = fmt.Sprintf("%s_0x%x", stateLabel, value)
+		}
+		usedLabels[stateLabel] = struct{}{}
+		values = append(values, enumValueMeta{
+			rawInt:     value,
+			stateLabel: stateLabel,
+		})
+	}
+
 	return enumMeta{
-		desc: prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, subsystem, m.Name+"_state"),
-			fmt.Sprintf("1 if %s is in this state, else 0.", m.Name),
-			descLabels,
-			nil,
-		),
-		enum: m.Enum,
+		desc:   desc,
+		values: values,
 	}
 }
