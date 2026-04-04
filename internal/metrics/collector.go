@@ -15,6 +15,11 @@ import (
 
 const namespace = "echonet"
 
+type enumMeta struct {
+	desc *prometheus.Desc
+	enum map[int]string
+}
+
 // Collector implements prometheus.Collector and serves cached metrics
 // from the detached poller. Collect reads a snapshot from the cache
 // under an RLock and emits const metrics; it never triggers network I/O.
@@ -28,7 +33,7 @@ type Collector struct {
 	lastScrapeTimestamp *prometheus.Desc
 	deviceInfo          *prometheus.Desc
 	metricDescs         map[string]map[string]*prometheus.Desc
-	enumMetricDescs     map[string]map[string]map[int]*prometheus.Desc
+	enumMetricDescs     map[string]map[string]enumMeta
 }
 
 // NewCollector builds descriptors from device specs and returns a collector
@@ -67,7 +72,7 @@ func NewCollector(cfg *config.Config, cache *poller.Cache, deviceSpecs map[strin
 			nil,
 		),
 		metricDescs:     make(map[string]map[string]*prometheus.Desc),
-		enumMetricDescs: make(map[string]map[string]map[int]*prometheus.Desc),
+		enumMetricDescs: make(map[string]map[string]enumMeta),
 	}
 
 	for class, spec := range deviceSpecs {
@@ -75,7 +80,7 @@ func NewCollector(cfg *config.Config, cache *poller.Cache, deviceSpecs map[strin
 			continue
 		}
 		c.metricDescs[class] = make(map[string]*prometheus.Desc)
-		c.enumMetricDescs[class] = make(map[string]map[int]*prometheus.Desc)
+		c.enumMetricDescs[class] = make(map[string]enumMeta)
 		for _, m := range spec.Metrics {
 			subsystem := subsystemForClass(class)
 			c.metricDescs[class][m.Name] = prometheus.NewDesc(
@@ -85,7 +90,7 @@ func NewCollector(cfg *config.Config, cache *poller.Cache, deviceSpecs map[strin
 				nil,
 			)
 			if len(m.Enum) > 0 {
-				c.enumMetricDescs[class][m.Name] = buildEnumDescs(subsystem, m, allLabelNames)
+				c.enumMetricDescs[class][m.Name] = buildEnumMeta(subsystem, m, allLabelNames)
 			}
 		}
 	}
@@ -106,10 +111,8 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 		}
 	}
 	for _, byMetric := range c.enumMetricDescs {
-		for _, byValue := range byMetric {
-			for _, d := range byValue {
-				ch <- d
-			}
+		for _, meta := range byMetric {
+			ch <- meta.desc
 		}
 	}
 }
@@ -164,17 +167,27 @@ func (c *Collector) collectDeviceMetrics(ch chan<- prometheus.Metric, class stri
 		}
 		ch <- prometheus.MustNewConstMetric(desc, vt, mv.Value, labels...)
 
-		enumDescs, hasEnum := classEnumDescs[name]
+		meta, hasEnum := classEnumDescs[name]
 		if !hasEnum {
 			continue
 		}
 		raw := int(math.Round(mv.Value))
-		for enumValue, enumDesc := range enumDescs {
+		
+		keys := make([]int, 0, len(meta.enum))
+		for value := range meta.enum {
+			keys = append(keys, value)
+		}
+		sort.Ints(keys)
+		
+		for _, enumValue := range keys {
+			label := meta.enum[enumValue]
 			v := 0.0
 			if raw == enumValue {
 				v = 1
 			}
-			ch <- prometheus.MustNewConstMetric(enumDesc, prometheus.GaugeValue, v, labels...)
+			stateLabel := sanitizeEnumLabel(label)
+			enumLabels := append(append([]string{}, labels...), stateLabel)
+			ch <- prometheus.MustNewConstMetric(meta.desc, prometheus.GaugeValue, v, enumLabels...)
 		}
 	}
 }
@@ -241,28 +254,15 @@ func sanitizeEnumLabel(s string) string {
 	return out
 }
 
-func buildEnumDescs(subsystem string, m specs.MetricSpec, labels []string) map[int]*prometheus.Desc {
-	out := make(map[int]*prometheus.Desc, len(m.Enum))
-	usedNames := make(map[string]struct{}, len(m.Enum))
-	keys := make([]int, 0, len(m.Enum))
-	for value := range m.Enum {
-		keys = append(keys, value)
-	}
-	sort.Ints(keys)
-	for _, value := range keys {
-		label := m.Enum[value]
-		suffix := sanitizeEnumLabel(label)
-		metricName := fmt.Sprintf("%s_is_%s", m.Name, suffix)
-		if _, exists := usedNames[metricName]; exists {
-			metricName = fmt.Sprintf("%s_is_%s_0x%x", m.Name, suffix, value)
-		}
-		usedNames[metricName] = struct{}{}
-		out[value] = prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, subsystem, metricName),
-			fmt.Sprintf("1 if %s equals %q, else 0.", m.Name, label),
-			labels,
+func buildEnumMeta(subsystem string, m specs.MetricSpec, labels []string) enumMeta {
+	descLabels := append(append([]string{}, labels...), "state")
+	return enumMeta{
+		desc: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, subsystem, m.Name+"_state"),
+			fmt.Sprintf("1 if %s is in this state, else 0.", m.Name),
+			descLabels,
 			nil,
-		)
+		),
+		enum: m.Enum,
 	}
-	return out
 }
