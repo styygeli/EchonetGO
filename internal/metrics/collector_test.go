@@ -115,14 +115,79 @@ func TestCollectorEmitsEnumMetrics(t *testing.T) {
 	collector := NewCollector(cfg, cache, deviceSpecs)
 
 	expected := `
-		# HELP echonet_ac_operation_mode_state Current operation mode (1 if active, else 0)
-		# TYPE echonet_ac_operation_mode_state gauge
-		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="auto"} 0
-		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="cool"} 1
-		echonet_ac_operation_mode_state{class="home_ac",device="test_ac",ip="192.168.1.11",state="heat"} 0
+		# HELP echonet_ac_operation_mode_info Current operation mode (1 if active, else 0)
+		# TYPE echonet_ac_operation_mode_info gauge
+		echonet_ac_operation_mode_info{class="home_ac",device="test_ac",ip="192.168.1.11",state="auto"} 0
+		echonet_ac_operation_mode_info{class="home_ac",device="test_ac",ip="192.168.1.11",state="cool"} 1
+		echonet_ac_operation_mode_info{class="home_ac",device="test_ac",ip="192.168.1.11",state="heat"} 0
 	`
-	if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), "echonet_ac_operation_mode_state"); err != nil {
+	if err := testutil.CollectAndCompare(collector, strings.NewReader(expected), "echonet_ac_operation_mode_info"); err != nil {
 		t.Errorf("enum metric mismatch: %v", err)
+	}
+}
+
+func TestCollectorNoPanicOnStateSuffix(t *testing.T) {
+	// This test reproduces the case that caused a runtime panic:
+	// a base metric already ending in "_state" colliding with the enum state descriptor.
+	cfg := &config.Config{
+		Devices: []config.Device{
+			{Name: "test_battery", IP: "192.168.1.10", Class: "storage_battery"},
+		},
+	}
+	deviceSpecs := map[string]*specs.DeviceSpec{
+		"storage_battery": {
+			Metrics: []specs.MetricSpec{
+				{
+					EPC:  0xD2,
+					Name: "working_operation_state",
+					Help: "Working state.",
+					Type: "gauge",
+					Enum: map[int]string{
+						0x42: "Charging",
+						0x43: "Discharging",
+					},
+				},
+			},
+		},
+	}
+
+	cache := poller.NewCache()
+	dev := cfg.Devices[0]
+	cache.Update(dev, "g1", 0, true, 0.5, map[string]echonet.MetricValue{
+		"working_operation_state": {Value: 0x42, Type: "gauge"},
+	}, "")
+
+	collector := NewCollector(cfg, cache, deviceSpecs)
+
+	registry := prometheus.NewRegistry()
+	// This call used to panic because both descriptors had the same FQName
+	// but different label sets (one with "state", one without).
+	if err := registry.Register(collector); err != nil {
+		t.Fatalf("failed to register collector: %v", err)
+	}
+
+	// Verify that both metrics are distinct and present
+	mfs, err := registry.Gather()
+	if err != nil {
+		t.Fatalf("gather: %v", err)
+	}
+
+	foundRaw := false
+	foundInfo := false
+	for _, mf := range mfs {
+		if mf.GetName() == "echonet_battery_working_operation_state" {
+			foundRaw = true
+		}
+		if mf.GetName() == "echonet_battery_working_operation_state_info" {
+			foundInfo = true
+		}
+	}
+
+	if !foundRaw {
+		t.Error("missing raw metric echonet_battery_working_operation_state")
+	}
+	if !foundInfo {
+		t.Error("missing info metric echonet_battery_working_operation_state_info")
 	}
 }
 

@@ -256,10 +256,9 @@ func sanitizeEnumLabel(s string) string {
 func buildEnumMeta(subsystem string, m specs.MetricSpec, labels []string) enumMeta {
 	descLabels := append(append([]string{}, labels...), "state")
 
-	metricName := m.Name
-	if !strings.HasSuffix(metricName, "_state") {
-		metricName += "_state"
-	}
+	// Use _info suffix for the labeled state metrics to avoid collisions with
+	// the raw numeric gauge (which might already have _state or other suffixes).
+	metricName := m.Name + "_info"
 
 	help := m.Help
 	if help == "" {
