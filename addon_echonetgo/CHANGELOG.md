@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.35
+- **Metrics**: Improved HELP text and fixed redundant _state suffix for metrics already ending in state.
+
 ## 0.9.34
 - **Performance**: Pre-process enum metadata to optimize metrics collection loop and prevent slice allocations on the hot path.
 - **Test coverage**: Add coverage for enum metrics collection.
