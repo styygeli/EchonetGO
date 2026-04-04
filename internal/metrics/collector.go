@@ -255,9 +255,21 @@ func sanitizeEnumLabel(s string) string {
 
 func buildEnumMeta(subsystem string, m specs.MetricSpec, labels []string) enumMeta {
 	descLabels := append(append([]string{}, labels...), "state")
+
+	metricName := m.Name
+	if !strings.HasSuffix(metricName, "_state") {
+		metricName += "_state"
+	}
+
+	help := m.Help
+	if help == "" {
+		help = fmt.Sprintf("Current state of %s.", m.Name)
+	}
+	help = fmt.Sprintf("%s (1 if active, else 0)", strings.TrimSuffix(help, "."))
+
 	desc := prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, subsystem, m.Name+"_state"),
-		fmt.Sprintf("1 if %s is in this state, else 0.", m.Name),
+		prometheus.BuildFQName(namespace, subsystem, metricName),
+		help,
 		descLabels,
 		nil,
 	)
