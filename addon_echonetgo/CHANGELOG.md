@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.37
+- **Metrics**: Fixed a critical runtime panic caused by metric name collisions (switched state suffix to `_info`).
+- **Testing**: Added regression tests for metric name collisions.
+
 ## 0.9.36
 - **Process**: Formalized the release workflow to include mandatory PR reviews and verification steps.
 
