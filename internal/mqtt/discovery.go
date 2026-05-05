@@ -153,6 +153,8 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, sensorCount, info.Manufacturer, info.ProductCode)
 }
 
+// buildSensorPayload constructs the JSON auto-discovery payload for a single metric
+// sensor, including derived constraints and precision settings.
 func buildSensorPayload(ms specs.MetricSpec, objectID, stateTopic, availTopic string, device haDevice) haDiscoveryPayload {
 	payload := haDiscoveryPayload{
 		Name:              friendlyName(ms.Name),

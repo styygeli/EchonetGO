@@ -141,6 +141,8 @@ func (c *Cache) discoverDeviceState(ctx context.Context, client, probeClient *ec
 	return activeEOJ, activeMetrics
 }
 
+// scheduleDeviceScrapers groups device metrics by their configured scrape interval
+// and launches background routines to poll them periodically.
 func (c *Cache) scheduleDeviceScrapers(ctx context.Context, client *echonet.Client, dev config.Device, activeEOJ [3]byte, activeMetrics []specs.MetricSpec, spec *specs.DeviceSpec) {
 	devDefaultInterval := spec.DefaultScrapeInterval
 	if dev.ScrapeInterval != "" {
@@ -421,6 +423,12 @@ func missingMetricNames(metrics []specs.MetricSpec, out map[string]echonet.Metri
 	missing := make([]string, 0)
 	for _, m := range metrics {
 		if _, ok := out[m.Name]; !ok {
+			missing = append(missing, m.Name)
+		}
+	}
+	return missing
+}
+{
 			missing = append(missing, m.Name)
 		}
 	}

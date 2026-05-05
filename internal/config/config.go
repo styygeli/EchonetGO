@@ -222,6 +222,8 @@ func applyEnvOverrides(cfg *Config) error {
 	return nil
 }
 
+// loadAdditionalDevices reads supplemental device configurations from files
+// or from the ECHONET_DEVICES JSON environment variable.
 func loadAdditionalDevices(cfg *Config) error {
 	// Devices from file if no devices in main config
 	if len(cfg.Devices) == 0 && cfg.DevicesPath != "" {
@@ -299,6 +301,11 @@ func sanitizeDeviceName(name string) string {
 		switch r {
 		case '/', '+', '#':
 			return '_'
+		}
+		return r
+	}, name)
+}
+eturn '_'
 		}
 		return r
 	}, name)

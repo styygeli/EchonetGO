@@ -73,6 +73,8 @@ func main() {
 	handleShutdown(cancel, mqttPub, server, errCh, log)
 }
 
+// setupMQTT initializes the MQTT publisher and configures the cache to automatically
+// publish updates when device state changes are detected.
 func setupMQTT(cfg *config.Config, cache *poller.Cache, readiness *api.Readiness, log *logging.Logger) (*mqttpub.Publisher, error) {
 	if !cfg.MQTTEnabled() {
 		return nil, nil
@@ -215,4 +217,12 @@ func handleShutdown(cancel context.CancelFunc, mqttPub *mqttpub.Publisher, serve
 	case err := <-errCh:
 		log.Fatalf("HTTP server: %v", err)
 	}
+}
+: %v", err)
+	}
+}
+, err)
+	}
+}
+
 }

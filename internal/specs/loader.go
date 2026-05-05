@@ -159,6 +159,8 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 	return spec, nil
 }
 
+// parseMetricSpec parses and validates a single metric YAML definition, applying
+// defaults for constraints, enum labels, and Home Assistant discovery metadata.
 func parseMetricSpec(m metricYAML, devInterval time.Duration, eoj [3]byte) (*MetricSpec, error) {
 	if m.Size != 0 && m.Size != 1 && m.Size != 2 && m.Size != 4 {
 		return nil, fmt.Errorf("metric %s: size must be 0 (auto), 1, 2, or 4", m.Name)
