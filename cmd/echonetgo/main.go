@@ -1,4 +1,3 @@
-// echonetgo is a Go service for ECHONET Lite devices (polling, cache, API).
 package main
 
 import (
@@ -47,29 +46,54 @@ func main() {
 	}
 
 	cache := poller.NewCache()
-
 	readiness := api.NewReadiness()
 	readiness.Register("poller")
 
-	var mqttPub *mqttpub.Publisher
-	if cfg.MQTTEnabled() {
-		mqttPub, err = mqttpub.NewPublisher(cfg.MQTT, version)
-		if err != nil {
-			log.Warnf("MQTT disabled: %v", err)
-		} else {
-			log.Infof("MQTT publishing to %s", cfg.MQTT.Broker)
-			cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool) {
-				mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, writable, climateSpec, lightSpec, success)
-			})
-			readiness.Register("commander")
-			// Commander will be started after ctx is created (below)
-		}
+	mqttPub, err := setupMQTT(cfg, cache, readiness, log)
+	if err != nil && cfg.MQTTEnabled() {
+		log.Warnf("MQTT disabled: %v", err)
 	}
 
-	transport := echonet.NewTransport(cfg.StrictSourcePort3610)
+	transport := setupEchonetTransport(cfg, cache, log)
 	defer transport.Close()
 
-	// Map device IPs to configured names for human-friendly log messages.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	setupNotifications(ctx, cfg, cache, transport, log)
+
+	go cache.Start(ctx, cfg, deviceSpecs, transport, func() { readiness.MarkReady("poller") })
+
+	if mqttPub != nil {
+		setupCommander(ctx, cfg, cache, transport, mqttPub, readiness)
+	}
+
+	server, errCh := setupHTTPServer(cfg, cache, deviceSpecs, readiness, log)
+
+	handleShutdown(cancel, mqttPub, server, errCh, log)
+}
+
+// setupMQTT initializes the MQTT publisher and configures the cache to automatically
+// publish updates when device state changes are detected.
+func setupMQTT(cfg *config.Config, cache *poller.Cache, readiness *api.Readiness, log *logging.Logger) (*mqttpub.Publisher, error) {
+	if !cfg.MQTTEnabled() {
+		return nil, nil
+	}
+	mqttPub, err := mqttpub.NewPublisher(cfg.MQTT, version)
+	if err != nil {
+		return nil, err
+	}
+	log.Infof("MQTT publishing to %s", cfg.MQTT.Broker)
+	cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool) {
+		mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, writable, climateSpec, lightSpec, success)
+	})
+	readiness.Register("commander")
+	return mqttPub, nil
+}
+
+func setupEchonetTransport(cfg *config.Config, cache *poller.Cache, log *logging.Logger) *echonet.Transport {
+	transport := echonet.NewTransport(cfg.StrictSourcePort3610)
+
 	if len(cfg.Devices) > 0 {
 		ipToName := make(map[string]string, len(cfg.Devices))
 		for _, d := range cfg.Devices {
@@ -94,57 +118,57 @@ func main() {
 		cache.SetForcePolling(true)
 		log.Infof("force_polling enabled: STATMAP will be ignored, all EPCs polled normally")
 	}
+	return transport
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	if cfg.NotificationsEnabled {
-		notifHandler := echonet.NewNotificationHandler(transport.NotificationChan(), transport,
-			func(ip string, seoj [3]byte, props []model.GetResProperty) {
-				dev, ok := cache.FindDeviceByIPAndEOJ(ip, seoj, cfg.Devices)
-				if !ok {
-					return
-				}
-				devSpecs, ok := cache.GetDeviceSpecs(dev)
-				if !ok {
-					return
-				}
-				epcs := make([]byte, 0, len(props))
-				for _, p := range props {
-					epcs = append(epcs, p.EPC)
-				}
-				cache.RecordPush(dev, epcs)
-				// Only pass specs for EPCs present in the INF frame to
-				// avoid "missing EPC" warnings for every other metric.
-				infEPCs := make(map[byte]struct{}, len(props))
-				for _, p := range props {
-					infEPCs[p.EPC] = struct{}{}
-				}
-				var relevantSpecs []specs.MetricSpec
-				for _, s := range devSpecs {
-					if _, ok := infEPCs[s.EPC]; ok {
-						relevantSpecs = append(relevantSpecs, s)
-					}
-				}
-				metrics := echonet.ParsePropsToMetrics(props, relevantSpecs)
-				if len(metrics) == 0 {
-					return
-				}
-				cache.UpdateFromINF(dev, metrics)
-			})
-		for _, dev := range cfg.Devices {
-			notifHandler.RegisterDevice(dev.IP)
-		}
-		go notifHandler.Run(ctx)
+func setupNotifications(ctx context.Context, cfg *config.Config, cache *poller.Cache, transport *echonet.Transport, log *logging.Logger) {
+	if !cfg.NotificationsEnabled {
+		return
 	}
-
-	go cache.Start(ctx, cfg, deviceSpecs, transport, func() { readiness.MarkReady("poller") })
-	if mqttPub != nil {
-		echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
-		commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
-		go commander.Run(ctx, mqttPub.Client(), func() { readiness.MarkReady("commander") })
+	notifHandler := echonet.NewNotificationHandler(transport.NotificationChan(), transport,
+		func(ip string, seoj [3]byte, props []model.GetResProperty) {
+			dev, ok := cache.FindDeviceByIPAndEOJ(ip, seoj, cfg.Devices)
+			if !ok {
+				return
+			}
+			devSpecs, ok := cache.GetDeviceSpecs(dev)
+			if !ok {
+				return
+			}
+			epcs := make([]byte, 0, len(props))
+			for _, p := range props {
+				epcs = append(epcs, p.EPC)
+			}
+			cache.RecordPush(dev, epcs)
+			infEPCs := make(map[byte]struct{}, len(props))
+			for _, p := range props {
+				infEPCs[p.EPC] = struct{}{}
+			}
+			var relevantSpecs []specs.MetricSpec
+			for _, s := range devSpecs {
+				if _, ok := infEPCs[s.EPC]; ok {
+					relevantSpecs = append(relevantSpecs, s)
+				}
+			}
+			metrics := echonet.ParsePropsToMetrics(props, relevantSpecs)
+			if len(metrics) == 0 {
+				return
+			}
+			cache.UpdateFromINF(dev, metrics)
+		})
+	for _, dev := range cfg.Devices {
+		notifHandler.RegisterDevice(dev.IP)
 	}
+	go notifHandler.Run(ctx)
+}
 
+func setupCommander(ctx context.Context, cfg *config.Config, cache *poller.Cache, transport *echonet.Transport, mqttPub *mqttpub.Publisher, readiness *api.Readiness) {
+	echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
+	commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
+	go commander.Run(ctx, mqttPub.Client(), func() { readiness.MarkReady("commander") })
+}
+
+func setupHTTPServer(cfg *config.Config, cache *poller.Cache, deviceSpecs map[string]*specs.DeviceSpec, readiness *api.Readiness, log *logging.Logger) (*http.Server, chan error) {
 	srv := &api.Server{
 		ListenAddr: cfg.ListenAddr,
 		Readiness:  readiness,
@@ -174,21 +198,29 @@ func main() {
 		}
 	}()
 	log.Infof("Listening on %s", cfg.ListenAddr)
+	return server, errCh
+}
 
+// handleShutdown blocks until an OS termination signal is received or a fatal HTTP server
+// error occurs, then coordinates a graceful shutdown of all background processes.
+func handleShutdown(cancel context.CancelFunc, mqttPub *mqttpub.Publisher, server *http.Server, errCh chan error, log *logging.Logger) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(sigCh)
 	select {
 	case <-sigCh:
 		log.Infof("Shutting down...")
-		cancel()
-		if mqttPub != nil {
-			mqttPub.Disconnect()
-		}
-		if err := server.Shutdown(context.Background()); err != nil {
-			log.Warnf("HTTP shutdown: %v", err)
-		}
 	case err := <-errCh:
-		log.Fatalf("HTTP server: %v", err)
+		log.Errorf("HTTP server error: %v", err)
+	}
+
+	cancel()
+	if mqttPub != nil {
+		mqttPub.Disconnect()
+	}
+	ctx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Warnf("HTTP shutdown: %v", err)
 	}
 }

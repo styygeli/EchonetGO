@@ -136,109 +136,11 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		spec.EOJ[i] = byte(v)
 	}
 	for _, m := range raw.Metrics {
-		if m.Size != 0 && m.Size != 1 && m.Size != 2 && m.Size != 4 {
-			return nil, fmt.Errorf("metric %s: size must be 0 (auto), 1, 2, or 4", m.Name)
+		metricSpec, err := parseMetricSpec(m, devInterval, spec.EOJ)
+		if err != nil {
+			return nil, err
 		}
-		if m.Type != "gauge" && m.Type != "counter" {
-			return nil, fmt.Errorf("metric %s: type must be gauge or counter", m.Name)
-		}
-		if m.EPC < 0 || m.EPC > 0xFF {
-			return nil, fmt.Errorf("metric %s: epc must be in range 0..255, got %d", m.Name, m.EPC)
-		}
-		if m.Offset < 0 {
-			return nil, fmt.Errorf("metric %s: offset must be non-negative, got %d", m.Name, m.Offset)
-		}
-		if m.MultiplierEPC < 0 || m.MultiplierEPC > 0xFF {
-			return nil, fmt.Errorf("metric %s: multiplier_epc must be in range 0..255, got %d", m.Name, m.MultiplierEPC)
-		}
-		if m.MultiplierEPC != 0 && len(m.MultiplierMap) == 0 {
-			return nil, fmt.Errorf("metric %s: multiplier_epc set but multiplier_map is empty", m.Name)
-		}
-		if m.NumberMin != nil && m.NumberMax != nil && *m.NumberMin >= *m.NumberMax {
-			return nil, fmt.Errorf("metric %s: number_min must be less than number_max", m.Name)
-		}
-		if m.SetMode != "" && m.SetMode != "setc" && m.SetMode != "seti" {
-			return nil, fmt.Errorf("metric %s: set_mode must be \"setc\" or \"seti\", got %q", m.Name, m.SetMode)
-		}
-		if m.PreSet != nil {
-			if m.PreSet.EPC < 0 || m.PreSet.EPC > 0xFF {
-				return nil, fmt.Errorf("metric %s: pre_set.epc must be in range 0..255, got %d", m.Name, m.PreSet.EPC)
-			}
-		}
-		scale := m.Scale
-		if scale == 0 {
-			scale = 1
-		}
-		var enum map[int]string
-		if len(m.Enum) > 0 {
-			if scale != 1 {
-				return nil, fmt.Errorf("metric %s: enum mapping requires scale=1, got %v", m.Name, scale)
-			}
-			enum = make(map[int]string, len(m.Enum))
-			for rawValue, label := range m.Enum {
-				if label == "" {
-					return nil, fmt.Errorf("metric %s: enum label must not be empty for value %d", m.Name, rawValue)
-				}
-				if m.Size != 0 && !enumValueFits(rawValue, m.Size, m.Signed) {
-					return nil, fmt.Errorf("metric %s: enum value %d doesn't fit size=%d signed=%t", m.Name, rawValue, m.Size, m.Signed)
-				}
-				enum[rawValue] = label
-			}
-		}
-		help := m.Help
-		if help == "" {
-			help = LookupEPCName(spec.EOJ, byte(m.EPC))
-		}
-		interval := devInterval
-		if m.ScrapeInterval != "" {
-			d, err := time.ParseDuration(m.ScrapeInterval)
-			if err != nil {
-				return nil, fmt.Errorf("metric %s scrape_interval %q: %w", m.Name, m.ScrapeInterval, err)
-			}
-			if d <= 0 {
-				return nil, fmt.Errorf("metric %s scrape_interval must be positive", m.Name)
-			}
-			interval = d
-		}
-		haDevice, haState, haUnit := m.HADeviceClass, m.HAStateClass, m.HAUnit
-		if haDevice == "" {
-			haDevice, haState, haUnit = inferHAMetadata(m.Name, m.Type, len(m.Enum) > 0)
-		}
-		reverseEnum := make(map[string]int, len(enum))
-		for raw, label := range enum {
-			reverseEnum[label] = raw
-		}
-		var preSetEPC byte
-		var preSetValue int
-		if m.PreSet != nil {
-			preSetEPC = byte(m.PreSet.EPC)
-			preSetValue = m.PreSet.Value
-		}
-		spec.Metrics = append(spec.Metrics, MetricSpec{
-			EPC:            byte(m.EPC),
-			Name:           m.Name,
-			Help:           help,
-			Size:           m.Size,
-			Offset:         m.Offset,
-			Scale:          scale,
-			Signed:         m.Signed,
-			Invalid:        m.Invalid,
-			Type:           m.Type,
-			Enum:           enum,
-			ReverseEnum:    reverseEnum,
-			ScrapeInterval: interval,
-			MultiplierEPC:  byte(m.MultiplierEPC),
-			MultiplierMap:  m.MultiplierMap,
-			HADeviceClass:  haDevice,
-			HAStateClass:   haState,
-			HAUnit:         haUnit,
-			NumberMin:      m.NumberMin,
-			NumberMax:      m.NumberMax,
-			PreSetEPC:      preSetEPC,
-			PreSetValue:    preSetValue,
-			ExcludeSet:     m.ExcludeSet,
-			SetMode:        m.SetMode,
-		})
+		spec.Metrics = append(spec.Metrics, *metricSpec)
 	}
 	if raw.Climate != nil {
 		cl, err := parseClimateYAML(raw.Climate)
@@ -255,6 +157,114 @@ func parseDeviceYAML(data []byte) (*DeviceSpec, error) {
 		spec.Light = lt
 	}
 	return spec, nil
+}
+
+// parseMetricSpec parses and validates a single metric YAML definition, applying
+// defaults for constraints, enum labels, and Home Assistant discovery metadata.
+func parseMetricSpec(m metricYAML, devInterval time.Duration, eoj [3]byte) (*MetricSpec, error) {
+	if m.Size != 0 && m.Size != 1 && m.Size != 2 && m.Size != 4 {
+		return nil, fmt.Errorf("metric %s: size must be 0 (auto), 1, 2, or 4", m.Name)
+	}
+	if m.Type != "gauge" && m.Type != "counter" {
+		return nil, fmt.Errorf("metric %s: type must be gauge or counter", m.Name)
+	}
+	if m.EPC < 0 || m.EPC > 0xFF {
+		return nil, fmt.Errorf("metric %s: epc must be in range 0..255, got %d", m.Name, m.EPC)
+	}
+	if m.Offset < 0 {
+		return nil, fmt.Errorf("metric %s: offset must be non-negative, got %d", m.Name, m.Offset)
+	}
+	if m.MultiplierEPC < 0 || m.MultiplierEPC > 0xFF {
+		return nil, fmt.Errorf("metric %s: multiplier_epc must be in range 0..255, got %d", m.Name, m.MultiplierEPC)
+	}
+	if m.MultiplierEPC != 0 && len(m.MultiplierMap) == 0 {
+		return nil, fmt.Errorf("metric %s: multiplier_epc set but multiplier_map is empty", m.Name)
+	}
+	if m.NumberMin != nil && m.NumberMax != nil && *m.NumberMin >= *m.NumberMax {
+		return nil, fmt.Errorf("metric %s: number_min must be less than number_max", m.Name)
+	}
+	if m.SetMode != "" && m.SetMode != "setc" && m.SetMode != "seti" {
+		return nil, fmt.Errorf("metric %s: set_mode must be \"setc\" or \"seti\", got %q", m.Name, m.SetMode)
+	}
+	if m.PreSet != nil {
+		if m.PreSet.EPC < 0 || m.PreSet.EPC > 0xFF {
+			return nil, fmt.Errorf("metric %s: pre_set.epc must be in range 0..255, got %d", m.Name, m.PreSet.EPC)
+		}
+	}
+	scale := m.Scale
+	if scale == 0 {
+		scale = 1
+	}
+	var enum map[int]string
+	if len(m.Enum) > 0 {
+		if scale != 1 {
+			return nil, fmt.Errorf("metric %s: enum mapping requires scale=1, got %v", m.Name, scale)
+		}
+		enum = make(map[int]string, len(m.Enum))
+		for rawValue, label := range m.Enum {
+			if label == "" {
+				return nil, fmt.Errorf("metric %s: enum label must not be empty for value %d", m.Name, rawValue)
+			}
+			if m.Size != 0 && !enumValueFits(rawValue, m.Size, m.Signed) {
+				return nil, fmt.Errorf("metric %s: enum value %d doesn't fit size=%d signed=%t", m.Name, rawValue, m.Size, m.Signed)
+			}
+			enum[rawValue] = label
+		}
+	}
+	help := m.Help
+	if help == "" {
+		help = LookupEPCName(eoj, byte(m.EPC))
+	}
+	interval := devInterval
+	if m.ScrapeInterval != "" {
+		d, err := time.ParseDuration(m.ScrapeInterval)
+		if err != nil {
+			return nil, fmt.Errorf("metric %s scrape_interval %q: %w", m.Name, m.ScrapeInterval, err)
+		}
+		if d <= 0 {
+			return nil, fmt.Errorf("metric %s scrape_interval must be positive", m.Name)
+		}
+		interval = d
+	}
+	haDevice, haState, haUnit := m.HADeviceClass, m.HAStateClass, m.HAUnit
+	if haDevice == "" {
+		haDevice, haState, haUnit = inferHAMetadata(m.Name, m.Type, len(m.Enum) > 0)
+	}
+	reverseEnum := make(map[string]int, len(enum))
+	for raw, label := range enum {
+		reverseEnum[label] = raw
+	}
+	var preSetEPC byte
+	var preSetValue int
+	if m.PreSet != nil {
+		preSetEPC = byte(m.PreSet.EPC)
+		preSetValue = m.PreSet.Value
+	}
+	return &MetricSpec{
+		EPC:            byte(m.EPC),
+		Name:           m.Name,
+		Help:           help,
+		Size:           m.Size,
+		Offset:         m.Offset,
+		Scale:          scale,
+		Signed:         m.Signed,
+		Invalid:        m.Invalid,
+		Type:           m.Type,
+		Enum:           enum,
+		ReverseEnum:    reverseEnum,
+		ScrapeInterval: interval,
+		MultiplierEPC:  byte(m.MultiplierEPC),
+		MultiplierMap:  m.MultiplierMap,
+		HADeviceClass:  haDevice,
+		HAStateClass:   haState,
+		HAUnit:         haUnit,
+		NumberMin:      m.NumberMin,
+		NumberMax:      m.NumberMax,
+		PreSetEPC:      preSetEPC,
+		PreSetValue:    preSetValue,
+		ExcludeSet:     m.ExcludeSet,
+		SetMode:        m.SetMode,
+	}, nil
 }
 
 // mergeSuperClass injects canonical Super Class metrics into spec. Class (and
