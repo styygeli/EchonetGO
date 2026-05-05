@@ -206,6 +206,7 @@ func setupHTTPServer(cfg *config.Config, cache *poller.Cache, deviceSpecs map[st
 func handleShutdown(cancel context.CancelFunc, mqttPub *mqttpub.Publisher, server *http.Server, errCh chan error, log *logging.Logger) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 	select {
 	case <-sigCh:
 		log.Infof("Shutting down...")
