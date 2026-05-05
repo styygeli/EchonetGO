@@ -126,45 +126,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 		objectID := dev.Name + "_" + ms.Name
 		configTopic := fmt.Sprintf("%s/sensor/%s/config", p.discoveryPrefix, objectID)
 
-		payload := haDiscoveryPayload{
-			Name:              friendlyName(ms.Name),
-			UniqueID:          "echonetgo_" + objectID,
-			StateTopic:        stateTopic,
-			ValueTemplate:     fmt.Sprintf("{{ value_json.%s | default(None) }}", ms.Name),
-			AvailabilityTopic: availTopic,
-			ExpireAfter:       300,
-			Device:            device,
-			ForceUpdate:       true,
-		}
-
-		if ms.HADeviceClass != "" && ms.HADeviceClass != "enum" {
-			payload.DeviceClass = ms.HADeviceClass
-		}
-		if ms.HAStateClass != "" {
-			payload.StateClass = ms.HAStateClass
-		}
-		if ms.HAUnit != "" {
-			payload.UnitOfMeasurement = ms.HAUnit
-		}
-
-		if ms.HADeviceClass == "enum" && len(ms.Enum) > 0 {
-			payload.DeviceClass = "enum"
-			payload.StateClass = ""
-			payload.UnitOfMeasurement = ""
-			options := make([]string, 0, len(ms.Enum))
-			for _, label := range ms.Enum {
-				options = append(options, label)
-			}
-			payload.Options = options
-			payload.ValueTemplate = fmt.Sprintf("{{ value_json.%s_str | default(value_json.%s | default(None)) }}", ms.Name, ms.Name)
-		}
-
-		if ms.HADeviceClass == "power" || ms.HADeviceClass == "energy" {
-			payload.SuggestedDisplayPrecision = intPtr(1)
-		}
-		if ms.HADeviceClass == "temperature" {
-			payload.SuggestedDisplayPrecision = intPtr(1)
-		}
+		payload := buildSensorPayload(ms, objectID, stateTopic, availTopic, device)
 
 		data, err := json.Marshal(payload)
 		if err != nil {
@@ -189,6 +151,49 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 	}
 	p.published[key] = infoKey
 	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, sensorCount, info.Manufacturer, info.ProductCode)
+}
+
+func buildSensorPayload(ms specs.MetricSpec, objectID, stateTopic, availTopic string, device haDevice) haDiscoveryPayload {
+	payload := haDiscoveryPayload{
+		Name:              friendlyName(ms.Name),
+		UniqueID:          "echonetgo_" + objectID,
+		StateTopic:        stateTopic,
+		ValueTemplate:     fmt.Sprintf("{{ value_json.%s | default(None) }}", ms.Name),
+		AvailabilityTopic: availTopic,
+		ExpireAfter:       300,
+		Device:            device,
+		ForceUpdate:       true,
+	}
+
+	if ms.HADeviceClass != "" && ms.HADeviceClass != "enum" {
+		payload.DeviceClass = ms.HADeviceClass
+	}
+	if ms.HAStateClass != "" {
+		payload.StateClass = ms.HAStateClass
+	}
+	if ms.HAUnit != "" {
+		payload.UnitOfMeasurement = ms.HAUnit
+	}
+
+	if ms.HADeviceClass == "enum" && len(ms.Enum) > 0 {
+		payload.DeviceClass = "enum"
+		payload.StateClass = ""
+		payload.UnitOfMeasurement = ""
+		options := make([]string, 0, len(ms.Enum))
+		for _, label := range ms.Enum {
+			options = append(options, label)
+		}
+		payload.Options = options
+		payload.ValueTemplate = fmt.Sprintf("{{ value_json.%s_str | default(value_json.%s | default(None)) }}", ms.Name, ms.Name)
+	}
+
+	if ms.HADeviceClass == "power" || ms.HADeviceClass == "energy" {
+		payload.SuggestedDisplayPrecision = intPtr(1)
+	}
+	if ms.HADeviceClass == "temperature" {
+		payload.SuggestedDisplayPrecision = intPtr(1)
+	}
+	return payload
 }
 
 func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, availTopic string, cl *specs.ClimateSpec, metricSpecs []specs.MetricSpec) {

@@ -51,7 +51,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	var wg sync.WaitGroup
 	for ip, devices := range devicesByIP {
 		wg.Add(1)
-		go func() {
+		go func(ip string, devices []config.Device) {
 			defer wg.Done()
 			var pairs []deviceWithEOJ
 			for _, dev := range devices {
@@ -59,100 +59,17 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 				if spec == nil {
 					continue
 				}
-				activeEOJ := resolveEOJInstance(ctx, probeClient, dev, spec.EOJ, &hostEOJCache)
-				pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
-				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
-
-				mfgCode, err := client.GetManufacturerCode(ctx, dev.IP, activeEOJ)
-				if err != nil {
-					pollerLog.Warnf("device %s (%s): manufacturer code read failed, using generic spec: %v", dev.Name, dev.IP, err)
-				} else if mfgCode != "" {
-					vendorKey := dev.Class + "_" + mfgCode
-					if vendorSpec := deviceSpecs[vendorKey]; vendorSpec != nil {
-						spec = vendorSpec
-						pollerLog.Infof("device %s (%s): using vendor-specific spec %s", dev.Name, dev.IP, vendorKey)
-					}
-				}
-
-				c.SetDeviceEOJ(dev, activeEOJ)
-
-				activeMetrics := spec.Metrics
-				readable, err := client.GetReadablePropertyMap(ctx, dev.IP, activeEOJ)
-				if err != nil {
-					pollerLog.Warnf("device %s (%s): failed to read GETMAP (0x9F), using configured EPCs: %v", dev.Name, dev.IP, err)
-				} else {
-					var unsupported []byte
-					activeMetrics, unsupported = filterMetricsByReadableMap(spec.Metrics, readable)
-					if len(unsupported) > 0 {
-						pollerLog.Warnf("device %s (%s): skipping unsupported EPCs from GETMAP: %v", dev.Name, dev.IP, unsupported)
-					}
-				}
-			writable, err := client.GetWritablePropertyMap(ctx, dev.IP, activeEOJ)
-			if err != nil {
-				pollerLog.Warnf("device %s (%s): failed to read writable property map (0x9E): %v", dev.Name, dev.IP, err)
-			} else {
-				c.SetWritableEPCs(dev, writable)
-			}
-			if cfg.NotificationsEnabled {
-				notify, err := client.GetNotificationPropertyMap(ctx, dev.IP, activeEOJ)
-				if err != nil {
-					pollerLog.Warnf("device %s (%s): failed to read STATMAP (0x9D): %v", dev.Name, dev.IP, err)
-				} else {
-					c.SetNotificationEPCs(dev, notify)
-					epcs := make([]byte, 0, len(notify))
-					for epc := range notify {
-						epcs = append(epcs, epc)
-					}
-					pollerLog.Infof("device %s (%s): STATMAP has %d notification EPCs: %s",
-						dev.Name, dev.IP, len(notify), echonet.FormatEPCList(epcs))
-				}
-			}
+				activeEOJ, activeMetrics := c.discoverDeviceState(ctx, client, probeClient, dev, spec, deviceSpecs, &hostEOJCache, cfg.NotificationsEnabled)
 				if len(activeMetrics) == 0 {
-					pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
 					continue
 				}
-				c.SetDeviceSpecs(dev, activeMetrics)
-				c.SetDeviceClimate(dev, spec.Climate)
-				c.SetDeviceLight(dev, spec.Light)
-
-				devDefaultInterval := spec.DefaultScrapeInterval
-				if dev.ScrapeInterval != "" {
-					d, err := time.ParseDuration(dev.ScrapeInterval)
-					if err != nil {
-						pollerLog.Warnf("device %s invalid scrape_interval %q: %v", dev.Name, dev.ScrapeInterval, err)
-					} else if d > 0 {
-						devDefaultInterval = d
-					}
-				}
-
-				byInterval := make(map[time.Duration][]specs.MetricSpec)
-				for _, m := range activeMetrics {
-					iv := m.ScrapeInterval
-					if iv <= 0 {
-						iv = devDefaultInterval
-					}
-					byInterval[iv] = append(byInterval[iv], m)
-				}
-				intervals := make([]time.Duration, 0, len(byInterval))
-				for iv := range byInterval {
-					intervals = append(intervals, iv)
-				}
-				sort.Slice(intervals, func(i, j int) bool { return intervals[i] < intervals[j] })
-
-				for i, interval := range intervals {
-					metrics := byInterval[interval]
-					groupID := interval.String()
-					initialDelay := time.Duration(i) * 500 * time.Millisecond
-					if initialDelay > interval/2 {
-						initialDelay = interval / 2
-					}
-					go c.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
-				}
+				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
+				c.scheduleDeviceScrapers(ctx, client, dev, activeEOJ, activeMetrics, spec)
 			}
 			hostDevicePairsMu.Lock()
 			hostDevicePairs[ip] = pairs
 			hostDevicePairsMu.Unlock()
-		}()
+		}(ip, devices)
 	}
 	wg.Wait()
 
@@ -161,6 +78,102 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	}
 	for _, pairs := range hostDevicePairs {
 		go c.runDeviceInfoRefresher(ctx, client, pairs)
+	}
+}
+
+func (c *Cache) discoverDeviceState(ctx context.Context, client, probeClient *echonet.Client, dev config.Device, defaultSpec *specs.DeviceSpec, deviceSpecs map[string]*specs.DeviceSpec, hostEOJCache *sync.Map, notificationsEnabled bool) ([3]byte, []specs.MetricSpec) {
+	activeEOJ := resolveEOJInstance(ctx, probeClient, dev, defaultSpec.EOJ, hostEOJCache)
+	pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
+
+	spec := defaultSpec
+	mfgCode, err := client.GetManufacturerCode(ctx, dev.IP, activeEOJ)
+	if err != nil {
+		pollerLog.Warnf("device %s (%s): manufacturer code read failed, using generic spec: %v", dev.Name, dev.IP, err)
+	} else if mfgCode != "" {
+		vendorKey := dev.Class + "_" + mfgCode
+		if vendorSpec := deviceSpecs[vendorKey]; vendorSpec != nil {
+			spec = vendorSpec
+			pollerLog.Infof("device %s (%s): using vendor-specific spec %s", dev.Name, dev.IP, vendorKey)
+		}
+	}
+
+	c.SetDeviceEOJ(dev, activeEOJ)
+
+	activeMetrics := spec.Metrics
+	readable, err := client.GetReadablePropertyMap(ctx, dev.IP, activeEOJ)
+	if err != nil {
+		pollerLog.Warnf("device %s (%s): failed to read GETMAP (0x9F), using configured EPCs: %v", dev.Name, dev.IP, err)
+	} else {
+		var unsupported []byte
+		activeMetrics, unsupported = filterMetricsByReadableMap(spec.Metrics, readable)
+		if len(unsupported) > 0 {
+			pollerLog.Warnf("device %s (%s): skipping unsupported EPCs from GETMAP: %v", dev.Name, dev.IP, unsupported)
+		}
+	}
+	writable, err := client.GetWritablePropertyMap(ctx, dev.IP, activeEOJ)
+	if err != nil {
+		pollerLog.Warnf("device %s (%s): failed to read writable property map (0x9E): %v", dev.Name, dev.IP, err)
+	} else {
+		c.SetWritableEPCs(dev, writable)
+	}
+	if notificationsEnabled {
+		notify, err := client.GetNotificationPropertyMap(ctx, dev.IP, activeEOJ)
+		if err != nil {
+			pollerLog.Warnf("device %s (%s): failed to read STATMAP (0x9D): %v", dev.Name, dev.IP, err)
+		} else {
+			c.SetNotificationEPCs(dev, notify)
+			epcs := make([]byte, 0, len(notify))
+			for epc := range notify {
+				epcs = append(epcs, epc)
+			}
+			pollerLog.Infof("device %s (%s): STATMAP has %d notification EPCs: %s",
+				dev.Name, dev.IP, len(notify), echonet.FormatEPCList(epcs))
+		}
+	}
+	if len(activeMetrics) == 0 {
+		pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
+		return activeEOJ, nil
+	}
+	c.SetDeviceSpecs(dev, activeMetrics)
+	c.SetDeviceClimate(dev, spec.Climate)
+	c.SetDeviceLight(dev, spec.Light)
+
+	return activeEOJ, activeMetrics
+}
+
+func (c *Cache) scheduleDeviceScrapers(ctx context.Context, client *echonet.Client, dev config.Device, activeEOJ [3]byte, activeMetrics []specs.MetricSpec, spec *specs.DeviceSpec) {
+	devDefaultInterval := spec.DefaultScrapeInterval
+	if dev.ScrapeInterval != "" {
+		d, err := time.ParseDuration(dev.ScrapeInterval)
+		if err != nil {
+			pollerLog.Warnf("device %s invalid scrape_interval %q: %v", dev.Name, dev.ScrapeInterval, err)
+		} else if d > 0 {
+			devDefaultInterval = d
+		}
+	}
+
+	byInterval := make(map[time.Duration][]specs.MetricSpec)
+	for _, m := range activeMetrics {
+		iv := m.ScrapeInterval
+		if iv <= 0 {
+			iv = devDefaultInterval
+		}
+		byInterval[iv] = append(byInterval[iv], m)
+	}
+	intervals := make([]time.Duration, 0, len(byInterval))
+	for iv := range byInterval {
+		intervals = append(intervals, iv)
+	}
+	sort.Slice(intervals, func(i, j int) bool { return intervals[i] < intervals[j] })
+
+	for i, interval := range intervals {
+		metrics := byInterval[interval]
+		groupID := interval.String()
+		initialDelay := time.Duration(i) * 500 * time.Millisecond
+		if initialDelay > interval/2 {
+			initialDelay = interval / 2
+		}
+		go c.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
 	}
 }
 
