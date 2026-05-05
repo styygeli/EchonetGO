@@ -201,28 +201,25 @@ func setupHTTPServer(cfg *config.Config, cache *poller.Cache, deviceSpecs map[st
 	return server, errCh
 }
 
+// handleShutdown blocks until an OS termination signal is received or a fatal HTTP server
+// error occurs, then coordinates a graceful shutdown of all background processes.
 func handleShutdown(cancel context.CancelFunc, mqttPub *mqttpub.Publisher, server *http.Server, errCh chan error, log *logging.Logger) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	select {
 	case <-sigCh:
 		log.Infof("Shutting down...")
-		cancel()
-		if mqttPub != nil {
-			mqttPub.Disconnect()
-		}
-		if err := server.Shutdown(context.Background()); err != nil {
-			log.Warnf("HTTP shutdown: %v", err)
-		}
 	case err := <-errCh:
-		log.Fatalf("HTTP server: %v", err)
+		log.Errorf("HTTP server error: %v", err)
 	}
-}
-: %v", err)
-	}
-}
-, err)
-	}
-}
 
+	cancel()
+	if mqttPub != nil {
+		mqttPub.Disconnect()
+	}
+	ctx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+	if err := server.Shutdown(ctx); err != nil {
+		log.Warnf("HTTP shutdown: %v", err)
+	}
 }

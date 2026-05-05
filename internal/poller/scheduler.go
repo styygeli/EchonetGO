@@ -59,12 +59,12 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 				if spec == nil {
 					continue
 				}
-				activeEOJ, activeMetrics := c.discoverDeviceState(ctx, client, probeClient, dev, spec, deviceSpecs, &hostEOJCache, cfg.NotificationsEnabled)
+				activeEOJ, activeMetrics, activeSpec := c.discoverDeviceState(ctx, client, probeClient, dev, spec, deviceSpecs, &hostEOJCache, cfg.NotificationsEnabled)
 				if len(activeMetrics) == 0 {
 					continue
 				}
 				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
-				c.scheduleDeviceScrapers(ctx, client, dev, activeEOJ, activeMetrics, spec)
+				c.scheduleDeviceScrapers(ctx, client, dev, activeEOJ, activeMetrics, activeSpec)
 			}
 			hostDevicePairsMu.Lock()
 			hostDevicePairs[ip] = pairs
@@ -81,7 +81,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 	}
 }
 
-func (c *Cache) discoverDeviceState(ctx context.Context, client, probeClient *echonet.Client, dev config.Device, defaultSpec *specs.DeviceSpec, deviceSpecs map[string]*specs.DeviceSpec, hostEOJCache *sync.Map, notificationsEnabled bool) ([3]byte, []specs.MetricSpec) {
+func (c *Cache) discoverDeviceState(ctx context.Context, client, probeClient *echonet.Client, dev config.Device, defaultSpec *specs.DeviceSpec, deviceSpecs map[string]*specs.DeviceSpec, hostEOJCache *sync.Map, notificationsEnabled bool) ([3]byte, []specs.MetricSpec, *specs.DeviceSpec) {
 	activeEOJ := resolveEOJInstance(ctx, probeClient, dev, defaultSpec.EOJ, hostEOJCache)
 	pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
 
@@ -132,13 +132,13 @@ func (c *Cache) discoverDeviceState(ctx context.Context, client, probeClient *ec
 	}
 	if len(activeMetrics) == 0 {
 		pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
-		return activeEOJ, nil
+		return activeEOJ, nil, spec
 	}
 	c.SetDeviceSpecs(dev, activeMetrics)
 	c.SetDeviceClimate(dev, spec.Climate)
 	c.SetDeviceLight(dev, spec.Light)
 
-	return activeEOJ, activeMetrics
+	return activeEOJ, activeMetrics, spec
 }
 
 // scheduleDeviceScrapers groups device metrics by their configured scrape interval
@@ -423,12 +423,6 @@ func missingMetricNames(metrics []specs.MetricSpec, out map[string]echonet.Metri
 	missing := make([]string, 0)
 	for _, m := range metrics {
 		if _, ok := out[m.Name]; !ok {
-			missing = append(missing, m.Name)
-		}
-	}
-	return missing
-}
-{
 			missing = append(missing, m.Name)
 		}
 	}

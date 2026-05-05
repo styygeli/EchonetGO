@@ -106,6 +106,8 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	cfg.Sanitize()
+
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
@@ -245,6 +247,15 @@ func loadAdditionalDevices(cfg *Config) error {
 	return nil
 }
 
+// Sanitize cleans up the configuration inputs before validation.
+func (c *Config) Sanitize() {
+	for i, d := range c.Devices {
+		if d.Name != "" {
+			c.Devices[i].Name = sanitizeDeviceName(d.Name)
+		}
+	}
+}
+
 // Validate checks the configuration for errors.
 func (c *Config) Validate() error {
 	for i, d := range c.Devices {
@@ -256,10 +267,6 @@ func (c *Config) Validate() error {
 		}
 		if d.Class == "" {
 			return fmt.Errorf("device %q: class is required", d.Name)
-		}
-		sanitized := sanitizeDeviceName(d.Name)
-		if sanitized != d.Name {
-			c.Devices[i].Name = sanitized
 		}
 	}
 	return nil
@@ -301,11 +308,6 @@ func sanitizeDeviceName(name string) string {
 		switch r {
 		case '/', '+', '#':
 			return '_'
-		}
-		return r
-	}, name)
-}
-eturn '_'
 		}
 		return r
 	}, name)
