@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.38 - 2026-05-05
+- **Refactor**: Break down large initialization and validation functions.
+
 ## 0.9.37
 - **Metrics**: Fixed a critical runtime panic caused by metric name collisions (switched state suffix to `_info`).
 - **Testing**: Added regression tests for metric name collisions.

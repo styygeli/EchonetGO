@@ -86,14 +86,44 @@ func Load() (*Config, error) {
 	}
 	cfg.ConfigPath = configPath
 
-	data, err := os.ReadFile(configPath)
+	if err := loadFromFile(cfg); err != nil {
+		return nil, err
+	}
+
+	// MQTT defaults
+	if cfg.MQTT.TopicPrefix == "" {
+		cfg.MQTT.TopicPrefix = "echonetgo"
+	}
+	if cfg.MQTT.DiscoveryPrefix == "" {
+		cfg.MQTT.DiscoveryPrefix = "homeassistant"
+	}
+
+	if err := applyEnvOverrides(cfg); err != nil {
+		return nil, err
+	}
+
+	if err := loadAdditionalDevices(cfg); err != nil {
+		return nil, err
+	}
+
+	cfg.Sanitize()
+
+	if err := cfg.Validate(); err != nil {
+		return nil, err
+	}
+
+	return cfg, nil
+}
+
+func loadFromFile(cfg *Config) error {
+	data, err := os.ReadFile(cfg.ConfigPath)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf("read config %s: %w", configPath, err)
+		return fmt.Errorf("read config %s: %w", cfg.ConfigPath, err)
 	}
 	if err == nil {
 		var fc fileConfig
 		if err := yaml.Unmarshal(data, &fc); err != nil {
-			return nil, fmt.Errorf("parse %s: %w", configPath, err)
+			return fmt.Errorf("parse %s: %w", cfg.ConfigPath, err)
 		}
 		if fc.ListenAddr != "" {
 			cfg.ListenAddr = fc.ListenAddr
@@ -127,16 +157,10 @@ func Load() (*Config, error) {
 		}
 		cfg.MQTT = fc.MQTT
 	}
+	return nil
+}
 
-	// MQTT defaults
-	if cfg.MQTT.TopicPrefix == "" {
-		cfg.MQTT.TopicPrefix = "echonetgo"
-	}
-	if cfg.MQTT.DiscoveryPrefix == "" {
-		cfg.MQTT.DiscoveryPrefix = "homeassistant"
-	}
-
-	// Environment overrides
+func applyEnvOverrides(cfg *Config) error {
 	if v := os.Getenv("ECHONET_LISTEN_ADDR"); v != "" {
 		cfg.ListenAddr = v
 	}
@@ -148,28 +172,28 @@ func Load() (*Config, error) {
 	if v := os.Getenv("ECHONET_STRICT_SOURCE_PORT_3610"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, fmt.Errorf("ECHONET_STRICT_SOURCE_PORT_3610: %w", err)
+			return fmt.Errorf("ECHONET_STRICT_SOURCE_PORT_3610: %w", err)
 		}
 		cfg.StrictSourcePort3610 = b
 	}
 	if v := os.Getenv("ECHONET_METRICS_ENABLED"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, fmt.Errorf("ECHONET_METRICS_ENABLED: %w", err)
+			return fmt.Errorf("ECHONET_METRICS_ENABLED: %w", err)
 		}
 		cfg.MetricsEnabled = b
 	}
 	if v := os.Getenv("ECHONET_NOTIFICATIONS_ENABLED"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, fmt.Errorf("ECHONET_NOTIFICATIONS_ENABLED: %w", err)
+			return fmt.Errorf("ECHONET_NOTIFICATIONS_ENABLED: %w", err)
 		}
 		cfg.NotificationsEnabled = b
 	}
 	if v := os.Getenv("ECHONET_FORCE_POLLING"); v != "" {
 		b, err := strconv.ParseBool(v)
 		if err != nil {
-			return nil, fmt.Errorf("ECHONET_FORCE_POLLING: %w", err)
+			return fmt.Errorf("ECHONET_FORCE_POLLING: %w", err)
 		}
 		cfg.ForcePolling = b
 	}
@@ -197,12 +221,17 @@ func Load() (*Config, error) {
 	if v := os.Getenv("MQTT_DISCOVERY_PREFIX"); v != "" {
 		cfg.MQTT.DiscoveryPrefix = v
 	}
+	return nil
+}
 
+// loadAdditionalDevices reads supplemental device configurations from files
+// or from the ECHONET_DEVICES JSON environment variable.
+func loadAdditionalDevices(cfg *Config) error {
 	// Devices from file if no devices in main config
 	if len(cfg.Devices) == 0 && cfg.DevicesPath != "" {
 		devices, err := loadDevicesFile(cfg.DevicesPath)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		cfg.Devices = devices
 	}
@@ -211,28 +240,36 @@ func Load() (*Config, error) {
 	if devicesJSON := os.Getenv("ECHONET_DEVICES"); devicesJSON != "" {
 		var devices []Device
 		if err := json.Unmarshal([]byte(devicesJSON), &devices); err != nil {
-			return nil, fmt.Errorf("ECHONET_DEVICES JSON: %w", err)
+			return fmt.Errorf("ECHONET_DEVICES JSON: %w", err)
 		}
 		cfg.Devices = devices
 	}
+	return nil
+}
 
-	for i, d := range cfg.Devices {
-		if d.Name == "" {
-			return nil, fmt.Errorf("device[%d]: name is required", i)
-		}
-		if d.IP == "" {
-			return nil, fmt.Errorf("device %q: ip is required", d.Name)
-		}
-		if d.Class == "" {
-			return nil, fmt.Errorf("device %q: class is required", d.Name)
-		}
-		sanitized := sanitizeDeviceName(d.Name)
-		if sanitized != d.Name {
-			cfg.Devices[i].Name = sanitized
+// Sanitize cleans up the configuration inputs before validation.
+func (c *Config) Sanitize() {
+	for i, d := range c.Devices {
+		if d.Name != "" {
+			c.Devices[i].Name = sanitizeDeviceName(d.Name)
 		}
 	}
+}
 
-	return cfg, nil
+// Validate checks the configuration for errors.
+func (c *Config) Validate() error {
+	for i, d := range c.Devices {
+		if d.Name == "" {
+			return fmt.Errorf("device[%d]: name is required", i)
+		}
+		if d.IP == "" {
+			return fmt.Errorf("device %q: ip is required", d.Name)
+		}
+		if d.Class == "" {
+			return fmt.Errorf("device %q: class is required", d.Name)
+		}
+	}
+	return nil
 }
 
 func loadDevicesFile(path string) ([]Device, error) {
