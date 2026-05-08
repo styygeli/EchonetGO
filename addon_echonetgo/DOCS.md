@@ -31,7 +31,7 @@ mqtt:
 
 ## Network
 
-This add-on runs with **host networking** so ECHONET Lite UDP traffic can reliably reach devices on LAN/IoT subnets. The HTTP API listens on port **9191**.
+This add-on runs with **host networking** (`host_network: true`). This is required because the ECHONET Lite protocol relies on UDP multicast group `224.0.23.0:3610` for device notifications and discovery. Docker's bridged networking does not forward multicast traffic from the host's physical interfaces into containers, making host networking the only reliable option for this protocol. The HTTP API listens on port **9191**.
 
 ### Multicast notifications
 

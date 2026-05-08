@@ -13,8 +13,9 @@ arch:
 init: false
 hassio_api: true
 host_network: true
+apparmor: true
 map:
-  - config:rw
+  - config:ro
 mqtt: auto
 options:
   config_path: "/config/echonetgo/config.yaml"
