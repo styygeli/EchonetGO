@@ -27,42 +27,22 @@ profile addon_echonetgo flags=(attach_disconnected,mediate_deleted) {
   # Add-on data
   /data/** rw,
 
-  # Start new profile for echonetgo service
-  /usr/bin/echonetgo cx -> echonetgo,
+  # EchonetGO binary
+  /usr/bin/echonetgo rix,
 
-  profile echonetgo flags=(attach_disconnected,mediate_deleted) {
-    #include <abstractions/base>
+  # Config (read-only)
+  /config/** r,
 
-    # Receive signals from S6-Overlay
-    signal (receive) peer=*_addon_echonetgo,
+  # Device specs
+  /usr/share/echonetgo/** r,
 
-    /usr/bin/echonetgo r,
+  # Network: UDP (ECHONET Lite multicast + unicast), TCP (MQTT, HTTP)
+  network inet dgram,
+  network inet stream,
+  network inet6 dgram,
+  network inet6 stream,
 
-    # Config (read-only)
-    /config/** r,
-
-    # Device specs
-    /usr/share/echonetgo/** r,
-
-    # Add-on data
-    /data/** r,
-
-    # Network: UDP (ECHONET Lite multicast + unicast), TCP (MQTT, HTTP)
-    network inet dgram,
-    network inet stream,
-    network inet6 dgram,
-    network inet6 stream,
-
-    # Proc/sys for network interface discovery
-    @{PROC}/sys/net/** r,
-    @{PROC}/self/** r,
-    /sys/class/net/ r,
-    /sys/class/net/** r,
-
-    # DNS resolution
-    /etc/resolv.conf r,
-    /etc/hosts r,
-    /etc/nsswitch.conf r,
-    /etc/ssl/** r,
-  }
+  # Deny dangerous paths
+  deny /root/** rwx,
+  deny /sys/firmware/** r,
 }
