@@ -6,10 +6,20 @@ profile addon_echonetgo flags=(attach_disconnected,mediate_deleted) {
   # Binary
   /usr/bin/echonetgo rmix,
 
-  # Runtime helpers (S6 overlay + shell)
+  # S6 overlay init system
+  /init rix,
+  /bin/s6-*** rix,
+  /bin/s6** rix,
+  /etc/s6-overlay/** r,
+  /etc/s6-overlay/**/run rix,
+  /etc/s6-overlay/**/finish rix,
+  /run/ rw,
+  /run/** rwk,
+  /var/run/s6/container-environment/* r,
+
+  # Runtime helpers
   /usr/bin/with-contenv rix,
   /run.sh rix,
-  /var/run/s6/container-environment/* r,
   /usr/bin/jq rix,
   /usr/bin/curl rix,
   /bin/sh rix,
