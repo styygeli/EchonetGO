@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -396,6 +397,12 @@ func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, e
 		mqttLog.Warnf("commander: no metric spec for temperature EPC 0x%02x", epc)
 		return
 	}
+	_, _, _, cached := c.cache.Get(*dev)
+	prev, hasPrev := 0.0, false
+	if mv, ok := cached[ms.Name]; ok {
+		prev, hasPrev = mv.Value, true
+	}
+	temp = normalizeClimateSetpoint(temp, prev, hasPrev, *ms)
 	edt, err := echonet.EncodeValueToEDT(temp, *ms)
 	if err != nil {
 		mqttLog.Warnf("commander: encode temperature failed: %v", err)
@@ -409,6 +416,34 @@ func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, e
 	}
 	mqttLog.Infof("commander: set %s temperature %s", dev.Name, payload)
 	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
+}
+
+// normalizeClimateSetpoint rounds a requested temperature to the integer
+// resolution used by most ECHONET Lite HVAC devices. When the request has a
+// .5 fractional part, it rounds in the direction of change relative to prev
+// (up when raising, down when lowering) so Matter bridges that emit 0.5°C
+// steps produce the setpoint the user intended. Other fractions use
+// nearest-integer rounding; integer inputs and sub-integer-scale metrics
+// pass through.
+func normalizeClimateSetpoint(req, prev float64, hasPrev bool, ms specs.MetricSpec) float64 {
+	scale := ms.Scale
+	if scale == 0 {
+		scale = 1
+	}
+	if scale != 1 {
+		return req
+	}
+	if req == math.Trunc(req) {
+		return req
+	}
+	frac := req - math.Floor(req)
+	if math.Abs(frac-0.5) < 1e-9 && hasPrev {
+		if req >= prev {
+			return math.Ceil(req)
+		}
+		return math.Floor(req)
+	}
+	return math.Round(req)
 }
 
 func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
