@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.41 - 2026-05-08
+- **Fix**: Allow S6 overlay `/init` and service tree in AppArmor profile (container failed to start).
+
 ## 0.9.40 - 2026-05-08
 - **Security**: Add AppArmor profile restricting container to required paths and network operations only.
 - **Security**: Change `/config` folder mapping from read-write to read-only.
