@@ -16,7 +16,7 @@ profile addon_echonetgo flags=(attach_disconnected,mediate_deleted) {
   /etc/s6-overlay/**/run rix,
   /etc/s6-overlay/**/finish rix,
   /run/ rw,
-  /run/** rwk,
+  /run/** rwkix,
   /var/run/s6/container-environment/* r,
 
   # Runtime helpers
