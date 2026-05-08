@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.40 - 2026-05-08
+- **Security**: Add AppArmor profile restricting container to required paths and network operations only.
+- **Security**: Change `/config` folder mapping from read-write to read-only.
+- **Docs**: Document host_network requirement (ECHONET Lite UDP multicast not supported in Docker bridged mode).
+
 ## 0.9.39 - 2026-05-08
 - **Climate**: Direction-aware rounding for 0.5°C target temperature requests. When a Matter bridge (e.g. Google Home) sends a fractional setpoint, EchonetGo now rounds toward the direction of change relative to the previously reported target instead of banker's rounding, so nudging a 22°C setpoint up to 22.5°C reliably becomes 23°C. Integer values and sub-integer-scale metrics are unaffected.
 
