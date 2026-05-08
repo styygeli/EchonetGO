@@ -3,65 +3,66 @@
 profile addon_echonetgo flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
 
-  # Binary
-  /usr/bin/echonetgo rmix,
+  # Capabilities
+  file,
+  signal (send) set=(kill,term,int,hup,cont),
 
-  # S6 overlay init system
-  /init rix,
-  /bin/s6-** rix,
-  /bin/s6** rix,
-  /package/** rix,
-  /command/** rix,
-  /etc/s6-overlay/** r,
-  /etc/s6-overlay/**/run rix,
-  /etc/s6-overlay/**/finish rix,
-  /run/ rw,
-  /run/** rwkix,
-  /var/run/s6/container-environment/* r,
+  # S6-Overlay
+  /init ix,
+  /bin/** ix,
+  /usr/bin/** ix,
+  /run/{s6,s6-rc*,service}/** ix,
+  /package/** ix,
+  /command/** ix,
+  /etc/services.d/** rwix,
+  /etc/cont-init.d/** rwix,
+  /etc/cont-finish.d/** rwix,
+  /run/{,**} rwk,
+  /dev/tty rw,
 
-  # Runtime helpers
-  /usr/bin/with-contenv rix,
-  /run.sh rix,
-  /usr/bin/jq rix,
-  /usr/bin/curl rix,
-  /bin/sh rix,
-  /bin/grep rix,
+  # Bashio
+  /usr/lib/bashio/** ix,
+  /tmp/** rwk,
 
-  # Config (read-only)
-  /config/** r,
+  # Add-on data
+  /data/** rw,
 
-  # Device specs (read-only)
-  /usr/share/echonetgo/** r,
+  # Start new profile for echonetgo service
+  /usr/bin/echonetgo cx -> echonetgo,
 
-  # Add-on options
-  /data/options.json r,
+  profile echonetgo flags=(attach_disconnected,mediate_deleted) {
+    #include <abstractions/base>
 
-  # Temp file for MQTT Supervisor API response
-  /tmp/ rw,
-  /tmp/mqtt_resp.json rw,
+    # Receive signals from S6-Overlay
+    signal (receive) peer=*_addon_echonetgo,
 
-  # System libraries and shared resources
-  /lib/** rm,
-  /usr/lib/** rm,
-  /etc/ssl/** r,
-  /etc/resolv.conf r,
-  /etc/hosts r,
-  /etc/nsswitch.conf r,
+    /usr/bin/echonetgo r,
 
-  # Proc/sys for network and runtime
-  @{PROC}/sys/net/** r,
-  @{PROC}/self/** r,
-  /sys/class/net/ r,
-  /sys/class/net/** r,
+    # Config (read-only)
+    /config/** r,
 
-  # Network: UDP (ECHONET Lite), TCP (MQTT, HTTP)
-  network inet dgram,
-  network inet stream,
-  network inet6 dgram,
-  network inet6 stream,
+    # Device specs
+    /usr/share/echonetgo/** r,
 
-  # Deny everything else
-  deny @{PROC}/*/net/fib_trie* r,
-  deny /root/** rwx,
-  deny /sys/firmware/** r,
+    # Add-on data
+    /data/** r,
+
+    # Network: UDP (ECHONET Lite multicast + unicast), TCP (MQTT, HTTP)
+    network inet dgram,
+    network inet stream,
+    network inet6 dgram,
+    network inet6 stream,
+
+    # Proc/sys for network interface discovery
+    @{PROC}/sys/net/** r,
+    @{PROC}/self/** r,
+    /sys/class/net/ r,
+    /sys/class/net/** r,
+
+    # DNS resolution
+    /etc/resolv.conf r,
+    /etc/hosts r,
+    /etc/nsswitch.conf r,
+    /etc/ssl/** r,
+  }
 }
