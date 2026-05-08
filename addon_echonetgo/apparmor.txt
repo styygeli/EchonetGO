@@ -49,7 +49,7 @@ profile addon_echonetgo flags=(attach_disconnected,mediate_deleted) {
   network inet6 stream,
 
   # Deny everything else
-  deny /proc/*/net/fib_trie* r,
+  deny @{PROC}/*/net/fib_trie* r,
   deny /root/** rwx,
   deny /sys/firmware/** r,
 }
