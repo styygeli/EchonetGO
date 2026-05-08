@@ -1,16 +1,19 @@
 #include <tunables/global>
 
-profile echonetgo flags=(attach_disconnected,mediate_deleted) {
+profile addon_echonetgo flags=(attach_disconnected,mediate_deleted) {
   #include <abstractions/base>
 
   # Binary
   /usr/bin/echonetgo rmix,
 
-  # Runtime helpers
+  # Runtime helpers (S6 overlay + shell)
+  /usr/bin/with-contenv rix,
+  /run.sh r,
+  /var/run/s6/container-environment/* r,
   /usr/bin/jq rix,
   /usr/bin/curl rix,
   /bin/sh rix,
-  /usr/bin/grep rix,
+  /bin/grep rix,
 
   # Config (read-only)
   /config/** r,
@@ -22,6 +25,7 @@ profile echonetgo flags=(attach_disconnected,mediate_deleted) {
   /data/options.json r,
 
   # Temp file for MQTT Supervisor API response
+  /tmp/ w,
   /tmp/mqtt_resp.json rw,
 
   # System libraries and shared resources
