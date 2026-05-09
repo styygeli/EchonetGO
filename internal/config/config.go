@@ -211,12 +211,19 @@ func applyEnvOverrides(cfg *Config) error {
 	} else {
 		// Fallback to HA Supervisor injected variables
 		host := os.Getenv("MQTT_HOST")
+		if host == "" {
+			host = os.Getenv("MQTT_SERVER")
+		}
 		port := os.Getenv("MQTT_PORT")
 		if host != "" {
 			if port == "" {
 				port = "1883"
 			}
-			cfg.MQTT.Broker = fmt.Sprintf("tcp://%s:%s", host, port)
+			if !strings.HasPrefix(host, "tcp://") && !strings.HasPrefix(host, "ssl://") {
+				cfg.MQTT.Broker = fmt.Sprintf("tcp://%s:%s", host, port)
+			} else {
+				cfg.MQTT.Broker = host
+			}
 		}
 	}
 	if v := os.Getenv("MQTT_USER"); v != "" {

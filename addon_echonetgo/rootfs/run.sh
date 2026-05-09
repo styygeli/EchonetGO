@@ -19,10 +19,18 @@ export ECHONET_LOG_LEVEL="${LOG_LEVEL:-info}"
 export ECHONET_SPECS_DIR="${ECHONET_SPECS_DIR:-/usr/share/echonetgo/specs}"
 export ECHONET_LISTEN_ADDR="0.0.0.0:9191"
 
+# Debug: check for Supervisor-injected MQTT variables
+echo "[run.sh] Checking for MQTT environment variables..."
+[ -n "${MQTT_HOST}" ] && echo "[run.sh] - MQTT_HOST is present"
+[ -n "${MQTT_SERVER}" ] && echo "[run.sh] - MQTT_SERVER is present"
+[ -n "${MQTT_USER}" ] && echo "[run.sh] - MQTT_USER is present"
+[ -n "${MQTT_USERNAME}" ] && echo "[run.sh] - MQTT_USERNAME is present"
+[ -n "${MQTT_PASSWORD}" ] && echo "[run.sh] - MQTT_PASSWORD is present"
+
 # MQTT: skip Supervisor API if the config file already has broker settings,
-# or if MQTT_BROKER env var is already set.
-if [ -n "${MQTT_BROKER}" ]; then
-  echo "[run.sh] MQTT_BROKER already set, skipping Supervisor API"
+# or if MQTT_BROKER/MQTT_HOST/MQTT_SERVER env vars are already set.
+if [ -n "${MQTT_BROKER}" ] || [ -n "${MQTT_HOST}" ] || [ -n "${MQTT_SERVER}" ]; then
+  echo "[run.sh] MQTT environment already set, skipping Supervisor API"
 elif grep -qE '^\s*broker:\s+".+"' "${CONFIG_PATH}" 2>/dev/null; then
   echo "[run.sh] MQTT broker found in ${CONFIG_PATH}, skipping Supervisor API"
 elif [ -n "${SUPERVISOR_TOKEN}" ]; then
