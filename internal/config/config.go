@@ -155,7 +155,6 @@ func loadFromFile(cfg *Config) error {
 		if len(fc.Devices) > 0 {
 			cfg.Devices = fc.Devices
 		}
-		cfg.MQTT = fc.MQTT
 	}
 	return nil
 }

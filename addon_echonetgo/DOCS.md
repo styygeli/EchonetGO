@@ -18,16 +18,16 @@ For full configuration reference, device classes, architecture, and spec format,
 
 ## MQTT
 
-The add-on uses `mqtt: true` to receive broker credentials from the HA Supervisor automatically (requires the Mosquitto add-on). No manual MQTT configuration is needed.
+MQTT configuration is handled exclusively via the **Add-on Configuration UI** in Home Assistant. This is more secure and avoids issues with Supervisor API permissions.
 
-If your config file already has an active `broker:` setting, the Supervisor API call is skipped. To use automatic credentials, ensure your `mqtt:` section is empty or commented out:
+1. Go to **Settings** -> **Add-ons** -> **EchonetGO (Dev)**.
+2. Click the **Configuration** tab.
+3. Fill in your broker details:
+   - `mqtt_broker`: e.g., `tcp://192.168.0.250:1883`
+   - `mqtt_username`: Your MQTT user
+   - `mqtt_password`: Your MQTT password
 
-```yaml
-mqtt:
-  broker: "tcp://core-mosquitto:1883"
-  username: "my_user"
-  password: "my_pass"
-```
+MQTT settings in `config.yaml` are ignored when running as an add-on.
 
 ## Network
 
