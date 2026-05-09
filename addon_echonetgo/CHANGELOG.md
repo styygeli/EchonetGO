@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.43 - 2026-05-09
+- **Configuration**: Transitioned exclusively to UI-based MQTT configuration via add-on options to fix Supervisor API permission issues (403 Forbidden).
+- **Fix**: Removed deprecated `arch` definitions (`armhf`, `armv7`, `i386`) from add-on config to resolve Supervisor validation warnings.
+- **Dependencies**: Bumped `golang.org/x/text` from 0.35.0 to 0.36.0.
+
 ## 0.9.42 - 2026-05-08
 - **Security**: Add AppArmor profile based on official Home Assistant template, restricting container access while allowing S6 overlay and network operations.
 - **Security**: Change `/config` folder mapping to read-only.
