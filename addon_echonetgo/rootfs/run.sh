@@ -22,6 +22,8 @@ export ECHONET_LISTEN_ADDR="0.0.0.0:9191"
 # Debug: check for Supervisor-injected MQTT variables
 echo "[run.sh] Checking for MQTT environment variables..."
 env | grep -E '^(MQTT|SUPERVISOR|HASSIO)_' | cut -d= -f1 | sed 's/^/- /'
+[ -n "${SUPERVISOR_TOKEN}" ] && echo "[run.sh] - SUPERVISOR_TOKEN is present"
+[ -n "${HASSIO_TOKEN}" ] && echo "[run.sh] - HASSIO_TOKEN is present"
 echo "[run.sh] Checking for MQTT environment variables... done"
 
 # MQTT: skip Supervisor API if the config file already has broker settings,
