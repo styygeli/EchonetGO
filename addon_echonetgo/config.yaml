@@ -12,8 +12,6 @@ hassio_api: true
 host_network: true
 apparmor: true
 mqtt: true
-services:
-  - mqtt
 map:
   - config:ro
 options:
