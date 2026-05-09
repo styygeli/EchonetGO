@@ -10,6 +10,11 @@ if [ -f /data/options.json ]; then
   v=$(jq -r '.config_path // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && CONFIG_PATH="$v"
   v=$(jq -r '.devices_path // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && DEVICES_PATH="$v"
   v=$(jq -r '.log_level // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && LOG_LEVEL="$v"
+  
+  # MQTT options from UI
+  v=$(jq -r '.mqtt_broker // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && export MQTT_BROKER="$v"
+  v=$(jq -r '.mqtt_username // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && export MQTT_USER="$v"
+  v=$(jq -r '.mqtt_password // empty' /data/options.json 2>/dev/null) && [ -n "$v" ] && export MQTT_PASS="$v"
 fi
 
 export ECHONET_CONFIG="${CONFIG_PATH}"
