@@ -20,10 +20,10 @@ For full configuration reference, device classes, architecture, and spec format,
 
 MQTT configuration is handled exclusively via the **Add-on Configuration UI** in Home Assistant. This is more secure and avoids issues with Supervisor API permissions.
 
-1. Go to **Settings** -> **Add-ons** -> **EchonetGO (Dev)**.
+1. Go to **Settings** -> **Add-ons** -> **EchonetGO**.
 2. Click the **Configuration** tab.
 3. Fill in your broker details:
-   - `mqtt_broker`: e.g., `tcp://192.168.0.250:1883`
+   - `mqtt_broker`: e.g., `tcp://core-mosquitto:1883` or `tcp://192.168.x.x:1883`
    - `mqtt_username`: Your MQTT user
    - `mqtt_password`: Your MQTT password
 
