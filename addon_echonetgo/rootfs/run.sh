@@ -32,10 +32,22 @@ if [ -n "${MQTT_BROKER}" ] || [ -n "${MQTT_HOST}" ] || [ -n "${MQTT_SERVER}" ]; 
   echo "[run.sh] MQTT environment already set, skipping Supervisor API"
 elif grep -qE '^\s*broker:\s+".+"' "${CONFIG_PATH}" 2>/dev/null; then
   echo "[run.sh] MQTT broker found in ${CONFIG_PATH}, skipping Supervisor API"
-elif [ -n "${SUPERVISOR_TOKEN}" ]; then
+elif [ -n "${SUPERVISOR_TOKEN}" ] || [ -n "${HASSIO_TOKEN}" ]; then
+  TOKEN="${SUPERVISOR_TOKEN:-$HASSIO_TOKEN}"
+  echo "[run.sh] Fetching MQTT credentials from Supervisor..."
+  
+  # Try primary endpoint
   HTTP_CODE=$(curl -s -o /tmp/mqtt_resp.json -w '%{http_code}' \
-    -H "Authorization: Bearer ${SUPERVISOR_TOKEN}" \
+    -H "Authorization: Bearer ${TOKEN}" \
     http://supervisor/services/mqtt 2>/dev/null) || HTTP_CODE="000"
+
+  # Fallback to legacy endpoint if 403 or 404
+  if [ "${HTTP_CODE}" = "403" ] || [ "${HTTP_CODE}" = "404" ]; then
+    echo "[run.sh] Primary endpoint returned ${HTTP_CODE}, trying legacy endpoint..."
+    HTTP_CODE=$(curl -s -o /tmp/mqtt_resp.json -w '%{http_code}' \
+      -H "Authorization: Bearer ${TOKEN}" \
+      http://hassio/services/mqtt 2>/dev/null) || HTTP_CODE="000"
+  fi
 
   if [ "${HTTP_CODE}" = "200" ]; then
     MQTT_HOST=$(jq -r '.data.host // empty' /tmp/mqtt_resp.json)
@@ -52,11 +64,13 @@ elif [ -n "${SUPERVISOR_TOKEN}" ]; then
       echo "[run.sh] WARNING: Supervisor returned 200 but no MQTT host in response"
     fi
   else
-    echo "[run.sh] Supervisor /services/mqtt returned HTTP ${HTTP_CODE}, MQTT will use config file settings if available"
+    echo "[run.sh] Supervisor API returned HTTP ${HTTP_CODE}"
+    [ -f /tmp/mqtt_resp.json ] && echo "[run.sh] Response: $(cat /tmp/mqtt_resp.json)"
+    echo "[run.sh] MQTT will use config file settings if available"
   fi
   rm -f /tmp/mqtt_resp.json
 else
-  echo "[run.sh] No SUPERVISOR_TOKEN, MQTT will use config file settings if available"
+  echo "[run.sh] No SUPERVISOR_TOKEN or HASSIO_TOKEN found"
 fi
 
 exec /usr/bin/echonetgo
