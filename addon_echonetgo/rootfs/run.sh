@@ -23,7 +23,7 @@ export ECHONET_LISTEN_ADDR="0.0.0.0:9191"
 # or if MQTT_BROKER env var is already set.
 if [ -n "${MQTT_BROKER}" ]; then
   echo "[run.sh] MQTT_BROKER already set, skipping Supervisor API"
-elif grep -q 'broker:' "${CONFIG_PATH}" 2>/dev/null; then
+elif grep -qE '^\s*broker:\s+".+"' "${CONFIG_PATH}" 2>/dev/null; then
   echo "[run.sh] MQTT broker found in ${CONFIG_PATH}, skipping Supervisor API"
 elif [ -n "${SUPERVISOR_TOKEN}" ]; then
   HTTP_CODE=$(curl -s -o /tmp/mqtt_resp.json -w '%{http_code}' \

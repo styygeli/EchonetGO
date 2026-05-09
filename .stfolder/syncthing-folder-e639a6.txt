@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: vvngu-houea
+created: 2026-05-08T17:48:26+09:00

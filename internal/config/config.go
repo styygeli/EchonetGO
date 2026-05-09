@@ -208,11 +208,25 @@ func applyEnvOverrides(cfg *Config) error {
 	}
 	if v := os.Getenv("MQTT_BROKER"); v != "" {
 		cfg.MQTT.Broker = v
+	} else {
+		// Fallback to HA Supervisor injected variables
+		host := os.Getenv("MQTT_HOST")
+		port := os.Getenv("MQTT_PORT")
+		if host != "" {
+			if port == "" {
+				port = "1883"
+			}
+			cfg.MQTT.Broker = fmt.Sprintf("tcp://%s:%s", host, port)
+		}
 	}
 	if v := os.Getenv("MQTT_USER"); v != "" {
 		cfg.MQTT.Username = v
+	} else if v := os.Getenv("MQTT_USERNAME"); v != "" {
+		cfg.MQTT.Username = v
 	}
 	if v := os.Getenv("MQTT_PASS"); v != "" {
+		cfg.MQTT.Password = v
+	} else if v := os.Getenv("MQTT_PASSWORD"); v != "" {
 		cfg.MQTT.Password = v
 	}
 	if v := os.Getenv("MQTT_TOPIC_PREFIX"); v != "" {

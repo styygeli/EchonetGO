@@ -18,9 +18,9 @@ For full configuration reference, device classes, architecture, and spec format,
 
 ## MQTT
 
-The add-on uses `mqtt: auto` to receive broker credentials from the HA Supervisor automatically (requires the Mosquitto add-on). No manual MQTT configuration is needed.
+The add-on uses `mqtt: true` to receive broker credentials from the HA Supervisor automatically (requires the Mosquitto add-on). No manual MQTT configuration is needed.
 
-If your config file already has an `mqtt.broker` setting, the Supervisor API call is skipped entirely. To override manually:
+If your config file already has an active `broker:` setting, the Supervisor API call is skipped. To use automatic credentials, ensure your `mqtt:` section is empty or commented out:
 
 ```yaml
 mqtt:
