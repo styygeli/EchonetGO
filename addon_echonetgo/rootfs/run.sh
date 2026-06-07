@@ -27,6 +27,11 @@ fi
 export ECHONET_LOG_LEVEL="${LOG_LEVEL:-info}"
 [ -n "${DEVICES_PATH}" ] && export ECHONET_DEVICES_PATH="${DEVICES_PATH}"
 
-export ECHONET_SPECS_DIR="${ECHONET_SPECS_DIR:-/usr/share/echonetgo/specs}"
+# Use user-provided specs if the directory exists, else fallback to bundled defaults.
+if [ -d "/config/echonetgo/specs" ]; then
+  export ECHONET_SPECS_DIR="/config/echonetgo/specs"
+else
+  export ECHONET_SPECS_DIR="/usr/share/echonetgo/specs"
+fi
 
 exec /usr/bin/echonetgo

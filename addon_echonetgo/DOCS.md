@@ -61,7 +61,7 @@ The service exposes two HTTP endpoints for orchestration and load balancers:
 
 ## Customizing Device Behavior
 
-Device support in EchonetGO is defined by YAML specification files in `etc/specs/`. You can customize how your device appears in Home Assistant by creating manufacturer-specific overrides.
+Device support in EchonetGO is defined by YAML specification files. By default, the add-on uses built-in specifications, but you can override them or add new ones by creating a `specs` folder in your Home Assistant configuration: `/config/echonetgo/specs/`.
 
 ### Friendly Fan Speeds
 
