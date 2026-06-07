@@ -145,7 +145,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 		p.publishLightDiscovery(dev, device, availTopic, lightSpec, metricSpecs)
 	}
 	p.published[key] = infoKey
-	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, sensorCount, info.Manufacturer, info.ProductCode)
+	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, len(metricSpecs), info.Manufacturer, info.ProductCode)
 }
 
 // buildSensorPayload constructs the JSON auto-discovery payload for a single metric
