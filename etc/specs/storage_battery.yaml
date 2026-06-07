@@ -47,42 +47,63 @@ metrics:
     size: 4
     scale: 1
     type: gauge
+    ha_device_class: energy
+    ha_state_class: total
+    ha_unit: "Wh"
   - epc: 0xA2
     name: chargeable_capacity_wh
     help: "AC chargeable capacity in Wh."
     size: 4
     scale: 1
     type: gauge
+    ha_device_class: energy
+    ha_state_class: total
+    ha_unit: "Wh"
   - epc: 0xA3
     name: dischargeable_capacity_wh
     help: "AC dischargeable capacity in Wh."
     size: 4
     scale: 1
     type: gauge
+    ha_device_class: energy
+    ha_state_class: total
+    ha_unit: "Wh"
   - epc: 0xA0
     name: effective_capacity_charging_wh
     help: "AC effective capacity while charging."
     size: 4
     scale: 1
     type: gauge
+    ha_device_class: energy
+    ha_state_class: total
+    ha_unit: "Wh"
   - epc: 0xA1
     name: effective_capacity_discharging_wh
     help: "AC effective capacity while discharging."
     size: 4
     scale: 1
     type: gauge
+    ha_device_class: energy
+    ha_state_class: total
+    ha_unit: "Wh"
   - epc: 0xA4
     name: chargeable_amount_wh
     help: "AC chargeable amount."
     size: 4
     scale: 1
     type: gauge
+    ha_device_class: energy
+    ha_state_class: total
+    ha_unit: "Wh"
   - epc: 0xA5
     name: dischargeable_amount_wh
     help: "AC dischargeable amount."
     size: 4
     scale: 1
     type: gauge
+    ha_device_class: energy
+    ha_state_class: total
+    ha_unit: "Wh"
   - epc: 0xA8
     name: cumulative_charge_wh
     help: "Cumulative AC charge amount in Wh."
@@ -90,6 +111,9 @@ metrics:
     scale: 1
     type: counter
     scrape_interval: 5m
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
   - epc: 0xA9
     name: cumulative_discharge_wh
     help: "Cumulative AC discharge amount in Wh."
@@ -97,6 +121,9 @@ metrics:
     scale: 1
     type: counter
     scrape_interval: 5m
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
   - epc: 0xAA
     name: charge_amount_setting_value
     help: "AC charge amount setting value."

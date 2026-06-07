@@ -69,6 +69,7 @@ metrics:
     size: 1
     scale: 1
     type: gauge
+    invalid: 0xFD
     number_max: 30
     pre_set:
       epc: 0xb0

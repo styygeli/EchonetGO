@@ -25,6 +25,8 @@ func SuperClassMetrics() []MetricSpec {
 		locationReverse[v] = k
 	}
 
+	invalidFF := 0xFF
+
 	faultEnum := map[int]string{0x41: "fault", 0x42: "no_fault"}
 	faultReverse := map[string]int{"fault": 0x41, "no_fault": 0x42}
 
@@ -49,6 +51,7 @@ func SuperClassMetrics() []MetricSpec {
 			Type:           "gauge",
 			Enum:           locationEnum,
 			ReverseEnum:    locationReverse,
+			Invalid:        &invalidFF,
 			HADeviceClass:  "enum",
 			ScrapeInterval: 10 * time.Minute,
 		},
