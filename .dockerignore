@@ -1,6 +1,7 @@
 # Exclude source control
 .git/
 .github/
+.stfolder/
 
 # Exclude local configuration and potentially sensitive data
 etc/devices.yaml
