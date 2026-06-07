@@ -23,6 +23,7 @@ COPY --from=builder /src/etc/specs /usr/share/echonetgo/specs
 RUN chmod a+x /run.sh
 
 LABEL \
+  org.opencontainers.image.source="https://github.com/styygeli/EchonetGO" \
   io.hass.name="EchonetGO" \
   io.hass.description="ECHONET Lite polling service in Go" \
   io.hass.type="addon" \
