@@ -4,8 +4,6 @@
 # Home Assistant overrides BUILD_FROM automatically during add-on builds.
 ARG BUILD_FROM=ghcr.io/hassio-addons/base:20.1.0
 FROM golang:1.26-alpine AS builder
-ARG ECHONETGO_REPO=https://github.com/styygeli/EchonetGO.git
-ARG ECHONETGO_REF=dev
 ARG BUILD_VERSION=dev
 RUN apk add --no-cache git ca-certificates
 WORKDIR /src
