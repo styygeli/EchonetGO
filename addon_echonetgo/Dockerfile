@@ -9,8 +9,7 @@ ARG ECHONETGO_REF=dev
 ARG BUILD_VERSION=dev
 RUN apk add --no-cache git ca-certificates
 WORKDIR /src
-RUN echo "Building EchonetGO source for addon version: ${BUILD_VERSION}" && \
-    git clone --depth=1 --branch "${ECHONETGO_REF}" "${ECHONETGO_REPO}" /src
+COPY . /src
 RUN go mod download
 RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${BUILD_VERSION}" -o /echonetgo ./cmd/echonetgo
 

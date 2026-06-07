@@ -2,6 +2,7 @@
 name: "EchonetGO (Dev)"
 version: "0.9.44-dev.11"
 slug: echonetgo_dev
+image: "ghcr.io/styygeli/{arch}-echonetgo_dev"
 description: ECHONET Lite polling service in Go. Polls devices, publishes HA entities via MQTT, and serves Prometheus metrics.
 url: "https://github.com/styygeli/EchonetGO"
 arch:

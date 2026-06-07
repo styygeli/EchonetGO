@@ -1,0 +1,71 @@
+# Exclude source control
+.git/
+.github/
+
+# Exclude local configuration and potentially sensitive data
+etc/devices.yaml
+etc/config.yaml
+.env
+.env.*
+!.env.example
+
+# Exclude local build outputs
+/echonetgo
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+*.prof
+*.pprof
+
+# Exclude Go workspace files
+go.work
+go.work.sum
+
+# Exclude Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+.venv/
+venv/
+env/
+.python-version
+.ipynb_checkpoints/
+
+# Exclude Editor/IDE settings
+.idea/
+.vscode/
+.swp
+
+# Exclude OS files
+.DS_Store
+
+# Exclude Gemini-specific files
+.gemini/
+gha-creds-*.json
+GEMINI.md
+CLAUDE.md
+.claude/
+.ai/
+
+# Exclude large spec datasets
+echonet_specs/MRA_*/
+
+# Exclude other local files
+TODO.txt
+plan.txt
