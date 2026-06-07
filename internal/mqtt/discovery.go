@@ -117,12 +117,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 	availTopic := fmt.Sprintf("%s/%s/availability", p.topicPrefix, dev.Name)
 	stateTopic := fmt.Sprintf("%s/%s/state", p.topicPrefix, dev.Name)
 
-	var sensorCount int
 	for _, ms := range metricSpecs {
-		if _, ok := metrics[ms.Name]; !ok {
-			continue
-		}
-		sensorCount++
 		objectID := dev.Name + "_" + ms.Name
 		configTopic := fmt.Sprintf("%s/sensor/%s/config", p.discoveryPrefix, objectID)
 
