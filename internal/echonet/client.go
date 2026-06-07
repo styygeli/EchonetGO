@@ -18,9 +18,10 @@ var clientLog = logging.New("echonet-client")
 
 // DeviceInfo represents generic identity properties of a device.
 type DeviceInfo struct {
-	UID          string
-	Manufacturer string
-	ProductCode  string
+	UID              string
+	Manufacturer     string
+	ManufacturerCode string
+	ProductCode      string
 }
 
 // MetricValue holds a parsed value and its type (gauge or counter).
@@ -244,6 +245,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 			info.UID = decodeUID(p.EDT, c.hostLabel(addr))
 		case 0x8A:
 			info.Manufacturer = decodeManufacturer(p.EDT)
+			info.ManufacturerCode = fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2])
 		case 0x8C:
 			info.ProductCode = decodeProductCode(p.EDT)
 		}
@@ -272,6 +274,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 				info.UID = decodeUID(p.EDT, c.hostLabel(addr))
 			case 0x8A:
 				info.Manufacturer = decodeManufacturer(p.EDT)
+				info.ManufacturerCode = fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2])
 			case 0x8C:
 				info.ProductCode = decodeProductCode(p.EDT)
 			}
