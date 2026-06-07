@@ -81,7 +81,7 @@ One of the core goals of EchonetGO is to build a comprehensive "database" of ECH
 If you have a device that shows generic `level_X` values, or if you've discovered new EPCs for your hardware:
 
 1. **Discover:** Watch your Home Assistant state or EchonetGO logs while using your physical remote to identify which `level_X` strings correspond to your remote's settings (e.g. "Quiet", "Turbo").
-2. **Override:** Identify your Manufacturer ID from the startup logs and create an override spec in `etc/specs/` (e.g., `home_ac_000006.yaml`).
+2. **Override:** Identify your Manufacturer ID from the startup logs and create an override spec in `etc/specs/` (e.g., `home_ac_000006.yaml`). **Note:** Overrides are complete replacements; you should copy the base spec (like `home_ac.yaml`) into your new file before making changes.
 3. **Contribute:** Submit a Pull Request! Your contribution will help other users with the same hardware get a "plug-and-play" experience.
 
 See the [Add-on Documentation](addon_echonetgo/DOCS.md#customizing-device-behavior) for more details on the spec format and how to define friendly fan speeds.

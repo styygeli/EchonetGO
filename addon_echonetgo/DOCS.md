@@ -69,7 +69,8 @@ By default, air conditioners show fan speeds as `level_1`, `level_2`, etc., beca
 
 1. **Identify your device's Manufacturer ID:** Check the EchonetGO logs on startup. You will see a line like: `published discovery for climate_unit (..., mfg="000006" model="...")`. The `mfg` hex code is what you need.
 2. **Discover your levels:** Use your physical remote and watch the Home Assistant state for your Climate entity. When you set it to "Quiet" on the remote, check the logs or HA to see which `level_X` it corresponds to.
-3. **Create an override file:** Create a file in your specs directory named `home_ac_{mfg}.yaml` (e.g., `home_ac_000006.yaml`).
+3. **Create an override file:** Create a file in your specs directory named `home_ac_{mfg}.yaml` (e.g., `home_ac_000006.yaml`). 
+    *   **Note:** Manufacturer-specific files **replace** the base class spec entirely. You should copy the contents of the generic `home_ac.yaml` into your new file as a starting point, then modify the specific parts you want to change.
 4. **Define the mapping:** Map the levels to friendly names in the `enum` section and set the UI order in the `fan_modes` list.
 
 ```yaml
