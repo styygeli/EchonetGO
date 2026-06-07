@@ -23,6 +23,7 @@ type ClimateSpec struct {
 	MaxTemp                 float64
 	TempStep                float64
 	Modes                   map[string]*int // HA mode label -> ECHONET raw value; nil for "off"
+	FanModes                []string        // HA fan mode labels in desired UI order
 }
 
 // LightSpec defines HA light entity mapping for lighting device classes.

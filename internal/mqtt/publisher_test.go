@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/styygeli/echonetgo/internal/specs"
@@ -304,4 +305,46 @@ func TestClimateModesList(t *testing.T) {
 			t.Fatalf("climateModesList()[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
+}
+
+func TestFanModesFromSpec(t *testing.T) {
+	ms := []specs.MetricSpec{
+		{
+			EPC:  0xA0,
+			Name: "fan_mode",
+			ReverseEnum: map[string]int{
+				"auto":    0x41,
+				"level_1": 0x31,
+				"level_2": 0x32,
+			},
+		},
+	}
+
+	t.Run("DefaultLevels", func(t *testing.T) {
+		cl := &specs.ClimateSpec{FanModeEPC: 0xA0}
+		got := fanModesFromSpec(ms, cl)
+		want := []string{"auto", "level_1", "level_2"}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("CustomModes", func(t *testing.T) {
+		cl := &specs.ClimateSpec{
+			FanModeEPC: 0xA0,
+			FanModes:   []string{"auto", "quiet", "high"},
+		}
+		got := fanModesFromSpec(ms, cl)
+		want := []string{"auto", "quiet", "high"}
+		if fmt.Sprint(got) != fmt.Sprint(want) {
+			t.Errorf("got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("NilClimate", func(t *testing.T) {
+		got := fanModesFromSpec(ms, nil)
+		if got != nil {
+			t.Errorf("got %v, want nil", got)
+		}
+	})
 }

@@ -14,17 +14,29 @@ apparmor: true
 map:
   - config:ro
 options:
-  config_path: "/config/echonetgo/config.yaml"
-  devices_path: ""
+  devices_path: "/config/echonetgo/devices.yaml"
   log_level: "info"
   mqtt_broker: ""
   mqtt_username: ""
   mqtt_password: ""
+  listen_addr: "0.0.0.0:9191"
+  scrape_timeout_sec: 15
+  strict_source_port_3610: true
+  metrics_enabled: true
+  notifications_enabled: true
+  force_polling: false
+  multicast_interfaces: ""
 schema:
-  config_path: "str?"
-  devices_path: "str?"
+  devices_path: "str"
   log_level: "str?"
   mqtt_broker: "str?"
   mqtt_username: "str?"
   mqtt_password: "password?"
+  listen_addr: "str"
+  scrape_timeout_sec: "int"
+  strict_source_port_3610: "bool"
+  metrics_enabled: "bool"
+  notifications_enabled: "bool"
+  force_polling: "bool"
+  multicast_interfaces: "str?"
 

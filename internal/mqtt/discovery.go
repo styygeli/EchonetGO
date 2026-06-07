@@ -228,7 +228,7 @@ func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, 
 	if cl.FanModeEPC != 0 {
 		payload.FanModeCommandTopic = base + "/fan_mode/set"
 		payload.FanModeStateTopic = base + "/fan_mode/state"
-		payload.FanModes = fanModesFromSpec(metricSpecs, cl.FanModeEPC)
+		payload.FanModes = fanModesFromSpec(metricSpecs, cl)
 		if len(payload.FanModes) == 0 {
 			payload.FanModes = []string{"auto", "low", "medium", "high"}
 		}
@@ -457,7 +457,14 @@ func selectOptionsOrdered(ms specs.MetricSpec) []string {
 	return out
 }
 
-func fanModesFromSpec(metricSpecs []specs.MetricSpec, epc byte) []string {
+func fanModesFromSpec(metricSpecs []specs.MetricSpec, cl *specs.ClimateSpec) []string {
+	if cl == nil || cl.FanModeEPC == 0 {
+		return nil
+	}
+	if len(cl.FanModes) > 0 {
+		return cl.FanModes
+	}
+	epc := cl.FanModeEPC
 	for _, m := range metricSpecs {
 		if m.EPC != epc {
 			continue

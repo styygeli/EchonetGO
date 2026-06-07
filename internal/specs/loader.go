@@ -74,6 +74,7 @@ type climateYAML struct {
 	MaxTemp               float64         `yaml:"max_temp"`
 	TempStep              float64         `yaml:"temp_step"`
 	Modes                 map[string]*int `yaml:"modes"`
+	FanModes              []string        `yaml:"fan_modes"`
 }
 
 type preSetYAML struct {
@@ -355,6 +356,7 @@ func parseClimateYAML(raw *climateYAML) (*ClimateSpec, error) {
 		MaxTemp:               raw.MaxTemp,
 		TempStep:              raw.TempStep,
 		Modes:                 raw.Modes,
+		FanModes:              raw.FanModes,
 	}, nil
 }
 

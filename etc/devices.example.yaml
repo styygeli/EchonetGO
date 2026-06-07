@@ -1,34 +1,71 @@
-# Device list for EchonetGO (editable YAML).
-# Copy to etc/devices.yaml and update IP addresses for your network.
-# Class names must match a file in etc/specs (e.g. home_ac.yaml -> class: home_ac).
+# EchonetGO configuration example.
+# Copy to etc/config.yaml or set ECHONET_CONFIG to your file path.
+#
+# Environment variables override file values:
+#   ECHONET_LISTEN_ADDR, ECHONET_SCRAPE_TIMEOUT_SEC,
+#   ECHONET_STRICT_SOURCE_PORT_3610,
+#   ECHONET_DEVICES_PATH, ECHONET_SPECS_DIR, ECHONET_DEVICES (JSON)
+#   MQTT_BROKER, MQTT_USER, MQTT_PASS, MQTT_TOPIC_PREFIX, MQTT_DISCOVERY_PREFIX
 
-devices:
-  # Air conditioners
-  - name: my_aircon_living
-    ip: 192.168.1.10
-    class: home_ac
-  - name: my_aircon_bedroom
-    ip: 192.168.1.11
-    class: home_ac
+listen_addr: ":9191"
+scrape_timeout_sec: 15
 
-  # Solar / battery (EP Cube, etc.)
-  - name: epcube_battery
-    ip: 192.168.1.20
-    class: storage_battery
-  - name: epcube_solar
-    ip: 192.168.1.20
-    class: home_solar
+# Keep source UDP port fixed to 3610 (recommended for devices that only reply
+# to requests sourced from port 3610).
+strict_source_port_3610: true
 
-  # Panasonic Smart Cosmo distribution board (multiple EOJ classes on one IP)
-  - name: breaker_panel
-    ip: 192.168.1.30
-    class: power_dist_board
-  - name: panel_solar
-    ip: 192.168.1.30
-    class: home_solar
-  - name: water_meter
-    ip: 192.168.1.30
-    class: water_flow_meter
-  - name: gas_meter
-    ip: 192.168.1.30
-    class: gas_meter
+# Listen for device-initiated INF/INFC multicast notifications (default true).
+# Devices that broadcast state changes are reflected immediately without waiting
+# for the next poll cycle.
+notifications_enabled: true
+
+# Always poll all EPCs even if recently pushed via notification (default false).
+# Useful for debugging or when you don't trust device push behavior.
+# force_polling: false
+
+# Network interfaces for multicast join. Leave empty (or omit) to auto-detect
+# all suitable IPv4 interfaces. Useful on multi-VLAN hosts.
+# multicast_interfaces:
+#   - eth0
+#   - eth0.3
+
+# Path to devices list (YAML or JSON). Optional if devices are listed below or in ECHONET_DEVICES.
+devices_path: "etc/devices.yaml"
+
+# Directory of device class specs (one .yaml per class). Default: etc/specs
+specs_dir: "etc/specs"
+
+# Optional: define devices inline instead of devices_path
+# devices:
+#   - name: epcube_battery
+#     ip: 192.168.1.10
+#     class: storage_battery
+#     manufacturer: "Eternalplanet"     # fallback if device doesn't report EPC 0x8A
+#     model: "EP Cube"                  # fallback if device doesn't report EPC 0x8C
+#     scrape_interval: 2m
+#   - name: living_ac
+#     ip: 192.168.1.20
+#     class: home_ac
+#   - name: breaker_panel
+#     ip: 192.168.1.30
+#     class: power_dist_board
+#   - name: panel_solar
+#     ip: 192.168.1.30
+#     class: home_solar
+#   - name: water_meter
+#     ip: 192.168.1.30
+#     class: water_flow_meter
+#   - name: gas_meter
+#     ip: 192.168.1.30
+#     class: gas_meter
+
+# MQTT publishing for Home Assistant auto-discovery.
+# Leave broker empty (or omit mqtt block) to disable.
+# When running as an HA add-on with mqtt: auto, the broker/credentials
+# are injected automatically via MQTT_HOST/MQTT_USERNAME/MQTT_PASSWORD.
+# mqtt:
+#   broker: "tcp://localhost:1883"
+#   username: ""
+#   password: ""
+#   topic_prefix: "echonetgo"         # state/availability published here
+#   discovery_prefix: "homeassistant" # HA MQTT auto-discovery prefix

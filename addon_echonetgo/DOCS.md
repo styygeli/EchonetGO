@@ -58,3 +58,35 @@ The service exposes two HTTP endpoints for orchestration and load balancers:
 - **MQTT not connecting** — Check add-on logs for MQTT errors. If your config file already has an `mqtt.broker` setting, the Supervisor API is skipped entirely. Otherwise the add-on queries the Supervisor for MQTT credentials on startup.
 - **Stale entities after spec changes** — If you remove metrics from a spec, the old HA entities persist as retained MQTT messages. Publish an empty payload (with retain) to `homeassistant/sensor/{entity_id}/config` to remove them, or delete via the HA MQTT integration's "Publish a packet" feature.
 - **Unknown manufacturer/model** — Some devices don't respond to identity EPCs. Add `manufacturer` and `model` fields to the device config as fallbacks.
+
+## Customizing Device Behavior
+
+Device support in EchonetGO is defined by YAML specification files in `etc/specs/`. You can customize how your device appears in Home Assistant by creating manufacturer-specific overrides.
+
+### Friendly Fan Speeds
+
+By default, air conditioners show fan speeds as `level_1`, `level_2`, etc., because the ECHONET Lite standard does not define human-friendly names for these levels. You can override this for your specific model:
+
+1. **Identify your device's Manufacturer ID:** Check the EchonetGO logs on startup. You will see a line like: `published discovery for climate_unit (..., mfg="000006" model="...")`. The `mfg` hex code is what you need.
+2. **Discover your levels:** Use your physical remote and watch the Home Assistant state for your Climate entity. When you set it to "Quiet" on the remote, check the logs or HA to see which `level_X` it corresponds to.
+3. **Create an override file:** Create a file in your specs directory named `home_ac_{mfg}.yaml` (e.g., `home_ac_000006.yaml`).
+4. **Define the mapping:** Map the levels to friendly names in the `enum` section and set the UI order in the `fan_modes` list.
+
+```yaml
+metrics:
+  - epc: 0xA0
+    name: air_flow_rate
+    enum:
+      0x41: auto
+      0x31: quiet
+      0x32: low
+      0x33: medium
+      0x34: high
+climate:
+  fan_mode_epc: 0xA0
+  fan_modes: ["auto", "quiet", "low", "medium", "high"]
+```
+
+### Contributing to the Database
+
+We encourage users to contribute their manufacturer-specific mappings back to the EchonetGO project! If you have figured out the friendly names or specific EPCs for your hardware, please submit a Pull Request to the [EchonetGO repository](https://github.com/styygeli/EchonetGO) with your new spec file. This helps build a comprehensive equipment database for everyone.
