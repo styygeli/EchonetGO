@@ -61,7 +61,16 @@ The service exposes two HTTP endpoints for orchestration and load balancers:
 
 ## Customizing Device Behavior
 
-Device support in EchonetGO is defined by YAML specification files. By default, the add-on uses built-in specifications, but you can override them or add new ones by creating a `specs` folder in your Home Assistant configuration: `/config/echonetgo/specs/`.
+Device support in EchonetGO is defined by YAML specification files. By default, the add-on uses built-in specifications. 
+
+If you want to customize how your device appears (e.g., adding friendly fan speeds) or add support for a new device, you can use your own `specs` folder:
+
+1. Create the folder: `/config/echonetgo/specs/`.
+2. **Download the base specs:** Since this folder replaces the internal one, you should first download the [entire etc/specs directory from GitHub](https://github.com/styygeli/EchonetGO/tree/dev/etc/specs) and place the YAML files into your new folder.
+3. Modify or add your custom `.yaml` files in that folder.
+4. Restart the add-on.
+
+We strongly encourage you to contribute your custom manufacturer-specific mappings back to the project! By submitting a Pull Request to the [EchonetGO repository](https://github.com/styygeli/EchonetGO), you help build a "plug-and-play" experience for everyone with the same hardware.
 
 ### Friendly Fan Speeds
 
