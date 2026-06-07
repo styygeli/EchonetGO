@@ -17,7 +17,7 @@ FROM ${BUILD_FROM}
 ARG BUILD_ARCH
 RUN apk add --no-cache ca-certificates jq
 COPY --from=builder /echonetgo /usr/bin/echonetgo
-COPY rootfs /
+COPY addon_echonetgo/rootfs /
 # Default specs shipped with the addon (can be overridden by config)
 COPY --from=builder /src/etc/specs /usr/share/echonetgo/specs
 RUN chmod a+x /run.sh
