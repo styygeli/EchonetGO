@@ -117,12 +117,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 	availTopic := fmt.Sprintf("%s/%s/availability", p.topicPrefix, dev.Name)
 	stateTopic := fmt.Sprintf("%s/%s/state", p.topicPrefix, dev.Name)
 
-	var sensorCount int
 	for _, ms := range metricSpecs {
-		if _, ok := metrics[ms.Name]; !ok {
-			continue
-		}
-		sensorCount++
 		objectID := dev.Name + "_" + ms.Name
 		configTopic := fmt.Sprintf("%s/sensor/%s/config", p.discoveryPrefix, objectID)
 
@@ -150,7 +145,7 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 		p.publishLightDiscovery(dev, device, availTopic, lightSpec, metricSpecs)
 	}
 	p.published[key] = infoKey
-	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q model=%q)", dev.Name, sensorCount, info.Manufacturer, info.ProductCode)
+	mqttLog.Infof("published discovery for %s (%d sensors, mfg=%q [%s] model=%q)", dev.Name, len(metricSpecs), info.Manufacturer, info.ManufacturerCode, info.ProductCode)
 }
 
 // buildSensorPayload constructs the JSON auto-discovery payload for a single metric
@@ -228,7 +223,7 @@ func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, 
 	if cl.FanModeEPC != 0 {
 		payload.FanModeCommandTopic = base + "/fan_mode/set"
 		payload.FanModeStateTopic = base + "/fan_mode/state"
-		payload.FanModes = fanModesFromSpec(metricSpecs, cl.FanModeEPC)
+		payload.FanModes = fanModesFromSpec(metricSpecs, cl)
 		if len(payload.FanModes) == 0 {
 			payload.FanModes = []string{"auto", "low", "medium", "high"}
 		}
@@ -457,7 +452,14 @@ func selectOptionsOrdered(ms specs.MetricSpec) []string {
 	return out
 }
 
-func fanModesFromSpec(metricSpecs []specs.MetricSpec, epc byte) []string {
+func fanModesFromSpec(metricSpecs []specs.MetricSpec, cl *specs.ClimateSpec) []string {
+	if cl == nil || cl.FanModeEPC == 0 {
+		return nil
+	}
+	if len(cl.FanModes) > 0 {
+		return cl.FanModes
+	}
+	epc := cl.FanModeEPC
 	for _, m := range metricSpecs {
 		if m.EPC != epc {
 			continue

@@ -231,6 +231,9 @@ func (p *Publisher) publishWritableState(dev config.Device, metrics map[string]e
 		if !ok {
 			continue
 		}
+		if shouldSkipStateUpdate(ms, mv) {
+			continue
+		}
 		base := fmt.Sprintf("%s/%s/%s/%s", p.topicPrefix, dev.Name, entityType, ms.Name)
 		stateTopic := base + "/state"
 		var payload string
@@ -283,6 +286,16 @@ func (p *Publisher) publishState(dev config.Device, metrics map[string]echonet.M
 	if !token.WaitTimeout(publishTimeout) {
 		mqttLog.Warnf("publish state timeout for %s", dev.Name)
 	}
+}
+
+func shouldSkipStateUpdate(ms specs.MetricSpec, mv echonet.MetricValue) bool {
+	if ms.NumberMin != nil && mv.Value < *ms.NumberMin {
+		return true
+	}
+	if ms.NumberMax != nil && mv.Value > *ms.NumberMax {
+		return true
+	}
+	return false
 }
 
 func (p *Publisher) publishAvailability(dev config.Device, online bool) {

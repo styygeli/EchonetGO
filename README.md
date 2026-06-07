@@ -74,6 +74,18 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 - **Metrics:** A detached Prometheus collector transforms the local cache state into the `/metrics` exposition format, preventing scrape delays from impacting device communication.
 - **API:** Provides `/health` and `/metrics` endpoints.
 
+## Contributing New Device Specs
+
+One of the core goals of EchonetGO is to build a comprehensive "database" of ECHONET Lite device specifications. Because many manufacturers use proprietary mappings for fan speeds (e.g., mapping `level_1` to `quiet`), vertical swing positions, or custom metrics, we rely on community contributions to provide these friendly names.
+
+If you have a device that shows generic `level_X` values, or if you've discovered new EPCs for your hardware:
+
+1. **Discover:** Watch your Home Assistant state or EchonetGO logs while using your physical remote to identify which `level_X` strings correspond to your remote's settings (e.g. "Quiet", "Turbo").
+2. **Override:** To test your changes locally, you can create a `specs/` directory in your config folder and copy the project's base specs into it. See the [Add-on Documentation](addon_echonetgo/DOCS.md#customizing-device-behavior) for details.
+3. **Contribute:** Submit a Pull Request! Your contribution will help other users with the same hardware get a "plug-and-play" experience.
+
+See the [Add-on Documentation](addon_echonetgo/DOCS.md#customizing-device-behavior) for more details on the spec format and how to define friendly fan speeds.
+
 ## Tested devices
 
 | Device | Manufacturer | Class | Notes |

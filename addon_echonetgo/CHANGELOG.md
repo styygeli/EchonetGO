@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.44 - 2026-06-07
+- **BREAKING CHANGE**: Refactored configuration system. `etc/config.yaml` is now ignored. Core settings (MQTT, timeouts, metrics) are now managed exclusively via Home Assistant Add-on UI options.
+- **BREAKING CHANGE**: Moved device list to a standalone file. Users must move their device definitions to `/config/echonetgo/devices.yaml`.
+- **Docker**: Switched to prebuilt multi-architecture images hosted on GitHub Container Registry (GHCR) for significantly faster and more reliable installations.
+- **Climate**: Support custom friendly fan speeds (e.g., "quiet", "low", "high") via the `fan_modes` array in specifications.
+- **Specs**: Added built-in, user-verified fan speed mappings for Mitsubishi Electric ACs.
+- **Specs**: Support for custom user-provided specification files in `/config/echonetgo/specs/`.
+- **UI**: Overhauled Home Assistant Add-on configuration page with dropdowns, descriptive labels, and help text.
+- **Fix**: Improved MQTT out-of-range value handling to prevent Home Assistant errors without dropping entities (resolves Ecocute vacation days visibility).
+- **Fix**: Corrected Home Assistant state classes for battery and solar energy sensors to comply with latest HA standards.
+
 ## 0.9.43 - 2026-05-09
 - **Configuration**: Transitioned exclusively to UI-based MQTT configuration via add-on options to fix Supervisor API permission issues (403 Forbidden).
 - **Fix**: Removed deprecated `arch` definitions (`armhf`, `armv7`, `i386`) from add-on config to resolve Supervisor validation warnings.

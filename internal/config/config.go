@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,7 +18,6 @@ type Config struct {
 	ListenAddr           string     `yaml:"listen_addr" json:"listen_addr"`
 	ScrapeTimeoutSec     int        `yaml:"scrape_timeout_sec" json:"scrape_timeout_sec"`
 	StrictSourcePort3610 bool       `yaml:"strict_source_port_3610" json:"strict_source_port_3610"`
-	ConfigPath           string     `yaml:"-" json:"-"`
 	DevicesPath          string     `yaml:"devices_path" json:"devices_path"`
 	SpecsDir             string     `yaml:"specs_dir" json:"specs_dir"`
 	MetricsEnabled       bool       `yaml:"metrics_enabled" json:"metrics_enabled"`
@@ -54,24 +54,8 @@ type Device struct {
 	ScrapeInterval string            `yaml:"scrape_interval,omitempty" json:"scrape_interval,omitempty"`
 }
 
-// fileConfig is the on-disk shape for the main config file.
-type fileConfig struct {
-	ListenAddr           string     `yaml:"listen_addr"`
-	ScrapeTimeoutSec     int        `yaml:"scrape_timeout_sec"`
-	StrictSourcePort3610 *bool      `yaml:"strict_source_port_3610"`
-	MetricsEnabled       *bool      `yaml:"metrics_enabled"`
-	NotificationsEnabled *bool      `yaml:"notifications_enabled"`
-	ForcePolling         *bool      `yaml:"force_polling"`
-	MulticastInterfaces  []string   `yaml:"multicast_interfaces"`
-	DevicesPath          string     `yaml:"devices_path"`
-	SpecsDir             string     `yaml:"specs_dir"`
-	Devices              []Device   `yaml:"devices"`
-	MQTT                 MQTTConfig `yaml:"mqtt"`
-}
-
-// Load reads configuration: optional etc config file, then env overrides.
-// If ECHONET_CONFIG is set, that path is used; else etc/config.yaml relative to cwd.
-// Devices can come from config file, from devices_path (YAML/JSON), or from ECHONET_DEVICES JSON env.
+// Load reads configuration purely from environment variables and the devices file.
+// Devices can come from devices_path (YAML/JSON), or from ECHONET_DEVICES JSON env.
 func Load() (*Config, error) {
 	cfg := &Config{
 		ListenAddr:           ":9191",
@@ -80,14 +64,9 @@ func Load() (*Config, error) {
 		NotificationsEnabled: true,
 	}
 
-	configPath := os.Getenv("ECHONET_CONFIG")
-	if configPath == "" {
-		configPath = "etc/config.yaml"
-	}
-	cfg.ConfigPath = configPath
-
-	if err := loadFromFile(cfg); err != nil {
-		return nil, err
+	cfg.DevicesPath = os.Getenv("ECHONET_DEVICES_PATH")
+	if cfg.DevicesPath == "" {
+		cfg.DevicesPath = "etc/devices.yaml"
 	}
 
 	// MQTT defaults
@@ -113,50 +92,6 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func loadFromFile(cfg *Config) error {
-	data, err := os.ReadFile(cfg.ConfigPath)
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("read config %s: %w", cfg.ConfigPath, err)
-	}
-	if err == nil {
-		var fc fileConfig
-		if err := yaml.Unmarshal(data, &fc); err != nil {
-			return fmt.Errorf("parse %s: %w", cfg.ConfigPath, err)
-		}
-		if fc.ListenAddr != "" {
-			cfg.ListenAddr = fc.ListenAddr
-		}
-		if fc.ScrapeTimeoutSec > 0 {
-			cfg.ScrapeTimeoutSec = fc.ScrapeTimeoutSec
-		}
-		if fc.StrictSourcePort3610 != nil {
-			cfg.StrictSourcePort3610 = *fc.StrictSourcePort3610
-		}
-		if fc.MetricsEnabled != nil {
-			cfg.MetricsEnabled = *fc.MetricsEnabled
-		}
-		if fc.NotificationsEnabled != nil {
-			cfg.NotificationsEnabled = *fc.NotificationsEnabled
-		}
-		if fc.ForcePolling != nil {
-			cfg.ForcePolling = *fc.ForcePolling
-		}
-		if len(fc.MulticastInterfaces) > 0 {
-			cfg.MulticastInterfaces = fc.MulticastInterfaces
-		}
-		if fc.DevicesPath != "" {
-			cfg.DevicesPath = fc.DevicesPath
-		}
-		if fc.SpecsDir != "" {
-			cfg.SpecsDir = fc.SpecsDir
-		}
-		if len(fc.Devices) > 0 {
-			cfg.Devices = fc.Devices
-		}
-	}
-	return nil
 }
 
 func applyEnvOverrides(cfg *Config) error {
@@ -251,9 +186,12 @@ func loadAdditionalDevices(cfg *Config) error {
 	if len(cfg.Devices) == 0 && cfg.DevicesPath != "" {
 		devices, err := loadDevicesFile(cfg.DevicesPath)
 		if err != nil {
-			return err
+			if !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		} else {
+			cfg.Devices = devices
 		}
-		cfg.Devices = devices
 	}
 
 	// ECHONET_DEVICES JSON env overrides / supplies devices
@@ -295,7 +233,7 @@ func (c *Config) Validate() error {
 func loadDevicesFile(path string) ([]Device, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read devices file %s: %w", path, err)
+		return nil, err
 	}
 	ext := filepath.Ext(path)
 	var out struct {

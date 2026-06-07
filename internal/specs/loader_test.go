@@ -500,6 +500,46 @@ light:
 	}
 }
 
+func TestParseDeviceYAML_ClimateSpec_FanModes(t *testing.T) {
+	data := []byte(`
+eoj: [0x01, 0x30, 0x01]
+description: "ac"
+metrics:
+  - epc: 0xA0
+    name: fan_mode
+    size: 1
+    type: gauge
+climate:
+  mode_epc: 0xB0
+  temperature_epc: 0xB3
+  current_temperature_epc: 0xBB
+  fan_mode_epc: 0xA0
+  min_temp: 16
+  max_temp: 30
+  temp_step: 1
+  modes:
+    "off": null
+    "auto": 0x41
+  fan_modes: ["auto", "quiet", "low", "high"]
+`)
+	spec, err := parseDeviceYAML(data)
+	if err != nil {
+		t.Fatalf("parseDeviceYAML() error = %v", err)
+	}
+	if spec.Climate == nil {
+		t.Fatal("expected ClimateSpec, got nil")
+	}
+	if len(spec.Climate.FanModes) != 4 {
+		t.Fatalf("len(FanModes) = %d, want 4", len(spec.Climate.FanModes))
+	}
+	want := []string{"auto", "quiet", "low", "high"}
+	for i, v := range want {
+		if spec.Climate.FanModes[i] != v {
+			t.Fatalf("FanModes[%d] = %q, want %q", i, spec.Climate.FanModes[i], v)
+		}
+	}
+}
+
 func TestParseDeviceYAML_LightSpec_WithScenes(t *testing.T) {
 	data := []byte(`
 eoj: [0x02, 0xA3, 0x01]
