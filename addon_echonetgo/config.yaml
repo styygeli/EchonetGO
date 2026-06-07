@@ -22,13 +22,13 @@ options:
   listen_addr: "0.0.0.0:9191"
   scrape_timeout_sec: 15
   strict_source_port_3610: true
-  metrics_enabled: true
+  metrics_enabled: false
   notifications_enabled: true
   force_polling: false
   multicast_interfaces: ""
 schema:
   devices_path: "str"
-  log_level: "str?"
+  log_level: "enum(debug|info|warn|error)"
   mqtt_broker: "str?"
   mqtt_username: "str?"
   mqtt_password: "password?"

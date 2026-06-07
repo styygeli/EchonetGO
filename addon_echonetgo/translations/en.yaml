@@ -1,12 +1,37 @@
 name: EchonetGO
 description: ECHONET Lite polling service in Go. Polls devices, publishes HA entities via MQTT, and serves Prometheus metrics.
 config:
-  config_path:
-    name: Config file path
-    description: Full path to the main EchonetGO config file (YAML), e.g. /config/echonetgo/config.yaml
   devices_path:
     name: Devices file path
-    description: Optional path to a devices YAML/JSON file. Leave empty if devices are in the main config.
+    description: Path to the YAML file containing your device list (e.g. /config/echonetgo/devices.yaml).
   log_level:
     name: Log level
-    description: Log verbosity (debug, info, warn, error)
+    description: Control the amount of detail in the add-on logs.
+  mqtt_broker:
+    name: MQTT Broker URL
+    description: The URL of your MQTT broker (e.g. tcp://192.168.1.10:1883). Leave empty to use HA supervisor defaults.
+  mqtt_username:
+    name: MQTT Username
+  mqtt_password:
+    name: MQTT Password
+  listen_addr:
+    name: API Listen Address
+    description: Address and port for the internal HTTP API and metrics.
+  scrape_timeout_sec:
+    name: Scrape Timeout
+    description: Timeout in seconds for ECHONET Lite UDP requests.
+  strict_source_port_3610:
+    name: Strict Source Port (3610)
+    description: Force the use of local port 3610 for outgoing requests. Required for some Mitsubishi and Daikin adapters.
+  metrics_enabled:
+    name: Enable Prometheus Metrics
+    description: Export device state and performance metrics on /metrics.
+  notifications_enabled:
+    name: Enable Real-time Notifications
+    description: Listen for multicast INF messages to get instant state updates.
+  force_polling:
+    name: Force Polling
+    description: Always poll all properties even if they were recently updated via a notification.
+  multicast_interfaces:
+    name: Multicast Interfaces
+    description: Comma-separated list of interface names (e.g. eth0,eth1) to join for multicast. Leave empty for all.
