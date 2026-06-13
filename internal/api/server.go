@@ -3,11 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/styygeli/echonetgo/internal/logging"
 )
-
-var apiLog = logging.New("api")
 
 // Server provides HTTP endpoints for health and metrics.
 type Server struct {
