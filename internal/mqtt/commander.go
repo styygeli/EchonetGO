@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	pahomqtt "github.com/eclipse/paho.mqtt.golang"
@@ -45,46 +46,55 @@ func NewCommander(client *echonet.Client, cache *poller.Cache, cfg *config.Confi
 
 // Run subscribes to command topics and blocks until ctx is cancelled.
 // If readyFunc is non-nil, it is called once all subscriptions have succeeded.
-func (c *Commander) Run(ctx context.Context, mqttClient pahomqtt.Client, readyFunc func()) {
+func (c *Commander) Run(ctx context.Context, mqttPub *Publisher, readyFunc func()) {
 	c.ctx = ctx
 	if c.topicPrefix == "" {
 		c.topicPrefix = "echonetgo"
 	}
-	// Subscribe to climate command topics: {prefix}/{device}/climate/#
-	climateTopic := c.topicPrefix + "/+/climate/#"
-	token := mqttClient.Subscribe(climateTopic, 1, c.handleClimateMessage)
-	c.subscribed = token
-	if !token.WaitTimeout(connectTimeout) {
-		mqttLog.Warnf("commander subscribe timeout for %s", climateTopic)
-		return
-	}
-	if err := token.Error(); err != nil {
-		mqttLog.Warnf("commander subscribe failed: %v", err)
-		return
-	}
-	// Subscribe to light command topics: {prefix}/{device}/light/#
-	lightTopic := c.topicPrefix + "/+/light/#"
-	tok := mqttClient.Subscribe(lightTopic, 1, c.handleLightMessage)
-	if !tok.WaitTimeout(connectTimeout) || tok.Error() != nil {
-		mqttLog.Warnf("commander subscribe failed for %s", lightTopic)
-	}
-	// Subscribe to switch/select/number command topics
-	for _, entityType := range []string{"switch", "select", "number"} {
-		topic := c.topicPrefix + "/+/" + entityType + "/+/set"
-		tok := mqttClient.Subscribe(topic, 1, c.handleWritableMessage)
-		if !tok.WaitTimeout(connectTimeout) || tok.Error() != nil {
-			mqttLog.Warnf("commander subscribe failed for %s", topic)
+	
+	var readyOnce sync.Once
+
+	mqttPub.RegisterOnConnect(func(mqttClient pahomqtt.Client) {
+		// Subscribe to climate command topics: {prefix}/{device}/climate/#
+		climateTopic := c.topicPrefix + "/+/climate/#"
+		token := mqttClient.Subscribe(climateTopic, 1, c.handleClimateMessage)
+		c.subscribed = token
+		if !token.WaitTimeout(connectTimeout) {
+			mqttLog.Warnf("commander subscribe timeout for %s", climateTopic)
+		} else if err := token.Error(); err != nil {
+			mqttLog.Warnf("commander subscribe failed: %v", err)
 		}
-	}
-	mqttLog.Infof("commander subscribed to %s, %s, and switch/select/number", climateTopic, lightTopic)
-	if readyFunc != nil {
-		readyFunc()
-	}
+
+		// Subscribe to light command topics: {prefix}/{device}/light/#
+		lightTopic := c.topicPrefix + "/+/light/#"
+		tok := mqttClient.Subscribe(lightTopic, 1, c.handleLightMessage)
+		if !tok.WaitTimeout(connectTimeout) || tok.Error() != nil {
+			mqttLog.Warnf("commander subscribe failed for %s", lightTopic)
+		}
+
+		// Subscribe to switch/select/number command topics
+		for _, entityType := range []string{"switch", "select", "number"} {
+			topic := c.topicPrefix + "/+/" + entityType + "/+/set"
+			tok := mqttClient.Subscribe(topic, 1, c.handleWritableMessage)
+			if !tok.WaitTimeout(connectTimeout) || tok.Error() != nil {
+				mqttLog.Warnf("commander subscribe failed for %s", topic)
+			}
+		}
+		mqttLog.Infof("commander subscribed to %s, %s, and switch/select/number topics", climateTopic, lightTopic)
+		
+		if readyFunc != nil {
+			readyOnce.Do(readyFunc)
+		}
+	})
+
 	<-ctx.Done()
-	_ = mqttClient.Unsubscribe(climateTopic)
-	_ = mqttClient.Unsubscribe(lightTopic)
-	for _, entityType := range []string{"switch", "select", "number"} {
-		_ = mqttClient.Unsubscribe(c.topicPrefix + "/+/" + entityType + "/+/set")
+	mqttClient := mqttPub.Client()
+	if mqttClient != nil {
+		_ = mqttClient.Unsubscribe(c.topicPrefix + "/+/climate/#")
+		_ = mqttClient.Unsubscribe(c.topicPrefix + "/+/light/#")
+		for _, entityType := range []string{"switch", "select", "number"} {
+			_ = mqttClient.Unsubscribe(c.topicPrefix + "/+/" + entityType + "/+/set")
+		}
 	}
 }
 

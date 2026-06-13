@@ -35,6 +35,9 @@ type Publisher struct {
 	mu        sync.Mutex
 	published map[string]string // tracks device name -> "manufacturer|model" published
 	infoSkips map[string]int    // tracks discovery skips while waiting for device info
+
+	muConnect          sync.Mutex
+	onConnectCallbacks []func(pahomqtt.Client)
 }
 
 // NewPublisher creates a connected MQTT publisher. Returns nil if broker is empty.
@@ -42,6 +45,14 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 	if cfg.Broker == "" {
 		return nil, nil
 	}
+	pub := &Publisher{
+		topicPrefix:     cfg.TopicPrefix,
+		discoveryPrefix: cfg.DiscoveryPrefix,
+		swVersion:       swVersion,
+		published:       make(map[string]string),
+		infoSkips:       make(map[string]int),
+	}
+
 	opts := pahomqtt.NewClientOptions().
 		AddBroker(cfg.Broker).
 		SetClientID("echonetgo").
@@ -53,8 +64,14 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 		SetConnectionLostHandler(func(_ pahomqtt.Client, err error) {
 			mqttLog.Warnf("connection lost: %v", err)
 		}).
-		SetOnConnectHandler(func(_ pahomqtt.Client) {
+		SetOnConnectHandler(func(c pahomqtt.Client) {
 			mqttLog.Infof("connected to %s", cfg.Broker)
+			pub.muConnect.Lock()
+			callbacks := append([]func(pahomqtt.Client){}, pub.onConnectCallbacks...)
+			pub.muConnect.Unlock()
+			for _, cb := range callbacks {
+				go cb(c)
+			}
 		})
 	if cfg.Username != "" {
 		opts.SetUsername(cfg.Username)
@@ -72,16 +89,19 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 		return nil, fmt.Errorf("mqtt connect to %s: %w", cfg.Broker, err)
 	}
 
-	pub := &Publisher{
-		client:          client,
-		topicPrefix:     cfg.TopicPrefix,
-		discoveryPrefix: cfg.DiscoveryPrefix,
-		swVersion:       swVersion,
-		published:       make(map[string]string),
-		infoSkips:       make(map[string]int),
-	}
+	pub.client = client
 	pub.publishBridgeDevice()
 	return pub, nil
+}
+
+// RegisterOnConnect registers a callback to be run whenever the client connects or reconnects.
+func (p *Publisher) RegisterOnConnect(cb func(pahomqtt.Client)) {
+	p.muConnect.Lock()
+	defer p.muConnect.Unlock()
+	p.onConnectCallbacks = append(p.onConnectCallbacks, cb)
+	if p.client != nil && p.client.IsConnected() {
+		go cb(p.client)
+	}
 }
 
 // Client returns the MQTT client for subscriptions (e.g. Commander).

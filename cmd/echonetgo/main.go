@@ -165,7 +165,7 @@ func setupNotifications(ctx context.Context, cfg *config.Config, cache *poller.C
 func setupCommander(ctx context.Context, cfg *config.Config, cache *poller.Cache, transport *echonet.Transport, mqttPub *mqttpub.Publisher, readiness *api.Readiness) {
 	echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
 	commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
-	go commander.Run(ctx, mqttPub.Client(), func() { readiness.MarkReady("commander") })
+	go commander.Run(ctx, mqttPub, func() { readiness.MarkReady("commander") })
 }
 
 func setupHTTPServer(cfg *config.Config, cache *poller.Cache, deviceSpecs map[string]*specs.DeviceSpec, readiness *api.Readiness, log *logging.Logger) (*http.Server, chan error) {

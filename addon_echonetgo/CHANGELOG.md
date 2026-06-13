@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.45 - 2026-06-13
+- **Hotfix**: MQTT subscriptions are now restored correctly upon broker reconnection, preventing the service from silently dropping commands (e.g., from Home Assistant automations) when the MQTT connection is temporarily lost and `CleanSession` is true.
+
 ## 0.9.44 - 2026-06-07
 - **BREAKING CHANGE**: Refactored configuration system. `etc/config.yaml` is now ignored. Core settings (MQTT, timeouts, metrics) are now managed exclusively via Home Assistant Add-on UI options.
 - **BREAKING CHANGE**: Moved device list to a standalone file. Users must move their device definitions to `/config/echonetgo/devices.yaml`.
