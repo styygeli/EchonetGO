@@ -125,8 +125,8 @@ func TestDecodePropertyMap_Bitmap0xE0(t *testing.T) {
 	// Bitmap format (>= 17 bytes). Set the bit that decodes to EPC 0xE0.
 	// code = 0xE0 & 0x0F = 0x00 -> byte index 1; row = (0xE0>>4)-8 = 14-8 = 6 -> bit 6.
 	edt := make([]byte, 17)
-	edt[0] = 0x01      // count
-	edt[1] = 1 << 6    // bit 6 in column 0 -> EPC 0xE0
+	edt[0] = 0x01   // count
+	edt[1] = 1 << 6 // bit 6 in column 0 -> EPC 0xE0
 	got := decodePropertyMap(edt)
 	if _, ok := got[0xE0]; !ok {
 		t.Fatalf("expected EPC 0xE0 in decoded bitmap, got %v", got)
