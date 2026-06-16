@@ -3,10 +3,14 @@ package echonet
 import (
 	"fmt"
 	"math"
-	"math/big"
 
 	"github.com/styygeli/echonetgo/internal/specs"
 )
+
+// maxIntegerBytes bounds parseInteger. ECHONET Lite EDT integer properties are
+// at most 4 bytes; 8 is the widest an int64 can hold without overflow and is a
+// safe ceiling for any realistic property.
+const maxIntegerBytes = 8
 
 func parseEDTWithReason(edt []byte, m specs.MetricSpec) (float64, bool, string) {
 	size := m.Size
@@ -24,14 +28,11 @@ func parseEDTWithReason(edt []byte, m specs.MetricSpec) (float64, bool, string) 
 	if err != nil {
 		return 0, false, err.Error()
 	}
-	if m.Invalid != nil {
-		if rawValue.Cmp(big.NewInt(int64(*m.Invalid))) == 0 {
-			return 0, false, fmt.Sprintf("raw value %s equals invalid sentinel", rawValue.String())
-		}
+	if m.Invalid != nil && rawValue == int64(*m.Invalid) {
+		return 0, false, fmt.Sprintf("raw value %d equals invalid sentinel", rawValue)
 	}
 
-	v, _ := new(big.Float).SetInt(rawValue).Float64()
-	v *= m.Scale
+	v := float64(rawValue) * m.Scale
 	if m.Scale > 0 && m.Scale < 1 {
 		digits := int(math.Ceil(-math.Log10(m.Scale)))
 		factor := math.Pow(10, float64(digits))
@@ -43,20 +44,26 @@ func parseEDTWithReason(edt []byte, m specs.MetricSpec) (float64, bool, string) 
 	return v, true, ""
 }
 
-func parseInteger(raw []byte, signed bool) (*big.Int, error) {
+// parseInteger decodes a big-endian EDT integer (signed or unsigned) into an
+// int64. ECHONET integer properties are <= 4 bytes, so int64 holds any value
+// — including the full unsigned 4-byte range — without the per-call heap
+// allocations that math/big incurred on this hot path.
+func parseInteger(raw []byte, signed bool) (int64, error) {
 	if len(raw) == 0 {
-		return nil, fmt.Errorf("cannot parse empty integer payload")
+		return 0, fmt.Errorf("cannot parse empty integer payload")
 	}
-	value := new(big.Int).SetBytes(raw)
-	if !signed {
-		return value, nil
+	if len(raw) > maxIntegerBytes {
+		return 0, fmt.Errorf("integer payload too wide: %d bytes (max %d)", len(raw), maxIntegerBytes)
 	}
-	if raw[0]&0x80 == 0 {
-		return value, nil
+	var u uint64
+	for _, b := range raw {
+		u = u<<8 | uint64(b)
 	}
-	twoPow := new(big.Int).Lsh(big.NewInt(1), uint(len(raw)*8))
-	value.Sub(value, twoPow)
-	return value, nil
+	if !signed || raw[0]&0x80 == 0 {
+		return int64(u), nil
+	}
+	// Sign-extend a negative two's-complement value of len(raw) bytes.
+	return int64(u) - (int64(1) << (uint(len(raw)) * 8)), nil
 }
 
 // EncodeValueToEDT encodes a value to EDT bytes for SET requests.
@@ -99,13 +106,14 @@ func EncodeValueToEDT(value float64, m specs.MetricSpec) ([]byte, error) {
 			raw = maxVal
 		}
 	}
-	val := big.NewInt(raw)
-	if m.Signed && raw < 0 {
-		twoPow := new(big.Int).Lsh(big.NewInt(1), uint(bits))
-		val.Add(val, twoPow)
-	}
-	b := val.Bytes()
+	// raw is clamped to fit `size` bytes above; mask to the low `bits` bits so a
+	// negative value becomes its two's-complement representation, then emit
+	// big-endian. (bits < 64 here since size is 1, 2, or 4.)
+	u := uint64(raw) & ((uint64(1) << uint(bits)) - 1)
 	out := make([]byte, size)
-	copy(out[size-len(b):], b)
+	for i := size - 1; i >= 0; i-- {
+		out[i] = byte(u)
+		u >>= 8
+	}
 	return out, nil
 }

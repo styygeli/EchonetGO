@@ -22,8 +22,8 @@ func TestParseInteger(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parseInteger() error = %v", err)
 		}
-		if got.Int64() != 256 {
-			t.Fatalf("value = %d, want 256", got.Int64())
+		if got != 256 {
+			t.Fatalf("value = %d, want 256", got)
 		}
 	})
 
@@ -32,8 +32,8 @@ func TestParseInteger(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parseInteger() error = %v", err)
 		}
-		if got.Int64() != 127 {
-			t.Fatalf("value = %d, want 127", got.Int64())
+		if got != 127 {
+			t.Fatalf("value = %d, want 127", got)
 		}
 	})
 
@@ -42,8 +42,8 @@ func TestParseInteger(t *testing.T) {
 		if err != nil {
 			t.Fatalf("parseInteger() error = %v", err)
 		}
-		if got.Int64() != -100 {
-			t.Fatalf("value = %d, want -100", got.Int64())
+		if got != -100 {
+			t.Fatalf("value = %d, want -100", got)
 		}
 	})
 
@@ -51,6 +51,34 @@ func TestParseInteger(t *testing.T) {
 		_, err := parseInteger(nil, false)
 		if err == nil {
 			t.Fatalf("parseInteger() expected error, got nil")
+		}
+	})
+
+	t.Run("full unsigned 4-byte range", func(t *testing.T) {
+		// 0xFFFFFFFF overflows int32 but must round-trip through int64 unsigned.
+		got, err := parseInteger([]byte{0xFF, 0xFF, 0xFF, 0xFF}, false)
+		if err != nil {
+			t.Fatalf("parseInteger() error = %v", err)
+		}
+		if got != 4294967295 {
+			t.Fatalf("value = %d, want 4294967295", got)
+		}
+	})
+
+	t.Run("signed 4-byte negative", func(t *testing.T) {
+		got, err := parseInteger([]byte{0xFF, 0xFF, 0xFF, 0xFF}, true)
+		if err != nil {
+			t.Fatalf("parseInteger() error = %v", err)
+		}
+		if got != -1 {
+			t.Fatalf("value = %d, want -1", got)
+		}
+	})
+
+	t.Run("over-wide payload rejected", func(t *testing.T) {
+		_, err := parseInteger(make([]byte, maxIntegerBytes+1), false)
+		if err == nil {
+			t.Fatalf("parseInteger() expected error for over-wide payload, got nil")
 		}
 	})
 }
@@ -487,6 +515,24 @@ func TestEncodeValueToEDT(t *testing.T) {
 		}
 		if len(got) != 2 || got[0] != 0x01 || got[1] != 0x00 {
 			t.Fatalf("got %v, want [0x01 0x00]", got)
+		}
+	})
+	t.Run("signed negative two's complement", func(t *testing.T) {
+		m := specs.MetricSpec{Name: "delta", Size: 2, Scale: 1, Signed: true, Type: "gauge"}
+		got, err := EncodeValueToEDT(-100, m)
+		if err != nil {
+			t.Fatalf("EncodeValueToEDT() error = %v", err)
+		}
+		if len(got) != 2 || got[0] != 0xFF || got[1] != 0x9C {
+			t.Fatalf("got %v, want [0xFF 0x9C]", got)
+		}
+		// Round-trips back through parseInteger.
+		back, err := parseInteger(got, true)
+		if err != nil {
+			t.Fatalf("parseInteger() error = %v", err)
+		}
+		if back != -100 {
+			t.Fatalf("round-trip = %d, want -100", back)
 		}
 	})
 }
