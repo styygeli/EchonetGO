@@ -62,7 +62,8 @@ func main() {
 
 	setupNotifications(ctx, cfg, cache, transport, log)
 
-	go cache.Start(ctx, cfg, deviceSpecs, transport, func() { readiness.MarkReady("poller") })
+	scheduler := poller.NewScheduler(cache)
+	go scheduler.Start(ctx, cfg, deviceSpecs, transport, func() { readiness.MarkReady("poller") })
 
 	if mqttPub != nil {
 		setupCommander(ctx, cfg, cache, transport, mqttPub, readiness)

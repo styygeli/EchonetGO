@@ -21,10 +21,23 @@ type deviceWithEOJ struct {
 	eoj [3]byte
 }
 
+// Scheduler drives ECHONET polling: per-host init (EOJ/property-map discovery),
+// per-interval scrapers, and periodic device-info refresh. It writes results
+// into a Cache, which it owns a reference to. Separating the orchestration from
+// the Cache keeps the latter a focused concurrent state store.
+type Scheduler struct {
+	cache *Cache
+}
+
+// NewScheduler creates a Scheduler that publishes state into the given Cache.
+func NewScheduler(cache *Cache) *Scheduler {
+	return &Scheduler{cache: cache}
+}
+
 // Start begins background scrapers for all configured devices. Call with a context
 // that is cancelled on shutdown. Init (probe + GETMAP) runs in parallel per host IP.
 // If readyFunc is non-nil, it is called once init is complete and scrapers are launched.
-func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec, transport *echonet.Transport, readyFunc func()) {
+func (s *Scheduler) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec, transport *echonet.Transport, readyFunc func()) {
 	client := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
 	probeTimeoutSec := cfg.ScrapeTimeoutSec
 	if probeTimeoutSec > 3 {
@@ -60,12 +73,12 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 				if spec == nil {
 					continue
 				}
-				activeEOJ, activeMetrics, activeSpec := c.discoverDeviceState(ctx, client, probeClient, dev, spec, deviceSpecs, &hostEOJCache, cfg.NotificationsEnabled)
+				activeEOJ, activeMetrics, activeSpec := s.discoverDeviceState(ctx, client, probeClient, dev, spec, deviceSpecs, &hostEOJCache, cfg.NotificationsEnabled)
 				if len(activeMetrics) == 0 {
 					continue
 				}
 				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
-				c.scheduleDeviceScrapers(ctx, client, dev, activeEOJ, activeMetrics, activeSpec)
+				s.scheduleDeviceScrapers(ctx, client, dev, activeEOJ, activeMetrics, activeSpec)
 			}
 			hostDevicePairsMu.Lock()
 			hostDevicePairs[ip] = pairs
@@ -78,11 +91,12 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 		readyFunc()
 	}
 	for _, pairs := range hostDevicePairs {
-		go c.runDeviceInfoRefresher(ctx, client, pairs)
+		go s.runDeviceInfoRefresher(ctx, client, pairs)
 	}
 }
 
-func (c *Cache) discoverDeviceState(ctx context.Context, client, probeClient *echonet.Client, dev config.Device, defaultSpec *specs.DeviceSpec, deviceSpecs map[string]*specs.DeviceSpec, hostEOJCache *sync.Map, notificationsEnabled bool) ([3]byte, []specs.MetricSpec, *specs.DeviceSpec) {
+func (s *Scheduler) discoverDeviceState(ctx context.Context, client, probeClient *echonet.Client, dev config.Device, defaultSpec *specs.DeviceSpec, deviceSpecs map[string]*specs.DeviceSpec, hostEOJCache *sync.Map, notificationsEnabled bool) ([3]byte, []specs.MetricSpec, *specs.DeviceSpec) {
+	c := s.cache
 	activeEOJ := resolveEOJInstance(ctx, probeClient, dev, defaultSpec.EOJ, hostEOJCache)
 	pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
 
@@ -144,7 +158,7 @@ func (c *Cache) discoverDeviceState(ctx context.Context, client, probeClient *ec
 
 // scheduleDeviceScrapers groups device metrics by their configured scrape interval
 // and launches background routines to poll them periodically.
-func (c *Cache) scheduleDeviceScrapers(ctx context.Context, client *echonet.Client, dev config.Device, activeEOJ [3]byte, activeMetrics []specs.MetricSpec, spec *specs.DeviceSpec) {
+func (s *Scheduler) scheduleDeviceScrapers(ctx context.Context, client *echonet.Client, dev config.Device, activeEOJ [3]byte, activeMetrics []specs.MetricSpec, spec *specs.DeviceSpec) {
 	devDefaultInterval := spec.DefaultScrapeInterval
 	if dev.ScrapeInterval != "" {
 		d, err := time.ParseDuration(dev.ScrapeInterval)
@@ -176,7 +190,7 @@ func (c *Cache) scheduleDeviceScrapers(ctx context.Context, client *echonet.Clie
 		if initialDelay > interval/2 {
 			initialDelay = interval / 2
 		}
-		go c.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
+		go s.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
 	}
 }
 
@@ -317,9 +331,9 @@ func filterMetricsByReadableMap(metrics []specs.MetricSpec, readable map[byte]st
 	return filtered, unsupported
 }
 
-func (c *Cache) runDeviceInfoRefresher(ctx context.Context, client *echonet.Client, devices []deviceWithEOJ) {
+func (s *Scheduler) runDeviceInfoRefresher(ctx context.Context, client *echonet.Client, devices []deviceWithEOJ) {
 	defer pollerLog.RecoverPanic("device info refresher")
-	c.refreshDeviceInfo(ctx, client, devices)
+	s.refreshDeviceInfo(ctx, client, devices)
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -327,12 +341,12 @@ func (c *Cache) runDeviceInfoRefresher(ctx context.Context, client *echonet.Clie
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.refreshDeviceInfo(ctx, client, devices)
+			s.refreshDeviceInfo(ctx, client, devices)
 		}
 	}
 }
 
-func (c *Cache) refreshDeviceInfo(ctx context.Context, client *echonet.Client, devices []deviceWithEOJ) {
+func (s *Scheduler) refreshDeviceInfo(ctx context.Context, client *echonet.Client, devices []deviceWithEOJ) {
 	for _, d := range devices {
 		if err := ctx.Err(); err != nil {
 			return
@@ -342,11 +356,11 @@ func (c *Cache) refreshDeviceInfo(ctx context.Context, client *echonet.Client, d
 			pollerLog.Warnf("device %s (%s): device info read failed: %v", d.dev.Name, d.dev.IP, err)
 			continue
 		}
-		c.UpdateInfo(d.dev, info)
+		s.cache.UpdateInfo(d.dev, info)
 	}
 }
 
-func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval, initialDelay time.Duration) {
+func (s *Scheduler) runScraper(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval, initialDelay time.Duration) {
 	defer pollerLog.RecoverPanic(fmt.Sprintf("scraper %s (%s) group %s", dev.Name, dev.IP, groupID))
 	if initialDelay > 0 {
 		select {
@@ -355,7 +369,7 @@ func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev conf
 		case <-time.After(initialDelay):
 		}
 	}
-	c.scrapeOnce(ctx, client, dev, eoj, metrics, groupID, interval)
+	s.scrapeOnce(ctx, client, dev, eoj, metrics, groupID, interval)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -363,12 +377,12 @@ func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev conf
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			c.scrapeOnce(ctx, client, dev, eoj, metrics, groupID, interval)
+			s.scrapeOnce(ctx, client, dev, eoj, metrics, groupID, interval)
 		}
 	}
 }
 
-func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval time.Duration) {
+func (s *Scheduler) scrapeOnce(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval time.Duration) {
 	freshness := interval * 2
 	seen := make(map[byte]struct{}, len(metrics))
 	skippedEPCs := make(map[byte]struct{})
@@ -376,7 +390,7 @@ func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev conf
 	var skipped []byte
 	for _, m := range metrics {
 		if _, dup := seen[m.EPC]; !dup {
-			if c.ShouldSkipPoll(dev, m.EPC, freshness) {
+			if s.cache.ShouldSkipPoll(dev, m.EPC, freshness) {
 				skipped = append(skipped, m.EPC)
 				skippedEPCs[m.EPC] = struct{}{}
 				seen[m.EPC] = struct{}{}
@@ -411,7 +425,7 @@ func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev conf
 	durationSec := time.Since(start).Seconds()
 	if err != nil {
 		pollerLog.Errorf("scrape %s (%s): %v", dev.Name, dev.IP, err)
-		c.Update(dev, groupID, interval, false, durationSec, nil, err.Error())
+		s.cache.Update(dev, groupID, interval, false, durationSec, nil, err.Error())
 		return
 	}
 	out := echonet.ParsePropsToMetrics(props, polledMetrics)
@@ -419,7 +433,7 @@ func (c *Cache) scrapeOnce(ctx context.Context, client *echonet.Client, dev conf
 		pollerLog.Warnf("device %s (%s): parsed %d/%d metrics for group %s; missing=%v",
 			dev.Name, dev.IP, len(out), len(polledMetrics), groupID, missingMetricNames(polledMetrics, out))
 	}
-	c.Update(dev, groupID, interval, true, durationSec, out, "")
+	s.cache.Update(dev, groupID, interval, true, durationSec, out, "")
 }
 
 func missingMetricNames(metrics []specs.MetricSpec, out map[string]echonet.MetricValue) []string {
