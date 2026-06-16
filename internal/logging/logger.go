@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"runtime/debug"
 	"strings"
 	"sync/atomic"
 )
@@ -129,4 +130,16 @@ func (l *Logger) Errorf(format string, args ...any) {
 func (l *Logger) Fatalf(format string, args ...any) {
 	l.logf(LevelError, "FATAL", format, args...)
 	os.Exit(1)
+}
+
+// RecoverPanic recovers a panic in the calling goroutine, logging it with a
+// stack trace at error level instead of crashing the process. Intended to be
+// deferred at the top of long-lived background goroutines (scrapers,
+// notification handler, post-command verification) so that a panic isolated to
+// one device — e.g. triggered by a malformed device response — does not take
+// down the whole service. context labels the goroutine in the log message.
+func (l *Logger) RecoverPanic(context string) {
+	if r := recover(); r != nil {
+		l.Errorf("panic recovered in %s: %v\n%s", context, r, debug.Stack())
+	}
 }

@@ -58,6 +58,7 @@ func (h *NotificationHandler) Run(ctx context.Context) {
 }
 
 func (h *NotificationHandler) handleFrame(frame UDPFrame) {
+	defer notifLog.RecoverPanic("notification frame handler")
 	if frame.From == nil {
 		return
 	}

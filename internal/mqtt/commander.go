@@ -669,6 +669,7 @@ type pendingUpdate struct {
 
 func (c *Commander) verifyStateUpdate(dev *config.Device, eoj [3]byte, updates []pendingUpdate) {
 	go func() {
+		defer mqttLog.RecoverPanic("verify state update for " + dev.Name)
 		delays := []time.Duration{1 * time.Second, 3 * time.Second, 3 * time.Second}
 		for attempt, delay := range delays {
 			select {
@@ -738,6 +739,7 @@ func (c *Commander) verifyStateUpdate(dev *config.Device, eoj [3]byte, updates [
 
 func (c *Commander) triggerStateUpdate(dev *config.Device, delay time.Duration, eoj [3]byte, epcs ...byte) {
 	go func() {
+		defer mqttLog.RecoverPanic("trigger state update for " + dev.Name)
 		if delay > 0 {
 			select {
 			case <-c.ctx.Done():

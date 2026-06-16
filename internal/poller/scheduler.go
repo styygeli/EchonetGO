@@ -53,6 +53,7 @@ func (c *Cache) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[s
 		wg.Add(1)
 		go func(ip string, devices []config.Device) {
 			defer wg.Done()
+			defer pollerLog.RecoverPanic("device init for " + ip)
 			var pairs []deviceWithEOJ
 			for _, dev := range devices {
 				spec := deviceSpecs[dev.Class]
@@ -317,6 +318,7 @@ func filterMetricsByReadableMap(metrics []specs.MetricSpec, readable map[byte]st
 }
 
 func (c *Cache) runDeviceInfoRefresher(ctx context.Context, client *echonet.Client, devices []deviceWithEOJ) {
+	defer pollerLog.RecoverPanic("device info refresher")
 	c.refreshDeviceInfo(ctx, client, devices)
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
@@ -345,6 +347,7 @@ func (c *Cache) refreshDeviceInfo(ctx context.Context, client *echonet.Client, d
 }
 
 func (c *Cache) runScraper(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte, metrics []specs.MetricSpec, groupID string, interval, initialDelay time.Duration) {
+	defer pollerLog.RecoverPanic(fmt.Sprintf("scraper %s (%s) group %s", dev.Name, dev.IP, groupID))
 	if initialDelay > 0 {
 		select {
 		case <-ctx.Done():
