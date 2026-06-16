@@ -3,6 +3,7 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"golang.org/x/text/cases"
@@ -295,7 +296,7 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				for label := range ms.ReverseEnum {
 					options = append(options, label)
 				}
-				sortStrings(options)
+				sort.Strings(options)
 			}
 			payload := map[string]any{
 				"name":               friendlyName(ms.Name),
@@ -552,7 +553,7 @@ func (p *Publisher) publishLightDiscovery(dev config.Device, device haDevice, av
 		for label := range lt.ColorSettings {
 			effects = append(effects, label)
 		}
-		sortStrings(effects)
+		sort.Strings(effects)
 		payload.EffectList = effects
 	} else if lt.SceneEPC != 0 && lt.MaxScenes > 0 {
 		payload.EffectCommandTopic = base + "/effect/set"
@@ -636,12 +637,3 @@ func writableEntityType(ms specs.MetricSpec) string {
 	return ""
 }
 
-func sortStrings(s []string) {
-	for i := 0; i < len(s); i++ {
-		for j := i + 1; j < len(s); j++ {
-			if s[i] > s[j] {
-				s[i], s[j] = s[j], s[i]
-			}
-		}
-	}
-}
