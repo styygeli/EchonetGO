@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"golang.org/x/net/ipv4"
 )
 
 const maxSendAttempts = 2
@@ -150,28 +152,12 @@ func (t *Transport) joinMulticastAutoDetect(conn *net.UDPConn, mcastIP net.IP) [
 }
 
 func joinGroup(conn *net.UDPConn, iface *net.Interface, group net.IP) error {
-	rawConn, err := conn.SyscallConn()
-	if err != nil {
-		return fmt.Errorf("syscall conn: %w", err)
-	}
-	mreq := &syscall.IPMreq{}
-	copy(mreq.Multiaddr[:], group.To4())
-	if iface != nil {
-		addrs, _ := iface.Addrs()
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
-				copy(mreq.Interface[:], ipNet.IP.To4())
-				break
-			}
-		}
-	}
-	var sockErr error
-	if ctrlErr := rawConn.Control(func(fd uintptr) {
-		sockErr = syscall.SetsockoptIPMreq(int(fd), syscall.IPPROTO_IP, syscall.IP_ADD_MEMBERSHIP, mreq)
-	}); ctrlErr != nil {
-		return ctrlErr
-	}
-	return sockErr
+	// x/net/ipv4 performs IP_ADD_MEMBERSHIP using the interface-index (ip_mreqn)
+	// form, which is more robust on multi-homed interfaces than hand-rolling
+	// ip_mreq with the interface IP. A nil iface lets the kernel choose, matching
+	// the previous behaviour. Wrapping the shared socket here does not interfere
+	// with the reader goroutine; JoinGroup is a setsockopt, not a read.
+	return ipv4.NewPacketConn(conn).JoinGroup(iface, &net.UDPAddr{IP: group})
 }
 
 func findInterfaceByIP(ip net.IP) *net.Interface {
