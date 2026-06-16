@@ -613,6 +613,13 @@ func isClimateEPC(epc byte, cl *specs.ClimateSpec) bool {
 }
 
 // writableEntityType returns "switch", "select", or "number" for a writable metric; "" if not applicable.
+//
+// NOTE: this is a heuristic on enum cardinality (2 on/off labels → switch,
+// other 2 → select, >2 → select, 0 → number) plus the exclude_set escape hatch.
+// It misclassifies e.g. a 2-value enum that is not on/off but is semantically a
+// toggle, or a numeric with an Invalid sentinel. The intended replacement
+// (TODO P2) is a decision matrix driven by the advertised get/set property maps
+// rather than label count; until then, specs lean on Enum shape and exclude_set.
 func writableEntityType(ms specs.MetricSpec) string {
 	if ms.ExcludeSet {
 		return ""
