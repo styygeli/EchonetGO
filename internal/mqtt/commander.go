@@ -22,6 +22,8 @@ const (
 	operationStatusEPC = 0x80
 	onStatus           = 0x30
 	offStatus          = 0x31
+	// addrPort is the ECHONET Lite UDP port suffix appended to a device IP.
+	addrPort = ":3610"
 )
 
 // Commander subscribes to MQTT command topics and performs ECHONET SET requests.
@@ -31,8 +33,11 @@ type Commander struct {
 	cfg         *config.Config
 	topicPrefix string
 	subscribed  pahomqtt.Token
-	ctx         context.Context
 }
+
+// commandTimeout bounds a single synchronous SET command (including any
+// pre-set and the SetC response wait).
+const commandTimeout = 5 * time.Second
 
 // NewCommander creates a Commander. Call Run to subscribe and process commands.
 func NewCommander(client *echonet.Client, cache *poller.Cache, cfg *config.Config, topicPrefix string) *Commander {
@@ -47,17 +52,22 @@ func NewCommander(client *echonet.Client, cache *poller.Cache, cfg *config.Confi
 // Run subscribes to command topics and blocks until ctx is cancelled.
 // If readyFunc is non-nil, it is called once all subscriptions have succeeded.
 func (c *Commander) Run(ctx context.Context, mqttPub *Publisher, readyFunc func()) {
-	c.ctx = ctx
 	if c.topicPrefix == "" {
 		c.topicPrefix = "echonetgo"
 	}
-	
+
 	var readyOnce sync.Once
 
 	mqttPub.RegisterOnConnect(func(mqttClient pahomqtt.Client) {
+		// paho's MessageHandler signature carries no context, so capture the
+		// service-lifetime ctx in closures and thread it to each handler. The
+		// background verification goroutines need a context that survives the
+		// handler return but is cancelled on shutdown.
 		// Subscribe to climate command topics: {prefix}/{device}/climate/#
 		climateTopic := c.topicPrefix + "/+/climate/#"
-		token := mqttClient.Subscribe(climateTopic, 1, c.handleClimateMessage)
+		token := mqttClient.Subscribe(climateTopic, 1, func(cl pahomqtt.Client, m pahomqtt.Message) {
+			c.handleClimateMessage(ctx, cl, m)
+		})
 		c.subscribed = token
 		if !token.WaitTimeout(connectTimeout) {
 			mqttLog.Warnf("commander subscribe timeout for %s", climateTopic)
@@ -67,7 +77,9 @@ func (c *Commander) Run(ctx context.Context, mqttPub *Publisher, readyFunc func(
 
 		// Subscribe to light command topics: {prefix}/{device}/light/#
 		lightTopic := c.topicPrefix + "/+/light/#"
-		tok := mqttClient.Subscribe(lightTopic, 1, c.handleLightMessage)
+		tok := mqttClient.Subscribe(lightTopic, 1, func(cl pahomqtt.Client, m pahomqtt.Message) {
+			c.handleLightMessage(ctx, cl, m)
+		})
 		if !tok.WaitTimeout(connectTimeout) || tok.Error() != nil {
 			mqttLog.Warnf("commander subscribe failed for %s", lightTopic)
 		}
@@ -75,13 +87,15 @@ func (c *Commander) Run(ctx context.Context, mqttPub *Publisher, readyFunc func(
 		// Subscribe to switch/select/number command topics
 		for _, entityType := range []string{"switch", "select", "number"} {
 			topic := c.topicPrefix + "/+/" + entityType + "/+/set"
-			tok := mqttClient.Subscribe(topic, 1, c.handleWritableMessage)
+			tok := mqttClient.Subscribe(topic, 1, func(cl pahomqtt.Client, m pahomqtt.Message) {
+				c.handleWritableMessage(ctx, cl, m)
+			})
 			if !tok.WaitTimeout(connectTimeout) || tok.Error() != nil {
 				mqttLog.Warnf("commander subscribe failed for %s", topic)
 			}
 		}
 		mqttLog.Infof("commander subscribed to %s, %s, and switch/select/number topics", climateTopic, lightTopic)
-		
+
 		if readyFunc != nil {
 			readyOnce.Do(readyFunc)
 		}
@@ -98,7 +112,7 @@ func (c *Commander) Run(ctx context.Context, mqttPub *Publisher, readyFunc func(
 	}
 }
 
-func (c *Commander) handleClimateMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
+func (c *Commander) handleClimateMessage(lifetimeCtx context.Context, _ pahomqtt.Client, msg pahomqtt.Message) {
 	topic := msg.Topic()
 	payload := strings.TrimSpace(string(msg.Payload()))
 	if payload == "" {
@@ -133,26 +147,24 @@ func (c *Commander) handleClimateMessage(_ pahomqtt.Client, msg pahomqtt.Message
 	climateSpec := c.cache.GetDeviceClimate(*dev)
 	writable, _ := c.cache.GetWritableEPCs(*dev)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	addr := dev.IP + ":3610"
+	addr := dev.IP + addrPort
 
 	switch attr {
 	case "mode":
-		c.handleClimateMode(ctx, addr, eoj, dev, payload, climateSpec, specs)
+		c.handleClimateMode(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs)
 	case "temperature":
-		c.handleClimateTemperature(ctx, addr, eoj, dev, payload, climateSpec, specs, writable)
+		c.handleClimateTemperature(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs, writable)
 	case "fan_mode":
-		c.handleClimateFanMode(ctx, addr, eoj, dev, payload, climateSpec, specs, writable)
+		c.handleClimateFanMode(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs, writable)
 	case "power":
-		c.handleClimatePower(ctx, addr, eoj, dev, payload, writable)
+		c.handleClimatePower(lifetimeCtx, addr, eoj, dev, payload, writable)
 	default:
 		mqttLog.Debugf("commander: ignored climate attribute %q", attr)
 	}
 }
 
 // handleWritableMessage handles switch/select/number command messages: prefix/device/switch|select|number/metricname/set
-func (c *Commander) handleWritableMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
+func (c *Commander) handleWritableMessage(lifetimeCtx context.Context, _ pahomqtt.Client, msg pahomqtt.Message) {
 	topic := msg.Topic()
 	payload := strings.TrimSpace(string(msg.Payload()))
 	if payload == "" {
@@ -203,10 +215,8 @@ func (c *Commander) handleWritableMessage(_ pahomqtt.Client, msg pahomqtt.Messag
 	if ms.ExcludeSet {
 		return
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	addr := dev.IP + ":3610"
-	c.executeWritableSet(ctx, addr, eoj, dev, ms, metricSpecs, entityType, payload)
+	addr := dev.IP + addrPort
+	c.executeWritableSet(lifetimeCtx, addr, eoj, dev, ms, metricSpecs, entityType, payload)
 }
 
 func metricSpecByName(specs []specs.MetricSpec, name string) *specs.MetricSpec {
@@ -218,7 +228,9 @@ func metricSpecByName(specs []specs.MetricSpec, name string) *specs.MetricSpec {
 	return nil
 }
 
-func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, ms *specs.MetricSpec, metricSpecs []specs.MetricSpec, entityType, payload string) {
+func (c *Commander) executeWritableSet(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, ms *specs.MetricSpec, metricSpecs []specs.MetricSpec, entityType, payload string) {
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	var preEDT []byte
 	if ms.PreSetEPC != 0 {
 		preMs := metricSpecByEPC(metricSpecs, ms.PreSetEPC)
@@ -293,7 +305,7 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 	_, err = c.client.SendSet(ctx, addr, eoj, ms.EPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set %s (0x%02x) failed for %s: %v", ms.Name, ms.EPC, dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, ms.EPC)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, ms.EPC)
 		return
 	}
 	mqttLog.Infof("commander: set %s %s = %s", dev.Name, ms.Name, payload)
@@ -301,7 +313,7 @@ func (c *Commander) executeWritableSet(ctx context.Context, addr string, eoj [3]
 	if ms.PreSetEPC != 0 {
 		updates = append(updates, pendingUpdate{epc: ms.PreSetEPC, edt: preEDT})
 	}
-	c.verifyStateUpdate(dev, eoj, updates)
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, updates)
 }
 
 func (c *Commander) deviceByName(name string) *config.Device {
@@ -313,7 +325,7 @@ func (c *Commander) deviceByName(name string) *config.Device {
 	return nil
 }
 
-func (c *Commander) handleClimatePower(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}) {
+func (c *Commander) handleClimatePower(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}) {
 	if _, ok := writable[operationStatusEPC]; !ok {
 		mqttLog.Warnf("commander: device %s operation_status (0x80) not writable", dev.Name)
 		return
@@ -328,38 +340,42 @@ func (c *Commander) handleClimatePower(ctx context.Context, addr string, eoj [3]
 		mqttLog.Warnf("commander: invalid power payload %q", payload)
 		return
 	}
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set 0x80 failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, operationStatusEPC)
 		return
 	}
 	mqttLog.Infof("commander: set %s power %s", dev.Name, payload)
-	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: edt}})
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: edt}})
 }
 
-func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec) {
+func (c *Commander) handleClimateMode(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec) {
 	if climateSpec == nil {
 		mqttLog.Warnf("commander: device %s has no climate spec", dev.Name)
 		return
 	}
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	payload = strings.ToLower(payload)
 	if payload == "off" {
 		_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, []byte{offStatus})
 		if err != nil {
 			mqttLog.Warnf("commander: Set 0x80=off failed for %s: %v", dev.Name, err)
-			c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
+			c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, operationStatusEPC)
 			return
 		}
 		mqttLog.Infof("commander: set %s mode off", dev.Name)
-		c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: []byte{offStatus}}})
+		c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: []byte{offStatus}}})
 		return
 	}
 	// Turn on first, then set operation mode
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, []byte{onStatus})
 	if err != nil {
 		mqttLog.Warnf("commander: Set 0x80=on failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, operationStatusEPC)
 		return
 	}
 	raw, ok := climateSpec.Modes[payload]
@@ -381,14 +397,14 @@ func (c *Commander) handleClimateMode(ctx context.Context, addr string, eoj [3]b
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set mode failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC, epc)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, operationStatusEPC, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s mode %s", dev.Name, payload)
-	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: []byte{onStatus}}, {epc: epc, edt: edt}})
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: []byte{onStatus}}, {epc: epc, edt: edt}})
 }
 
-func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleClimateTemperature(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
 	if climateSpec == nil {
 		return
 	}
@@ -418,14 +434,16 @@ func (c *Commander) handleClimateTemperature(ctx context.Context, addr string, e
 		mqttLog.Warnf("commander: encode temperature failed: %v", err)
 		return
 	}
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set temperature failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, epc)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s temperature %s", dev.Name, payload)
-	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 
 // normalizeClimateSetpoint rounds a requested temperature to the integer
@@ -456,7 +474,7 @@ func normalizeClimateSetpoint(req, prev float64, hasPrev bool, ms specs.MetricSp
 	return math.Round(req)
 }
 
-func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleClimateFanMode(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
 	if climateSpec == nil || climateSpec.FanModeEPC == 0 {
 		return
 	}
@@ -480,17 +498,19 @@ func (c *Commander) handleClimateFanMode(ctx context.Context, addr string, eoj [
 		mqttLog.Warnf("commander: encode fan_mode failed: %v", err)
 		return
 	}
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set fan_mode failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, epc)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s fan_mode %s", dev.Name, payload)
-	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 
-func (c *Commander) handleLightMessage(_ pahomqtt.Client, msg pahomqtt.Message) {
+func (c *Commander) handleLightMessage(lifetimeCtx context.Context, _ pahomqtt.Client, msg pahomqtt.Message) {
 	topic := msg.Topic()
 	payload := strings.TrimSpace(string(msg.Payload()))
 	if payload == "" {
@@ -523,23 +543,21 @@ func (c *Commander) handleLightMessage(_ pahomqtt.Client, msg pahomqtt.Message) 
 	lightSpec := c.cache.GetDeviceLight(*dev)
 	writable, _ := c.cache.GetWritableEPCs(*dev)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	addr := dev.IP + ":3610"
+	addr := dev.IP + addrPort
 
 	switch attr {
 	case "power":
-		c.handleLightPower(ctx, addr, eoj, dev, payload, writable)
+		c.handleLightPower(lifetimeCtx, addr, eoj, dev, payload, writable)
 	case "brightness":
-		c.handleLightBrightness(ctx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
+		c.handleLightBrightness(lifetimeCtx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
 	case "effect":
-		c.handleLightEffect(ctx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
+		c.handleLightEffect(lifetimeCtx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
 	default:
 		mqttLog.Debugf("commander: ignored light attribute %q", attr)
 	}
 }
 
-func (c *Commander) handleLightPower(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}) {
+func (c *Commander) handleLightPower(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}) {
 	if _, ok := writable[operationStatusEPC]; !ok {
 		mqttLog.Warnf("commander: device %s operation_status (0x80) not writable", dev.Name)
 		return
@@ -554,17 +572,19 @@ func (c *Commander) handleLightPower(ctx context.Context, addr string, eoj [3]by
 		mqttLog.Warnf("commander: invalid light power payload %q", payload)
 		return
 	}
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set 0x80 failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, operationStatusEPC)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, operationStatusEPC)
 		return
 	}
 	mqttLog.Infof("commander: set %s light power %s", dev.Name, payload)
-	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: edt}})
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: edt}})
 }
 
-func (c *Commander) handleLightBrightness(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleLightBrightness(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
 	if lightSpec == nil || lightSpec.BrightnessEPC == 0 {
 		return
 	}
@@ -588,17 +608,19 @@ func (c *Commander) handleLightBrightness(ctx context.Context, addr string, eoj 
 		mqttLog.Warnf("commander: encode brightness failed: %v", err)
 		return
 	}
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set brightness failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, epc)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s brightness %s", dev.Name, payload)
-	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 
-func (c *Commander) handleLightEffect(ctx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleLightEffect(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
 	if lightSpec == nil {
 		return
 	}
@@ -643,14 +665,16 @@ func (c *Commander) handleLightEffect(ctx context.Context, addr string, eoj [3]b
 		mqttLog.Warnf("commander: encode effect failed: %v", err)
 		return
 	}
+	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+	defer cancel()
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set effect failed for %s: %v", dev.Name, err)
-		c.triggerStateUpdate(dev, 0, eoj, epc)
+		c.triggerStateUpdate(lifetimeCtx, dev, 0, eoj, epc)
 		return
 	}
 	mqttLog.Infof("commander: set %s effect %s", dev.Name, payload)
-	c.verifyStateUpdate(dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
+	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 
 func metricSpecByEPC(specs []specs.MetricSpec, epc byte) *specs.MetricSpec {
@@ -667,18 +691,18 @@ type pendingUpdate struct {
 	edt []byte
 }
 
-func (c *Commander) verifyStateUpdate(dev *config.Device, eoj [3]byte, updates []pendingUpdate) {
+func (c *Commander) verifyStateUpdate(lifetimeCtx context.Context, dev *config.Device, eoj [3]byte, updates []pendingUpdate) {
 	go func() {
 		defer mqttLog.RecoverPanic("verify state update for " + dev.Name)
 		delays := []time.Duration{1 * time.Second, 3 * time.Second, 3 * time.Second}
 		for attempt, delay := range delays {
 			select {
-			case <-c.ctx.Done():
+			case <-lifetimeCtx.Done():
 				return
 			case <-time.After(delay):
 			}
 
-			ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
+			ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 			epcs := make([]byte, len(updates))
 			for i, u := range updates {
 				epcs[i] = u.epc
@@ -737,21 +761,21 @@ func (c *Commander) verifyStateUpdate(dev *config.Device, eoj [3]byte, updates [
 	}()
 }
 
-func (c *Commander) triggerStateUpdate(dev *config.Device, delay time.Duration, eoj [3]byte, epcs ...byte) {
+func (c *Commander) triggerStateUpdate(lifetimeCtx context.Context, dev *config.Device, delay time.Duration, eoj [3]byte, epcs ...byte) {
 	go func() {
 		defer mqttLog.RecoverPanic("trigger state update for " + dev.Name)
 		if delay > 0 {
 			select {
-			case <-c.ctx.Done():
+			case <-lifetimeCtx.Done():
 				return
 			case <-time.After(delay):
 			}
 		} else {
-			if c.ctx.Err() != nil {
+			if lifetimeCtx.Err() != nil {
 				return
 			}
 		}
-		ctx, cancel := context.WithTimeout(c.ctx, 5*time.Second)
+		ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 		defer cancel()
 
 		props, err := c.client.GetProps(ctx, dev.IP, eoj, epcs)
