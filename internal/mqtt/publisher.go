@@ -66,6 +66,11 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 		}).
 		SetOnConnectHandler(func(c pahomqtt.Client) {
 			mqttLog.Infof("connected to %s", cfg.Broker)
+			// (Re)publish the bridge device on every connect so HA discovery
+			// survives broker restarts and a deferred first connection. Run in a
+			// goroutine to avoid blocking paho's connection routine on publish
+			// acks. Retained publishes make this idempotent.
+			go pub.publishBridgeDevice()
 			pub.muConnect.Lock()
 			callbacks := append([]func(pahomqtt.Client){}, pub.onConnectCallbacks...)
 			pub.muConnect.Unlock()
@@ -81,16 +86,19 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 	}
 
 	client := pahomqtt.NewClient(opts)
+	pub.client = client
+	// ConnectRetry + AutoReconnect are enabled, so the broker being unreachable
+	// at boot is recoverable — common when the MQTT add-on restarts alongside
+	// this one. Wait briefly for a clean connect for nicer startup logs, but do
+	// NOT hard-fail: returning an error here would make the caller disable MQTT
+	// for the entire process lifetime, defeating the background retry. The
+	// OnConnect handler reconciles discovery and subscriptions once connected.
 	token := client.Connect()
 	if !token.WaitTimeout(connectTimeout) {
-		return nil, fmt.Errorf("mqtt connect timeout to %s", cfg.Broker)
+		mqttLog.Warnf("mqtt broker %s not reachable yet; continuing with background retry", cfg.Broker)
+	} else if err := token.Error(); err != nil {
+		mqttLog.Warnf("mqtt connect to %s failed: %v; continuing with background retry", cfg.Broker, err)
 	}
-	if err := token.Error(); err != nil {
-		return nil, fmt.Errorf("mqtt connect to %s: %w", cfg.Broker, err)
-	}
-
-	pub.client = client
-	pub.publishBridgeDevice()
 	return pub, nil
 }
 
