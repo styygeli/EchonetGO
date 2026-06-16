@@ -245,7 +245,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 			info.UID = decodeUID(p.EDT, c.hostLabel(addr))
 		case 0x8A:
 			info.Manufacturer = decodeManufacturer(p.EDT)
-			info.ManufacturerCode = fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2])
+			info.ManufacturerCode = formatManufacturerCode(p.EDT)
 		case 0x8C:
 			info.ProductCode = decodeProductCode(p.EDT)
 		}
@@ -274,7 +274,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 				info.UID = decodeUID(p.EDT, c.hostLabel(addr))
 			case 0x8A:
 				info.Manufacturer = decodeManufacturer(p.EDT)
-				info.ManufacturerCode = fmt.Sprintf("%02x%02x%02x", p.EDT[0], p.EDT[1], p.EDT[2])
+				info.ManufacturerCode = formatManufacturerCode(p.EDT)
 			case 0x8C:
 				info.ProductCode = decodeProductCode(p.EDT)
 			}

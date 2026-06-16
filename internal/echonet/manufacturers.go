@@ -253,3 +253,13 @@ func decodeManufacturer(edt []byte) string {
 	}
 	return fmt.Sprintf("0x%06X", code)
 }
+
+// formatManufacturerCode returns the 6-digit lowercase hex manufacturer code
+// (e.g. "000006") for a 3-byte EDT, or "" if the EDT is not exactly 3 bytes.
+// Guards against malformed 0x8A responses with a short PDC.
+func formatManufacturerCode(edt []byte) string {
+	if len(edt) != 3 {
+		return ""
+	}
+	return fmt.Sprintf("%02x%02x%02x", edt[0], edt[1], edt[2])
+}
