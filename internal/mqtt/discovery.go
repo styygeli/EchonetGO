@@ -14,6 +14,10 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
+// expireAfterSeconds is the HA discovery expire_after window: an entity is
+// marked unavailable if no state arrives within this many seconds.
+const expireAfterSeconds = 300
+
 // haDiscoveryPayload is the JSON structure for HA MQTT sensor auto-discovery.
 type haDiscoveryPayload struct {
 	Name                      string   `json:"name"`
@@ -158,7 +162,7 @@ func buildSensorPayload(ms specs.MetricSpec, objectID, stateTopic, availTopic st
 		StateTopic:        stateTopic,
 		ValueTemplate:     fmt.Sprintf("{{ value_json.%s | default(None) }}", ms.Name),
 		AvailabilityTopic: availTopic,
-		ExpireAfter:       300,
+		ExpireAfter:       expireAfterSeconds,
 		Device:            device,
 		ForceUpdate:       true,
 	}
@@ -217,7 +221,7 @@ func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, 
 		TempStep:                cl.TempStep,
 		Precision:               1.0,
 		AvailabilityTopic:       availTopic,
-		ExpireAfter:             300,
+		ExpireAfter:             expireAfterSeconds,
 		Device:                  device,
 		Modes:                   climateModesList(cl.Modes),
 	}
@@ -277,7 +281,7 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"command_topic":      commandTopic,
 				"state_topic":        stateTopic,
 				"availability_topic": availTopic,
-				"expire_after":       300,
+				"expire_after":       expireAfterSeconds,
 				"device":             device,
 			}
 			data, err := json.Marshal(payload)
@@ -305,7 +309,7 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"state_topic":        stateTopic,
 				"options":            options,
 				"availability_topic": availTopic,
-				"expire_after":       300,
+				"expire_after":       expireAfterSeconds,
 				"device":             device,
 			}
 			data, err := json.Marshal(payload)
@@ -342,7 +346,7 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"max":                maxVal,
 				"step":               step,
 				"availability_topic": availTopic,
-				"expire_after":       300,
+				"expire_after":       expireAfterSeconds,
 				"device":             device,
 			}
 			if ms.HAUnit != "" {
@@ -538,7 +542,7 @@ func (p *Publisher) publishLightDiscovery(dev config.Device, device haDevice, av
 		CommandTopic:      powerCmd,
 		StateTopic:        powerState,
 		AvailabilityTopic: availTopic,
-		ExpireAfter:       300,
+		ExpireAfter:       expireAfterSeconds,
 		Device:            device,
 	}
 	if lt.BrightnessEPC != 0 {
@@ -636,4 +640,3 @@ func writableEntityType(ms specs.MetricSpec) string {
 	}
 	return ""
 }
-
