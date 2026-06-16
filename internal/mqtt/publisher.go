@@ -14,6 +14,7 @@ import (
 	"github.com/styygeli/echonetgo/internal/config"
 	"github.com/styygeli/echonetgo/internal/echonet"
 	"github.com/styygeli/echonetgo/internal/logging"
+	"github.com/styygeli/echonetgo/internal/poller"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
@@ -127,19 +128,20 @@ func (p *Publisher) Disconnect() {
 }
 
 // PublishDeviceState publishes state for a device and ensures discovery has been sent.
-func (p *Publisher) PublishDeviceState(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool) {
-	p.publishAvailability(dev, success)
-	if success && len(metrics) > 0 {
-		p.ensureDiscovery(dev, info, metricSpecs, writable, climateSpec, lightSpec, metrics)
-		p.publishState(dev, metrics)
-		if climateSpec != nil {
-			p.publishClimateState(dev, metrics, metricSpecs, climateSpec)
+func (p *Publisher) PublishDeviceState(st poller.DeviceState) {
+	dev := st.Device
+	p.publishAvailability(dev, st.Success)
+	if st.Success && len(st.Metrics) > 0 {
+		p.ensureDiscovery(dev, st.Info, st.MetricSpecs, st.Writable, st.Climate, st.Light, st.Metrics)
+		p.publishState(dev, st.Metrics)
+		if st.Climate != nil {
+			p.publishClimateState(dev, st.Metrics, st.MetricSpecs, st.Climate)
 		}
-		if lightSpec != nil {
-			p.publishLightState(dev, metrics, metricSpecs, lightSpec)
+		if st.Light != nil {
+			p.publishLightState(dev, st.Metrics, st.MetricSpecs, st.Light)
 		}
-		if writable != nil {
-			p.publishWritableState(dev, metrics, metricSpecs, writable, climateSpec, lightSpec)
+		if st.Writable != nil {
+			p.publishWritableState(dev, st.Metrics, st.MetricSpecs, st.Writable, st.Climate, st.Light)
 		}
 	}
 }

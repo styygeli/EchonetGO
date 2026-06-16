@@ -84,9 +84,7 @@ func setupMQTT(cfg *config.Config, cache *poller.Cache, readiness *api.Readiness
 		return nil, err
 	}
 	log.Infof("MQTT publishing to %s", cfg.MQTT.Broker)
-	cache.SetOnUpdate(func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool) {
-		mqttPub.PublishDeviceState(dev, info, metrics, metricSpecs, writable, climateSpec, lightSpec, success)
-	})
+	cache.SetOnUpdate(mqttPub.PublishDeviceState)
 	readiness.Register("commander")
 	return mqttPub, nil
 }

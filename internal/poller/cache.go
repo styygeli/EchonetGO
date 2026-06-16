@@ -9,11 +9,28 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-// UpdateCallback is called after a scrape with the device's current state.
-// writable is the set of EPCs the device reports as writable (0x9E); may be nil.
-// climateSpec is non-nil for device classes that support HA climate (e.g. home_ac).
-// lightSpec is non-nil for device classes that support HA light (e.g. general_lighting).
-type UpdateCallback func(dev config.Device, info echonet.DeviceInfo, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, climateSpec *specs.ClimateSpec, lightSpec *specs.LightSpec, success bool)
+// DeviceState is the snapshot of a single device's state delivered to update
+// subscribers (e.g. the MQTT publisher) after a poll, an INF push, or a
+// post-command verification read. It is the typed boundary between the poller
+// and the presentation layer, replacing a long positional argument list.
+//
+//   - Writable is the set of EPCs the device reports as writable (0x9E); may be nil.
+//   - Climate is non-nil for device classes that support HA climate (e.g. home_ac).
+//   - Light is non-nil for device classes that support HA light (e.g. general_lighting).
+type DeviceState struct {
+	Device      config.Device
+	Info        echonet.DeviceInfo
+	Metrics     map[string]echonet.MetricValue
+	MetricSpecs []specs.MetricSpec
+	Writable    map[byte]struct{}
+	Climate     *specs.ClimateSpec
+	Light       *specs.LightSpec
+	Success     bool
+}
+
+// UpdateCallback is called after a scrape, INF push, or command verification
+// with the device's current state.
+type UpdateCallback func(DeviceState)
 
 // Cache holds the latest scraped metrics per device. Safe for concurrent use.
 type Cache struct {
@@ -238,26 +255,35 @@ func (c *Cache) Update(dev config.Device, groupID string, interval time.Duration
 	c.metrics[key] = dc
 
 	cb := c.onUpdate
-	var devSpecs []specs.MetricSpec
-	var writable map[byte]struct{}
-	var climateSpec *specs.ClimateSpec
-	var lightSpec *specs.LightSpec
-	if cb != nil {
-		devSpecs = c.specsByDev[key]
-		writable = c.writableEPCs[key]
-		climateSpec = c.climateByDev[key]
-		lightSpec = c.lightByDev[key]
+	state, ok := c.snapshotLocked(dev, key, dc, success, cb != nil)
+	c.mu.Unlock()
+
+	if cb != nil && ok {
+		cb(state)
 	}
-	info := dc.info
+}
+
+// snapshotLocked assembles a DeviceState from the cache while c.mu is held.
+// When wantState is false (no subscriber) it skips the metric copy and returns
+// ok=false. The caller must release c.mu before invoking the callback.
+func (c *Cache) snapshotLocked(dev config.Device, key string, dc deviceCache, success, wantState bool) (DeviceState, bool) {
+	if !wantState {
+		return DeviceState{}, false
+	}
 	allMetrics := make(map[string]echonet.MetricValue, len(dc.metrics))
 	for k, v := range dc.metrics {
 		allMetrics[k] = v
 	}
-	c.mu.Unlock()
-
-	if cb != nil {
-		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, lightSpec, success)
-	}
+	return DeviceState{
+		Device:      dev,
+		Info:        dc.info,
+		Metrics:     allMetrics,
+		MetricSpecs: c.specsByDev[key],
+		Writable:    c.writableEPCs[key],
+		Climate:     c.climateByDev[key],
+		Light:       c.lightByDev[key],
+		Success:     success,
+	}, true
 }
 
 // SetNotificationEPCs records the notification property map (0x9D / STATMAP) for a device.
@@ -338,25 +364,11 @@ func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.Metr
 	c.metrics[key] = dc
 
 	cb := c.onUpdate
-	var devSpecs []specs.MetricSpec
-	var writable map[byte]struct{}
-	var climateSpec *specs.ClimateSpec
-	var lightSpec *specs.LightSpec
-	if cb != nil {
-		devSpecs = c.specsByDev[key]
-		writable = c.writableEPCs[key]
-		climateSpec = c.climateByDev[key]
-		lightSpec = c.lightByDev[key]
-	}
-	info := dc.info
-	allMetrics := make(map[string]echonet.MetricValue, len(dc.metrics))
-	for k, v := range dc.metrics {
-		allMetrics[k] = v
-	}
+	state, ok := c.snapshotLocked(dev, key, dc, true, cb != nil)
 	c.mu.Unlock()
 
-	if cb != nil {
-		cb(dev, info, allMetrics, devSpecs, writable, climateSpec, lightSpec, true)
+	if cb != nil && ok {
+		cb(state)
 	}
 }
 

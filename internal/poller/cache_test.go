@@ -18,11 +18,11 @@ func TestSetOnUpdate_CallbackFiresOnUpdate(t *testing.T) {
 	var lastDev config.Device
 	var lastSuccess bool
 	var lastMetrics map[string]echonet.MetricValue
-	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ *specs.LightSpec, success bool) {
+	c.SetOnUpdate(func(st DeviceState) {
 		callCount++
-		lastDev = d
-		lastSuccess = success
-		lastMetrics = m
+		lastDev = st.Device
+		lastSuccess = st.Success
+		lastMetrics = st.Metrics
 	})
 
 	c.Update(dev, "1m", time.Minute, false, 0.5, nil, "timeout")
@@ -63,8 +63,8 @@ func TestSetDeviceSpecs_OnUpdateReceivesSpecs(t *testing.T) {
 	c.SetDeviceSpecs(dev, metricSpecs)
 
 	var receivedSpecs []specs.MetricSpec
-	c.SetOnUpdate(func(d config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, ms []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ *specs.LightSpec, success bool) {
-		receivedSpecs = ms
+	c.SetOnUpdate(func(st DeviceState) {
+		receivedSpecs = st.MetricSpecs
 	})
 
 	c.Update(dev, "1m", time.Minute, true, 0.1, map[string]echonet.MetricValue{
@@ -96,8 +96,8 @@ func TestSetDeviceLight_CallbackReceivesLightSpec(t *testing.T) {
 	})
 
 	var receivedLight *specs.LightSpec
-	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, _ map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, lt *specs.LightSpec, _ bool) {
-		receivedLight = lt
+	c.SetOnUpdate(func(st DeviceState) {
+		receivedLight = st.Light
 	})
 
 	c.Update(dev, "1m", time.Minute, true, 0.1, map[string]echonet.MetricValue{
@@ -128,10 +128,10 @@ func TestSetOnUpdate_CallbackReceivesAggregatedMetrics(t *testing.T) {
 
 	var mu sync.Mutex
 	var lastMetrics map[string]echonet.MetricValue
-	c.SetOnUpdate(func(_ config.Device, _ echonet.DeviceInfo, m map[string]echonet.MetricValue, _ []specs.MetricSpec, _ map[byte]struct{}, _ *specs.ClimateSpec, _ *specs.LightSpec, _ bool) {
+	c.SetOnUpdate(func(st DeviceState) {
 		mu.Lock()
-		lastMetrics = make(map[string]echonet.MetricValue, len(m))
-		for k, v := range m {
+		lastMetrics = make(map[string]echonet.MetricValue, len(st.Metrics))
+		for k, v := range st.Metrics {
 			lastMetrics[k] = v
 		}
 		mu.Unlock()
