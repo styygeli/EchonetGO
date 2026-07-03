@@ -2,6 +2,7 @@ package specs
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -210,6 +211,17 @@ func parseMetricSpec(m metricYAML, devInterval time.Duration, eoj [3]byte) (*Met
 				return nil, fmt.Errorf("metric %s: enum value %d doesn't fit size=%d signed=%t", m.Name, rawValue, m.Size, m.Signed)
 			}
 			enum[rawValue] = label
+		}
+	}
+	// The encoder rounds scaled values assuming a negative power-of-ten scale
+	// (e.g. 0.1, 0.01). A non-power-of-ten scale<1 (e.g. 0.25) would round to
+	// the wrong precision, so reject it at load rather than silently mis-round.
+	// (Enum metrics already require scale=1 above, so this only governs
+	// non-enum numeric metrics.)
+	if scale > 0 && scale < 1 {
+		digits := int(math.Ceil(-math.Log10(scale)))
+		if math.Abs(math.Pow(10, -float64(digits))-scale) > 1e-12 {
+			return nil, fmt.Errorf("metric %s: scale %v must be a negative power of ten (e.g. 0.1, 0.01)", m.Name, scale)
 		}
 	}
 	help := m.Help

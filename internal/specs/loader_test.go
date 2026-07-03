@@ -69,6 +69,35 @@ metrics:
 	}
 }
 
+func TestParseDeviceYAML_RejectsNonPowerOfTenScale(t *testing.T) {
+	data := []byte(`
+eoj: [0x01, 0x30, 0x01]
+metrics:
+  - epc: 0xE0
+    name: measured_value
+    size: 2
+    scale: 0.25
+    type: gauge
+`)
+
+	_, err := parseDeviceYAML(data)
+	if err == nil {
+		t.Fatalf("parseDeviceYAML() expected error for scale 0.25, got nil")
+	}
+	if !strings.Contains(err.Error(), "negative power of ten") {
+		t.Fatalf("error = %q, want power-of-ten scale validation", err)
+	}
+}
+
+func TestParseDeviceYAML_AcceptsPowerOfTenScale(t *testing.T) {
+	for _, sc := range []string{"0.1", "0.01", "0.001"} {
+		data := []byte("\neoj: [0x01, 0x30, 0x01]\nmetrics:\n  - epc: 0xE0\n    name: measured_value\n    size: 2\n    scale: " + sc + "\n    type: gauge\n")
+		if _, err := parseDeviceYAML(data); err != nil {
+			t.Fatalf("parseDeviceYAML() with scale %s: unexpected error %v", sc, err)
+		}
+	}
+}
+
 func TestParseDeviceYAML_RejectsOutOfRangeEnumForFixedSize(t *testing.T) {
 	data := []byte(`
 eoj: [0x01, 0x30, 0x01]
