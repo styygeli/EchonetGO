@@ -32,7 +32,6 @@ type Commander struct {
 	cache       *poller.Cache
 	cfg         *config.Config
 	topicPrefix string
-	subscribed  pahomqtt.Token
 }
 
 // commandTimeout bounds a single synchronous SET command (including any
@@ -68,7 +67,6 @@ func (c *Commander) Run(ctx context.Context, mqttPub *Publisher, readyFunc func(
 		token := mqttClient.Subscribe(climateTopic, 1, func(cl pahomqtt.Client, m pahomqtt.Message) {
 			c.handleClimateMessage(ctx, cl, m)
 		})
-		c.subscribed = token
 		if !token.WaitTimeout(connectTimeout) {
 			mqttLog.Warnf("commander subscribe timeout for %s", climateTopic)
 		} else if err := token.Error(); err != nil {
