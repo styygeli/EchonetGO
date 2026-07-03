@@ -85,7 +85,7 @@ func setupMQTT(cfg *config.Config, cache *poller.Cache, readiness *api.Readiness
 		return nil, err
 	}
 	log.Infof("MQTT publishing to %s", cfg.MQTT.Broker)
-	cache.SetOnUpdate(mqttPub.PublishDeviceState)
+	cache.SetOnUpdate(mqttPub.EnqueueDeviceState)
 	readiness.Register("commander")
 	return mqttPub, nil
 }

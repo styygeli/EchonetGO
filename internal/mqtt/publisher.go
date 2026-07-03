@@ -39,6 +39,16 @@ type Publisher struct {
 
 	muConnect          sync.Mutex
 	onConnectCallbacks []func(pahomqtt.Client)
+
+	// Async publish pipeline: cache updates are enqueued (coalesced per device)
+	// and published by a single worker goroutine, so a slow/unreachable broker
+	// never stalls the scraper/INF/command goroutine that produced the update.
+	publishFn func(poller.DeviceState)      // defaults to PublishDeviceState; overridable in tests
+	pubMu     sync.Mutex                    // guards pending
+	pending   map[string]poller.DeviceState // dev.Name -> latest state awaiting publish
+	wake      chan struct{}                 // cap 1: non-blocking signal to the worker
+	stop      chan struct{}                 // closed on Disconnect to stop the worker
+	done      chan struct{}                 // closed when the worker goroutine exits
 }
 
 // NewPublisher creates a connected MQTT publisher. Returns nil if broker is empty.
@@ -52,7 +62,13 @@ func NewPublisher(cfg config.MQTTConfig, swVersion string) (*Publisher, error) {
 		swVersion:       swVersion,
 		published:       make(map[string]string),
 		infoSkips:       make(map[string]int),
+		pending:         make(map[string]poller.DeviceState),
+		wake:            make(chan struct{}, 1),
+		stop:            make(chan struct{}),
+		done:            make(chan struct{}),
 	}
+	pub.publishFn = pub.PublishDeviceState
+	go pub.publishWorker()
 
 	opts := pahomqtt.NewClientOptions().
 		AddBroker(cfg.Broker).
@@ -120,11 +136,74 @@ func (p *Publisher) Client() pahomqtt.Client {
 
 // Disconnect cleanly shuts down the MQTT connection.
 func (p *Publisher) Disconnect() {
+	// Stop the publish worker and let it flush any pending state before we drop
+	// the connection.
+	close(p.stop)
+	select {
+	case <-p.done:
+	case <-time.After(publishTimeout):
+		mqttLog.Warnf("publish worker did not drain within %s", publishTimeout)
+	}
 	topic := fmt.Sprintf("%s/bridge/availability", p.topicPrefix)
 	token := p.client.Publish(topic, qos, true, "offline")
 	token.WaitTimeout(publishTimeout)
 	p.client.Disconnect(1000)
 	mqttLog.Infof("disconnected")
+}
+
+// EnqueueDeviceState records the latest state for a device and signals the
+// publish worker. It never blocks on broker I/O, so the producing goroutine
+// (scraper, INF handler, or command verification) is decoupled from broker
+// latency. Registered as the cache onUpdate callback.
+func (p *Publisher) EnqueueDeviceState(st poller.DeviceState) {
+	p.pubMu.Lock()
+	p.pending[st.Device.Name] = st // coalesce: latest state wins
+	p.pubMu.Unlock()
+	select {
+	case p.wake <- struct{}{}:
+	default: // worker already signaled
+	}
+}
+
+// publishWorker drains queued device state until Disconnect closes p.stop.
+func (p *Publisher) publishWorker() {
+	defer mqttLog.RecoverPanic("mqtt publish worker")
+	defer close(p.done)
+	for {
+		select {
+		case <-p.stop:
+			p.drainPending() // flush remaining before exit
+			return
+		case <-p.wake:
+			p.drainPending()
+		}
+	}
+}
+
+// drainPending publishes the latest pending state for every device, recovering
+// per item so one failing publish cannot kill the worker.
+func (p *Publisher) drainPending() {
+	for {
+		p.pubMu.Lock()
+		var name string
+		var st poller.DeviceState
+		found := false
+		for k, v := range p.pending {
+			name, st, found = k, v, true
+			break
+		}
+		if found {
+			delete(p.pending, name)
+		}
+		p.pubMu.Unlock()
+		if !found {
+			return
+		}
+		func() {
+			defer mqttLog.RecoverPanic("mqtt publish for " + st.Device.Name)
+			p.publishFn(st)
+		}()
+	}
 }
 
 // PublishDeviceState publishes state for a device and ensures discovery has been sent.
