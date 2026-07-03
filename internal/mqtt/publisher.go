@@ -251,7 +251,7 @@ func (p *Publisher) publishClimateState(dev config.Device, metrics map[string]ec
 				}
 			}
 			if modeStr == "" {
-				modeStr = "heat"
+				mqttLog.Debugf("device %s: operation_mode raw 0x%02x not in climate modes; leaving mode unpublished", dev.Name, raw)
 			}
 		}
 	}
