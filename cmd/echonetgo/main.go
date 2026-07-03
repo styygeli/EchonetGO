@@ -23,11 +23,7 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-// version is set at build time via:
-//
-//	-ldflags "-X main.version=<release-version>"
-//
-// Defaults to "dev" for local builds.
+// version is injected at build time via -ldflags "-X main.version=...". Defaults to "dev".
 var version = "dev"
 
 func main() {
@@ -74,8 +70,7 @@ func main() {
 	handleShutdown(cancel, mqttPub, server, errCh, log)
 }
 
-// setupMQTT initializes the MQTT publisher and configures the cache to automatically
-// publish updates when device state changes are detected.
+// setupMQTT creates the publisher and wires the cache to publish on state change.
 func setupMQTT(cfg *config.Config, cache *poller.Cache, readiness *api.Readiness, log *logging.Logger) (*mqttpub.Publisher, error) {
 	if !cfg.MQTTEnabled() {
 		return nil, nil
@@ -200,8 +195,7 @@ func setupHTTPServer(cfg *config.Config, cache *poller.Cache, deviceSpecs map[st
 	return server, errCh
 }
 
-// handleShutdown blocks until an OS termination signal is received or a fatal HTTP server
-// error occurs, then coordinates a graceful shutdown of all background processes.
+// handleShutdown blocks until a termination signal or fatal server error, then shuts down cleanly.
 func handleShutdown(cancel context.CancelFunc, mqttPub *mqttpub.Publisher, server *http.Server, errCh chan error, log *logging.Logger) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)

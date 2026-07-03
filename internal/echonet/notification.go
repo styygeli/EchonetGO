@@ -25,8 +25,7 @@ type NotificationHandler struct {
 	devices   map[string]struct{} // known device IPs
 }
 
-// NewNotificationHandler creates a handler that reads from infChan,
-// parses INF frames, and calls the callback for known devices.
+// NewNotificationHandler wires infChan to cb, dispatching only for registered devices.
 func NewNotificationHandler(infChan chan UDPFrame, transport *Transport, cb NotificationCallback) *NotificationHandler {
 	return &NotificationHandler{
 		infChan:   infChan,

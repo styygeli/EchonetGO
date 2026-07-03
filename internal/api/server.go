@@ -49,7 +49,6 @@ func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	allReady, components := s.Readiness.Status()
-	// Map bool to "ready" / "not_ready" for response
 	compStatus := make(map[string]string, len(components))
 	for name, ready := range components {
 		if ready {

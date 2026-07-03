@@ -39,9 +39,8 @@ type UDPFrame struct {
 	Data []byte
 }
 
-// NewTransport creates a Transport that manages ECHONET Lite UDP connections.
-// If strictSourcePort3610 is true, all requests must originate from local UDP
-// port 3610; no fallback to an ephemeral port is attempted.
+// NewTransport creates a Transport. If strictSourcePort3610 is true, all requests
+// must originate from local UDP port 3610 with no fallback to an ephemeral port.
 func NewTransport(strictSourcePort3610 bool) *Transport {
 	return &Transport{
 		hostLocks:    make(map[string]*sync.Mutex),
@@ -56,9 +55,8 @@ func (t *Transport) SetNotificationChan(ch chan UDPFrame) {
 	t.infChan = ch
 }
 
-// SetNameResolver registers an optional function that maps an IP address to a
-// configured device name. When set, log messages include the device name
-// alongside the IP for easier identification.
+// SetNameResolver registers an optional IP -> device-name lookup so log messages
+// can show the device name alongside the IP.
 func (t *Transport) SetNameResolver(fn func(ip string) string) {
 	t.nameResolver = fn
 }
@@ -74,7 +72,6 @@ func (t *Transport) hostLabel(ip string) string {
 	return ip
 }
 
-// NotificationChan returns the channel for unsolicited frames.
 func (t *Transport) NotificationChan() chan UDPFrame {
 	return t.infChan
 }

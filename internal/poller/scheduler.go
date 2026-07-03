@@ -22,9 +22,8 @@ type deviceWithEOJ struct {
 }
 
 // Scheduler drives ECHONET polling: per-host init (EOJ/property-map discovery),
-// per-interval scrapers, and periodic device-info refresh. It writes results
-// into a Cache, which it owns a reference to. Separating the orchestration from
-// the Cache keeps the latter a focused concurrent state store.
+// per-interval scrapers, and periodic device-info refresh. Results are written
+// into the Cache it holds a reference to.
 type Scheduler struct {
 	cache *Cache
 }
@@ -156,8 +155,7 @@ func (s *Scheduler) discoverDeviceState(ctx context.Context, client, probeClient
 	return activeEOJ, activeMetrics, spec
 }
 
-// scheduleDeviceScrapers groups device metrics by their configured scrape interval
-// and launches background routines to poll them periodically.
+// scheduleDeviceScrapers groups metrics by scrape interval and launches a poller per group.
 func (s *Scheduler) scheduleDeviceScrapers(ctx context.Context, client *echonet.Client, dev config.Device, activeEOJ [3]byte, activeMetrics []specs.MetricSpec, spec *specs.DeviceSpec) {
 	devDefaultInterval := spec.DefaultScrapeInterval
 	if dev.ScrapeInterval != "" {

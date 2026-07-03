@@ -25,9 +25,9 @@ type enumMeta struct {
 	values []enumValueMeta
 }
 
-// Collector implements prometheus.Collector and serves cached metrics
-// from the detached poller. Collect reads a snapshot from the cache
-// under an RLock and emits const metrics; it never triggers network I/O.
+// Collector implements prometheus.Collector, serving cached metrics from the
+// detached poller. Collect emits const metrics from a cache snapshot and never
+// does network I/O.
 type Collector struct {
 	cfg            *config.Config
 	cache          *poller.Cache
@@ -122,10 +122,8 @@ func (c *Collector) Describe(ch chan<- *prometheus.Desc) {
 	}
 }
 
-// Collect implements prometheus.Collector. Snapshots each device's cached
-// state via the cache's RLock and emits const metrics. Safe for concurrent
-// calls — all collector state is read-only after construction and the cache
-// is internally synchronized.
+// Collect implements prometheus.Collector. Safe for concurrent calls: collector
+// state is read-only after construction and the cache is internally synchronized.
 func (c *Collector) Collect(ch chan<- prometheus.Metric) {
 	for _, dev := range c.cfg.Devices {
 		c.collectDevice(ch, dev)

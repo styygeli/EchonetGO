@@ -5,14 +5,12 @@ import (
 )
 
 // Readiness tracks which components have finished initialization.
-// Components register at startup and call MarkReady when their goroutines are up.
 type Readiness struct {
 	mu         sync.RWMutex
 	registered map[string]struct{}
 	ready      map[string]bool
 }
 
-// NewReadiness creates an empty readiness tracker.
 func NewReadiness() *Readiness {
 	return &Readiness{
 		registered: make(map[string]struct{}),
@@ -20,7 +18,7 @@ func NewReadiness() *Readiness {
 	}
 }
 
-// Register declares a component that must become ready. Call before starting the component's goroutine.
+// Register declares a component that must become ready. Call before starting its goroutine.
 func (r *Readiness) Register(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -28,7 +26,6 @@ func (r *Readiness) Register(name string) {
 	r.ready[name] = false
 }
 
-// MarkReady is called by a component's goroutine once it has finished initialization.
 func (r *Readiness) MarkReady(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()

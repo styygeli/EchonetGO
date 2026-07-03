@@ -7,9 +7,8 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-// maxIntegerBytes bounds parseInteger. ECHONET Lite EDT integer properties are
-// at most 4 bytes; 8 is the widest an int64 can hold without overflow and is a
-// safe ceiling for any realistic property.
+// maxIntegerBytes bounds parseInteger. ECHONET EDT integers are at most 4 bytes;
+// 8 is the widest an int64 holds without overflow, a safe ceiling.
 const maxIntegerBytes = 8
 
 func parseEDTWithReason(edt []byte, m specs.MetricSpec) (float64, bool, string) {
@@ -44,10 +43,9 @@ func parseEDTWithReason(edt []byte, m specs.MetricSpec) (float64, bool, string) 
 	return v, true, ""
 }
 
-// parseInteger decodes a big-endian EDT integer (signed or unsigned) into an
-// int64. ECHONET integer properties are <= 4 bytes, so int64 holds any value
-// — including the full unsigned 4-byte range — without the per-call heap
-// allocations that math/big incurred on this hot path.
+// parseInteger decodes a big-endian EDT integer into an int64. ECHONET integers
+// are <= 4 bytes, so int64 covers the full unsigned range without the per-call
+// heap allocations math/big incurred on this hot path.
 func parseInteger(raw []byte, signed bool) (int64, error) {
 	if len(raw) == 0 {
 		return 0, fmt.Errorf("cannot parse empty integer payload")

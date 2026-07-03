@@ -37,7 +37,6 @@ type Client struct {
 	timeout   time.Duration
 }
 
-// NewClient creates a client backed by the given Transport with the specified timeout.
 func NewClient(transport *Transport, timeoutSec int) *Client {
 	return &Client{
 		transport: transport,
@@ -45,8 +44,7 @@ func NewClient(transport *Transport, timeoutSec int) *Client {
 	}
 }
 
-// hostLabel returns a human-friendly label for an address, including the
-// configured device name when available.
+// hostLabel returns a display label for an address, adding the device name when known.
 func (c *Client) hostLabel(addr string) string {
 	return c.transport.hostLabel(normalizeHost(addr))
 }

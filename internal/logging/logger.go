@@ -106,22 +106,18 @@ func (l *Logger) logf(level Level, label string, format string, args ...any) {
 	target.Printf("[%s] %s", label, msg)
 }
 
-// Debugf logs a debug-level message.
 func (l *Logger) Debugf(format string, args ...any) {
 	l.logf(LevelDebug, "DEBUG", format, args...)
 }
 
-// Infof logs an info-level message.
 func (l *Logger) Infof(format string, args ...any) {
 	l.logf(LevelInfo, "INFO", format, args...)
 }
 
-// Warnf logs a warning-level message.
 func (l *Logger) Warnf(format string, args ...any) {
 	l.logf(LevelWarn, "WARN", format, args...)
 }
 
-// Errorf logs an error-level message.
 func (l *Logger) Errorf(format string, args ...any) {
 	l.logf(LevelError, "ERROR", format, args...)
 }
@@ -132,12 +128,10 @@ func (l *Logger) Fatalf(format string, args ...any) {
 	os.Exit(1)
 }
 
-// RecoverPanic recovers a panic in the calling goroutine, logging it with a
-// stack trace at error level instead of crashing the process. Intended to be
-// deferred at the top of long-lived background goroutines (scrapers,
-// notification handler, post-command verification) so that a panic isolated to
-// one device — e.g. triggered by a malformed device response — does not take
-// down the whole service. context labels the goroutine in the log message.
+// RecoverPanic recovers a panic in the calling goroutine and logs it with a
+// stack trace at error level. Defer it at the top of long-lived background
+// goroutines so a panic from one misbehaving device can't crash the process.
+// context labels the goroutine in the log message.
 func (l *Logger) RecoverPanic(context string) {
 	if r := recover(); r != nil {
 		l.Errorf("panic recovered in %s: %v\n%s", context, r, debug.Stack())

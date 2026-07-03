@@ -184,8 +184,7 @@ func applyEnvOverrides(cfg *Config) error {
 	return nil
 }
 
-// loadAdditionalDevices reads supplemental device configurations from files
-// or from the ECHONET_DEVICES JSON environment variable.
+// loadAdditionalDevices reads devices from a file or the ECHONET_DEVICES JSON env var.
 func loadAdditionalDevices(cfg *Config) error {
 	// Devices from file if no devices in main config
 	if len(cfg.Devices) == 0 && cfg.DevicesPath != "" {
