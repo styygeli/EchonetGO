@@ -748,7 +748,7 @@ func (c *Commander) verifyStateUpdate(lifetimeCtx context.Context, dev *config.D
 				}
 				metrics := echonet.ParsePropsToMetrics(props, specsForRequested)
 				if len(metrics) > 0 {
-					c.cache.Update(*dev, "verify_update", 0, true, 0, metrics, "")
+					c.cache.MergeMetrics(*dev, metrics)
 					if !allMatched {
 						mqttLog.Warnf("commander: device %s did not reflect requested state after retries", dev.Name)
 					} else {
@@ -803,7 +803,7 @@ func (c *Commander) triggerStateUpdate(lifetimeCtx context.Context, dev *config.
 
 		metrics := echonet.ParsePropsToMetrics(props, specsForRequested)
 		if len(metrics) > 0 {
-			c.cache.Update(*dev, "set_update", 0, true, 0, metrics, "")
+			c.cache.MergeMetrics(*dev, metrics)
 			mqttLog.Debugf("commander: immediate update for %s parsed %d metrics", dev.Name, len(metrics))
 		}
 	}()

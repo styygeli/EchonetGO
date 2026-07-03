@@ -147,3 +147,57 @@ func TestSetOnUpdate_CallbackReceivesAggregatedMetrics(t *testing.T) {
 		t.Fatalf("callback should receive aggregated cache (latest value): got %v", agg)
 	}
 }
+
+// TestMergeMetrics_NoSyntheticGroup verifies that MergeMetrics (used for INF
+// pushes and post-command verification reads) merges metric values and fires
+// the callback WITHOUT registering a scrape group, so scrape_duration_seconds
+// and last_scrape_timestamp_seconds keep reflecting only real polls.
+func TestMergeMetrics_NoSyntheticGroup(t *testing.T) {
+	c := NewCache()
+	dev := config.Device{Name: "ac", IP: "192.168.1.5", Class: "home_ac"}
+
+	var callCount int
+	c.SetOnUpdate(func(st DeviceState) { callCount++ })
+
+	// One real scrape with a known duration/timestamp.
+	c.Update(dev, "1m", time.Minute, true, 0.42, map[string]echonet.MetricValue{
+		"operation_status": {Value: 0x30, Type: "gauge"},
+	}, "")
+	realSuccess := c.metrics[deviceKey(dev)].groups["1m"].lastSuccess
+	if callCount != 1 {
+		t.Fatalf("callback fired %d times after Update, want 1", callCount)
+	}
+
+	// A command-verification merge must not add a group nor change scrape timing.
+	c.MergeMetrics(dev, map[string]echonet.MetricValue{
+		"target_temperature_celsius": {Value: 22, Type: "gauge"},
+	})
+	if callCount != 2 {
+		t.Fatalf("callback fired %d times after MergeMetrics, want 2", callCount)
+	}
+
+	success, durationSec, lastScrape, metrics := c.Get(dev)
+	if !success {
+		t.Fatal("Get success = false, want true (real scrape within TTL)")
+	}
+	if durationSec != 0.42 {
+		t.Fatalf("Get duration = %v, want 0.42 (from real scrape, not synthetic 0)", durationSec)
+	}
+	if !lastScrape.Equal(realSuccess) {
+		t.Fatalf("Get lastScrape = %v, want real scrape time %v (not command time)", lastScrape, realSuccess)
+	}
+	if metrics["operation_status"].Value != 0x30 || metrics["target_temperature_celsius"].Value != 22 {
+		t.Fatalf("merged metrics = %v, want both operation_status and target_temperature_celsius", metrics)
+	}
+
+	groups := c.metrics[deviceKey(dev)].groups
+	if len(groups) != 1 {
+		t.Fatalf("groups = %d, want 1 (no synthetic group)", len(groups))
+	}
+	if _, ok := groups["verify_update"]; ok {
+		t.Fatal("groups contains synthetic verify_update entry")
+	}
+	if _, ok := groups["set_update"]; ok {
+		t.Fatal("groups contains synthetic set_update entry")
+	}
+}

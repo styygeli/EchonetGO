@@ -349,9 +349,12 @@ func (c *Cache) ShouldSkipPoll(dev config.Device, epc byte, freshness time.Durat
 	return time.Since(lastT) < freshness
 }
 
-// UpdateFromINF merges properties received from an INF notification into
-// the cache and triggers the onUpdate callback.
-func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.MetricValue) {
+// MergeMetrics merges metric values into the cache without registering a scrape
+// group, then fires the onUpdate callback. It is the path for out-of-band
+// updates — INF pushes and post-command verification reads — so that
+// scrape_duration_seconds and last_scrape_timestamp_seconds keep reflecting
+// only real polls (Update owns the per-group scrape status).
+func (c *Cache) MergeMetrics(dev config.Device, metrics map[string]echonet.MetricValue) {
 	c.mu.Lock()
 	key := deviceKey(dev)
 	dc := c.metrics[key]
@@ -370,6 +373,13 @@ func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.Metr
 	if cb != nil && ok {
 		cb(state)
 	}
+}
+
+// UpdateFromINF merges properties received from an INF notification into the
+// cache and triggers the onUpdate callback. INF pushes carry no scrape timing,
+// so this records no group (see MergeMetrics).
+func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.MetricValue) {
+	c.MergeMetrics(dev, metrics)
 }
 
 // FindDeviceByIPAndEOJ returns the configured device matching an IP and SEOJ class,
