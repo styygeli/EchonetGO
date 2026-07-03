@@ -8,6 +8,24 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
+func TestFormatNumberPayload(t *testing.T) {
+	tests := []struct {
+		in   float64
+		want string
+	}{
+		{1000000, "1000000"}, // must not be "1e+06"
+		{24.5, "24.5"},
+		{0.001, "0.001"},
+		{0, "0"},
+		{-42.25, "-42.25"},
+	}
+	for _, tt := range tests {
+		if got := formatNumberPayload(tt.in); got != tt.want {
+			t.Fatalf("formatNumberPayload(%v) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestFriendlyName(t *testing.T) {
 	tests := []struct {
 		name string

@@ -5,6 +5,7 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -369,7 +370,7 @@ func (p *Publisher) publishWritableState(dev config.Device, metrics map[string]e
 			}
 			payload = mv.EnumLabel
 		case "number":
-			payload = fmt.Sprintf("%v", mv.Value)
+			payload = formatNumberPayload(mv.Value)
 		default:
 			continue
 		}
@@ -405,6 +406,14 @@ func shouldSkipStateUpdate(ms specs.MetricSpec, mv echonet.MetricValue) bool {
 		return true
 	}
 	return false
+}
+
+// formatNumberPayload renders a number-entity value as a plain decimal string.
+// It uses 'f' with precision -1 (shortest exact representation) so large or
+// small values never render in scientific notation (e.g. 1000000, not 1e+06),
+// which a Home Assistant number entity would not accept.
+func formatNumberPayload(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
 func (p *Publisher) publishAvailability(dev config.Device, online bool) {
