@@ -99,9 +99,11 @@ func applyEnvOverrides(cfg *Config) error {
 		cfg.ListenAddr = v
 	}
 	if v := os.Getenv("ECHONET_SCRAPE_TIMEOUT_SEC"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			cfg.ScrapeTimeoutSec = n
+		n, err := strconv.Atoi(v)
+		if err != nil || n <= 0 {
+			return fmt.Errorf("ECHONET_SCRAPE_TIMEOUT_SEC: invalid %q (want positive integer)", v)
 		}
+		cfg.ScrapeTimeoutSec = n
 	}
 	if v := os.Getenv("ECHONET_STRICT_SOURCE_PORT_3610"); v != "" {
 		b, err := strconv.ParseBool(v)
@@ -154,6 +156,9 @@ func applyEnvOverrides(cfg *Config) error {
 				port = "1883"
 			}
 			if !strings.HasPrefix(host, "tcp://") && !strings.HasPrefix(host, "ssl://") {
+				if p, err := strconv.Atoi(port); err != nil || p < 1 || p > 65535 {
+					return fmt.Errorf("MQTT_PORT: invalid port %q (want 1..65535)", port)
+				}
 				cfg.MQTT.Broker = fmt.Sprintf("tcp://%s:%s", host, port)
 			} else {
 				cfg.MQTT.Broker = host

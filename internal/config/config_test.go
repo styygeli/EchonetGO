@@ -69,6 +69,29 @@ func TestLoad_EnvOverrides(t *testing.T) {
 	}
 }
 
+func TestLoad_RejectsBadScrapeTimeout(t *testing.T) {
+	for _, bad := range []string{"abc", "0", "-5"} {
+		clearEnv(t)
+		t.Setenv("ECHONET_DEVICES_PATH", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+		t.Setenv("ECHONET_SCRAPE_TIMEOUT_SEC", bad)
+		if _, err := Load(); err == nil {
+			t.Fatalf("Load() with ECHONET_SCRAPE_TIMEOUT_SEC=%q: want error, got nil", bad)
+		}
+	}
+}
+
+func TestLoad_RejectsBadMQTTPort(t *testing.T) {
+	for _, bad := range []string{"abc", "0", "70000", "-1"} {
+		clearEnv(t)
+		t.Setenv("ECHONET_DEVICES_PATH", filepath.Join(t.TempDir(), "nonexistent.yaml"))
+		t.Setenv("MQTT_HOST", "broker.local")
+		t.Setenv("MQTT_PORT", bad)
+		if _, err := Load(); err == nil {
+			t.Fatalf("Load() with MQTT_PORT=%q: want error, got nil", bad)
+		}
+	}
+}
+
 func TestLoad_DevicesJSON(t *testing.T) {
 	clearEnv(t)
 	t.Setenv("ECHONET_DEVICES_PATH", filepath.Join(t.TempDir(), "nonexistent.yaml"))
