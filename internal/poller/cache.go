@@ -9,14 +9,10 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-// DeviceState is the snapshot of a single device's state delivered to update
-// subscribers (e.g. the MQTT publisher) after a poll, an INF push, or a
-// post-command verification read. It is the typed boundary between the poller
-// and the presentation layer, replacing a long positional argument list.
-//
-//   - Writable is the set of EPCs the device reports as writable (0x9E); may be nil.
-//   - Climate is non-nil for device classes that support HA climate (e.g. home_ac).
-//   - Light is non-nil for device classes that support HA light (e.g. general_lighting).
+// DeviceState is a snapshot of one device's state, delivered to update
+// subscribers (the MQTT publisher) after a poll, an INF push, or a
+// post-command verification read. Writable/Climate/Light are nil for devices
+// that don't support them.
 type DeviceState struct {
 	Device      config.Device
 	Info        echonet.DeviceInfo
@@ -119,7 +115,6 @@ func (c *Cache) SetDeviceLight(dev config.Device, light *specs.LightSpec) {
 	c.lightByDev[key] = light
 }
 
-// GetDeviceLight returns the light spec for a device, if any.
 func (c *Cache) GetDeviceLight(dev config.Device) *specs.LightSpec {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -133,7 +128,6 @@ func (c *Cache) SetWritableEPCs(dev config.Device, writable map[byte]struct{}) {
 	c.writableEPCs[deviceKey(dev)] = writable
 }
 
-// GetWritableEPCs returns the writable EPC set for a device, if known.
 func (c *Cache) GetWritableEPCs(dev config.Device) (map[byte]struct{}, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -148,7 +142,6 @@ func (c *Cache) SetDeviceEOJ(dev config.Device, eoj [3]byte) {
 	c.eojByDev[deviceKey(dev)] = eoj
 }
 
-// GetDeviceEOJ returns the EOJ for a device, if known.
 func (c *Cache) GetDeviceEOJ(dev config.Device) ([3]byte, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -156,14 +149,12 @@ func (c *Cache) GetDeviceEOJ(dev config.Device) ([3]byte, bool) {
 	return eoj, ok
 }
 
-// GetDeviceClimate returns the climate spec for a device, if any (e.g. home_ac).
 func (c *Cache) GetDeviceClimate(dev config.Device) *specs.ClimateSpec {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.climateByDev[deviceKey(dev)]
 }
 
-// GetDeviceSpecs returns the cached metric specs for a device, if any.
 func (c *Cache) GetDeviceSpecs(dev config.Device) ([]specs.MetricSpec, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -293,14 +284,6 @@ func (c *Cache) SetNotificationEPCs(dev config.Device, notify map[byte]struct{})
 	c.notifyEPCs[deviceKey(dev)] = notify
 }
 
-// GetNotificationEPCs returns the STATMAP (0x9D) for a device, if known.
-func (c *Cache) GetNotificationEPCs(dev config.Device) (map[byte]struct{}, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-	n, ok := c.notifyEPCs[deviceKey(dev)]
-	return n, ok
-}
-
 // RecordPush records that an INF notification was received for the given EPCs.
 func (c *Cache) RecordPush(dev config.Device, epcs []byte) {
 	c.mu.Lock()
@@ -349,11 +332,10 @@ func (c *Cache) ShouldSkipPoll(dev config.Device, epc byte, freshness time.Durat
 	return time.Since(lastT) < freshness
 }
 
-// MergeMetrics merges metric values into the cache without registering a scrape
-// group, then fires the onUpdate callback. It is the path for out-of-band
-// updates — INF pushes and post-command verification reads — so that
-// scrape_duration_seconds and last_scrape_timestamp_seconds keep reflecting
-// only real polls (Update owns the per-group scrape status).
+// MergeMetrics merges metric values into the cache and fires onUpdate without
+// touching any scrape group, so scrape_duration_seconds and
+// last_scrape_timestamp_seconds keep reflecting only real polls. Used for INF
+// pushes and post-command verification reads.
 func (c *Cache) MergeMetrics(dev config.Device, metrics map[string]echonet.MetricValue) {
 	c.mu.Lock()
 	key := deviceKey(dev)
@@ -375,9 +357,7 @@ func (c *Cache) MergeMetrics(dev config.Device, metrics map[string]echonet.Metri
 	}
 }
 
-// UpdateFromINF merges properties received from an INF notification into the
-// cache and triggers the onUpdate callback. INF pushes carry no scrape timing,
-// so this records no group (see MergeMetrics).
+// UpdateFromINF merges properties from an INF notification (no scrape group).
 func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.MetricValue) {
 	c.MergeMetrics(dev, metrics)
 }

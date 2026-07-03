@@ -41,9 +41,8 @@ type Publisher struct {
 	muConnect          sync.Mutex
 	onConnectCallbacks []func(pahomqtt.Client)
 
-	// Async publish pipeline: cache updates are enqueued (coalesced per device)
-	// and published by a single worker goroutine, so a slow/unreachable broker
-	// never stalls the scraper/INF/command goroutine that produced the update.
+	// Async publish pipeline: updates are coalesced per device and drained by a
+	// single worker, so a slow broker never stalls the scrape/INF/command path.
 	publishFn func(poller.DeviceState)      // defaults to PublishDeviceState; overridable in tests
 	pubMu     sync.Mutex                    // guards pending
 	pending   map[string]poller.DeviceState // dev.Name -> latest state awaiting publish
@@ -152,10 +151,8 @@ func (p *Publisher) Disconnect() {
 	mqttLog.Infof("disconnected")
 }
 
-// EnqueueDeviceState records the latest state for a device and signals the
-// publish worker. It never blocks on broker I/O, so the producing goroutine
-// (scraper, INF handler, or command verification) is decoupled from broker
-// latency. Registered as the cache onUpdate callback.
+// EnqueueDeviceState records a device's latest state and signals the worker
+// without blocking on broker I/O. Registered as the cache onUpdate callback.
 func (p *Publisher) EnqueueDeviceState(st poller.DeviceState) {
 	p.pubMu.Lock()
 	p.pending[st.Device.Name] = st // coalesce: latest state wins
@@ -408,10 +405,8 @@ func shouldSkipStateUpdate(ms specs.MetricSpec, mv echonet.MetricValue) bool {
 	return false
 }
 
-// formatNumberPayload renders a number-entity value as a plain decimal string.
-// It uses 'f' with precision -1 (shortest exact representation) so large or
-// small values never render in scientific notation (e.g. 1000000, not 1e+06),
-// which a Home Assistant number entity would not accept.
+// formatNumberPayload renders v as a plain decimal (no scientific notation,
+// which a Home Assistant number entity rejects — e.g. 1000000, not 1e+06).
 func formatNumberPayload(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }

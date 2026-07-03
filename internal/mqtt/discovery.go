@@ -16,16 +16,12 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-// minExpireAfterSeconds is the floor for the HA discovery expire_after window
-// (seconds): an entity is marked unavailable if no state arrives within
-// expire_after. The per-entity value is derived from the metric's resolved
-// scrape interval by expireAfterFor; fast pollers clamp to this floor.
+// minExpireAfterSeconds is the floor for expire_after; per-entity values are
+// derived from the scrape interval by expireAfterFor.
 const minExpireAfterSeconds = 300
 
-// expireAfterFor returns the HA expire_after window (seconds) for an entity
-// whose slowest contributing metric polls every d. We allow 2.5 poll cycles so
-// a single missed scrape doesn't flap the entity, with a floor of
-// minExpireAfterSeconds for fast pollers.
+// expireAfterFor sizes the HA expire_after window (seconds) at 2.5 poll cycles
+// of interval d, floored at minExpireAfterSeconds so fast pollers don't flap.
 func expireAfterFor(d time.Duration) int {
 	secs := int(math.Ceil(d.Seconds() * 2.5))
 	if secs < minExpireAfterSeconds {
@@ -547,11 +543,9 @@ func metricNameForEPC(specs []specs.MetricSpec, epc byte) string {
 	return ""
 }
 
-// slowestMetricInterval returns the largest resolved ScrapeInterval among the
-// metrics matching the given EPCs (skipping 0 EPCs and unmatched EPCs). It sizes
-// expire_after for multi-EPC entities (climate/light) from their slowest-polled
-// contributing property. Returns 0 if none match, so callers fall back to the
-// expireAfterFor floor.
+// slowestMetricInterval returns the largest ScrapeInterval among the metrics
+// matching epcs (skipping 0/unmatched), used to size expire_after for multi-EPC
+// entities like climate and light. Returns 0 if none match.
 func slowestMetricInterval(metricSpecs []specs.MetricSpec, epcs ...byte) time.Duration {
 	var slowest time.Duration
 	for _, epc := range epcs {
