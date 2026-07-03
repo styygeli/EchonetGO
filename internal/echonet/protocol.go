@@ -155,7 +155,7 @@ func decodePropertyMap(edt []byte) map[byte]struct{} {
 		}
 		return out
 	}
-	for i := 1; i < len(edt); i++ {
+	for i := 1; i < len(edt) && i <= 16; i++ {
 		code := byte(i - 1)
 		bits := edt[i]
 		for bit := 0; bit < 8; bit++ {

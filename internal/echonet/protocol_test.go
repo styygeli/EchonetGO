@@ -135,3 +135,20 @@ func TestDecodePropertyMap_Bitmap0xE0(t *testing.T) {
 		t.Fatalf("expected exactly 1 EPC, got %d", len(got))
 	}
 }
+
+func TestDecodePropertyMap_OversizedMapEmitsNoPhantomEPCs(t *testing.T) {
+	// A malformed format-2 map longer than the standard 17 bytes must not run
+	// the bitmap loop past its 16 data bytes: doing so overflows the EPC
+	// arithmetic and emits phantom codes below 0x80. Every decoded EPC must be
+	// a valid property code in 0x80..0xFF.
+	edt := make([]byte, 21) // count + 20 bytes (4 beyond the 16-byte bitmap)
+	for i := range edt {
+		edt[i] = 0xFF
+	}
+	got := decodePropertyMap(edt)
+	for epc := range got {
+		if epc < 0x80 {
+			t.Fatalf("decoded phantom EPC 0x%02x (< 0x80) from oversized map", epc)
+		}
+	}
+}
