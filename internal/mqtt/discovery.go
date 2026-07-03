@@ -3,8 +3,10 @@ package mqtt
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strings"
+	"time"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -14,9 +16,23 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-// expireAfterSeconds is the HA discovery expire_after window: an entity is
-// marked unavailable if no state arrives within this many seconds.
-const expireAfterSeconds = 300
+// minExpireAfterSeconds is the floor for the HA discovery expire_after window
+// (seconds): an entity is marked unavailable if no state arrives within
+// expire_after. The per-entity value is derived from the metric's resolved
+// scrape interval by expireAfterFor; fast pollers clamp to this floor.
+const minExpireAfterSeconds = 300
+
+// expireAfterFor returns the HA expire_after window (seconds) for an entity
+// whose slowest contributing metric polls every d. We allow 2.5 poll cycles so
+// a single missed scrape doesn't flap the entity, with a floor of
+// minExpireAfterSeconds for fast pollers.
+func expireAfterFor(d time.Duration) int {
+	secs := int(math.Ceil(d.Seconds() * 2.5))
+	if secs < minExpireAfterSeconds {
+		return minExpireAfterSeconds
+	}
+	return secs
+}
 
 // haDiscoveryPayload is the JSON structure for HA MQTT sensor auto-discovery.
 type haDiscoveryPayload struct {
@@ -162,7 +178,7 @@ func buildSensorPayload(ms specs.MetricSpec, objectID, stateTopic, availTopic st
 		StateTopic:        stateTopic,
 		ValueTemplate:     fmt.Sprintf("{{ value_json.%s | default(None) }}", ms.Name),
 		AvailabilityTopic: availTopic,
-		ExpireAfter:       expireAfterSeconds,
+		ExpireAfter:       expireAfterFor(ms.ScrapeInterval),
 		Device:            device,
 		ForceUpdate:       true,
 	}
@@ -221,7 +237,7 @@ func (p *Publisher) publishClimateDiscovery(dev config.Device, device haDevice, 
 		TempStep:                cl.TempStep,
 		Precision:               1.0,
 		AvailabilityTopic:       availTopic,
-		ExpireAfter:             expireAfterSeconds,
+		ExpireAfter:             expireAfterFor(slowestMetricInterval(metricSpecs, 0x80, cl.ModeEPC, cl.TemperatureEPC, cl.CurrentTemperatureEPC, cl.FanModeEPC)),
 		Device:                  device,
 		Modes:                   climateModesList(cl.Modes),
 	}
@@ -281,7 +297,7 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"command_topic":      commandTopic,
 				"state_topic":        stateTopic,
 				"availability_topic": availTopic,
-				"expire_after":       expireAfterSeconds,
+				"expire_after":       expireAfterFor(ms.ScrapeInterval),
 				"device":             device,
 			}
 			data, err := json.Marshal(payload)
@@ -309,7 +325,7 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"state_topic":        stateTopic,
 				"options":            options,
 				"availability_topic": availTopic,
-				"expire_after":       expireAfterSeconds,
+				"expire_after":       expireAfterFor(ms.ScrapeInterval),
 				"device":             device,
 			}
 			data, err := json.Marshal(payload)
@@ -346,7 +362,7 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 				"max":                maxVal,
 				"step":               step,
 				"availability_topic": availTopic,
-				"expire_after":       expireAfterSeconds,
+				"expire_after":       expireAfterFor(ms.ScrapeInterval),
 				"device":             device,
 			}
 			if ms.HAUnit != "" {
@@ -531,6 +547,26 @@ func metricNameForEPC(specs []specs.MetricSpec, epc byte) string {
 	return ""
 }
 
+// slowestMetricInterval returns the largest resolved ScrapeInterval among the
+// metrics matching the given EPCs (skipping 0 EPCs and unmatched EPCs). It sizes
+// expire_after for multi-EPC entities (climate/light) from their slowest-polled
+// contributing property. Returns 0 if none match, so callers fall back to the
+// expireAfterFor floor.
+func slowestMetricInterval(metricSpecs []specs.MetricSpec, epcs ...byte) time.Duration {
+	var slowest time.Duration
+	for _, epc := range epcs {
+		if epc == 0 {
+			continue
+		}
+		for _, m := range metricSpecs {
+			if m.EPC == epc && m.ScrapeInterval > slowest {
+				slowest = m.ScrapeInterval
+			}
+		}
+	}
+	return slowest
+}
+
 func (p *Publisher) publishLightDiscovery(dev config.Device, device haDevice, availTopic string, lt *specs.LightSpec, metricSpecs []specs.MetricSpec) {
 	base := fmt.Sprintf("%s/%s/light", p.topicPrefix, dev.Name)
 	powerCmd := base + "/power/set"
@@ -542,7 +578,7 @@ func (p *Publisher) publishLightDiscovery(dev config.Device, device haDevice, av
 		CommandTopic:      powerCmd,
 		StateTopic:        powerState,
 		AvailabilityTopic: availTopic,
-		ExpireAfter:       expireAfterSeconds,
+		ExpireAfter:       expireAfterFor(slowestMetricInterval(metricSpecs, 0x80, lt.BrightnessEPC, lt.ColorSettingEPC, lt.SceneEPC)),
 		Device:            device,
 	}
 	if lt.BrightnessEPC != 0 {
