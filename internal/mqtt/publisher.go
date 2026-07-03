@@ -363,11 +363,11 @@ func (p *Publisher) publishWritableState(dev config.Device, metrics map[string]e
 				payload = "OFF"
 			}
 		case "select":
-			if mv.EnumLabel != "" {
-				payload = mv.EnumLabel
-			} else {
-				payload = fmt.Sprintf("%.0f", mv.Value)
+			if mv.EnumLabel == "" {
+				mqttLog.Debugf("device %s: select %s raw %.0f has no enum label; skipping (not an advertised option)", dev.Name, ms.Name, mv.Value)
+				continue
 			}
+			payload = mv.EnumLabel
 		case "number":
 			payload = fmt.Sprintf("%v", mv.Value)
 		default:
