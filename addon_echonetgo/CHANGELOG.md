@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.46-dev.3 - 2026-07-03
+- **Performance**: Optimized EDT integer parsing and encoding to use standard integer math instead of `math/big` allocation on hot paths.
+- **Poller**: Refactored cache state and extracted the scheduling engine into a dedicated `Scheduler` component.
+- **Poller**: Prevented MQTT command-verify updates from skewing `scrape_duration_seconds` and `last_scrape_timestamp_seconds` metrics.
+- **MQTT**: Decoupled poller execution from broker round-trips via an asynchronous state publishing worker.
+- **MQTT**: Service now survives broker unavailability at startup and automatically retries connection.
+- **MQTT/HA**: Derive Home Assistant `expire_after` dynamically per entity, fixing availability flaps for slow-scraped properties.
+- **MQTT/HA**: Render number states as plain decimals (no scientific notation) and drop invalid select states not defined in options list.
+- **Network**: Restructured multicast group joining to use `golang.org/x/net/ipv4` instead of manual socket options.
+- **Safety**: Bounded properties-map parsing and manufacturer-code indexing to prevent panics on malformed incoming packets.
+- **Safety**: Added panic recovery loops on all background goroutines (scrapers, MQTT publisher, notifications listener).
+- **Validation**: Strict validation of environment variables (`MQTT_PORT`, `ECHONET_SCRAPE_TIMEOUT_SEC`) and scale specs.
+
 ## 0.9.45 - 2026-06-13
 - **Hotfix**: MQTT subscriptions are now restored correctly upon broker reconnection, preventing the service from silently dropping commands (e.g., from Home Assistant automations) when the MQTT connection is temporarily lost and `CleanSession` is true.
 
