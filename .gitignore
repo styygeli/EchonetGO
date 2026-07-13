@@ -62,7 +62,7 @@ etc/config.yaml
 # OS files
 .DS_Store
 
-.gemini/
+.agents/
 gha-creds-*.json
 GEMINI.md
 .claude/

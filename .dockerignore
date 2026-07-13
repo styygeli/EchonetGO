@@ -56,8 +56,8 @@ env/
 # Exclude OS files
 .DS_Store
 
-# Exclude Gemini-specific files
-.gemini/
+# Exclude Agent-specific files
+.agents/
 gha-creds-*.json
 GEMINI.md
 CLAUDE.md
