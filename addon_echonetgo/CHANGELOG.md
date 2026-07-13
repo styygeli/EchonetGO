@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.9.46-dev.3 - 2026-07-03
+## 0.9.46 - 2026-07-13
 - **Performance**: Optimized EDT integer parsing and encoding to use standard integer math instead of `math/big` allocation on hot paths.
 - **Poller**: Refactored cache state and extracted the scheduling engine into a dedicated `Scheduler` component.
 - **Poller**: Prevented MQTT command-verify updates from skewing `scrape_duration_seconds` and `last_scrape_timestamp_seconds` metrics.
