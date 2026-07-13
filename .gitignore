@@ -64,7 +64,6 @@ etc/config.yaml
 
 .agents/
 gha-creds-*.json
-GEMINI.md
 .claude/
 .ai/
 CLAUDE.md
