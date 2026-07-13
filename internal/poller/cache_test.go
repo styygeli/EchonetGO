@@ -69,7 +69,7 @@ func TestSetDeviceSpecs_OnUpdateReceivesSpecs(t *testing.T) {
 
 	c.Update(dev, "1m", time.Minute, true, 0.1, map[string]echonet.MetricValue{
 		"instantaneous_generation_watts": {Value: 500, Type: "gauge"},
-		"cumulative_generation_kwh":       {Value: 1234.5, Type: "counter"},
+		"cumulative_generation_kwh":      {Value: 1234.5, Type: "counter"},
 	}, "")
 	if len(receivedSpecs) != 2 {
 		t.Fatalf("callback received %d specs, want 2", len(receivedSpecs))

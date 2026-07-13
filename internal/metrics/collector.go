@@ -175,7 +175,7 @@ func (c *Collector) collectDeviceMetrics(ch chan<- prometheus.Metric, class stri
 			continue
 		}
 		raw := int(math.Round(mv.Value))
-		
+
 		enumLabels := make([]string, len(labels)+1)
 		copy(enumLabels, labels)
 		for _, valMeta := range meta.values {

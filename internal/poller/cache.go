@@ -30,17 +30,17 @@ type UpdateCallback func(DeviceState)
 
 // Cache holds the latest scraped metrics per device. Safe for concurrent use.
 type Cache struct {
-	mu            sync.RWMutex
-	metrics       map[string]deviceCache
-	onUpdate      UpdateCallback
-	specsByDev    map[string][]specs.MetricSpec   // filtered specs per device key
-	climateByDev  map[string]*specs.ClimateSpec   // device key -> climate spec if AC
-	lightByDev    map[string]*specs.LightSpec    // device key -> light spec if lighting
-	writableEPCs  map[string]map[byte]struct{}    // device key -> set of writable EPCs (from 0x9E)
-	eojByDev      map[string][3]byte              // device key -> EOJ for SET requests
-	notifyEPCs    map[string]map[byte]struct{}    // device key -> set of EPCs the device pushes (from 0x9D)
-	lastPush      map[string]map[byte]time.Time   // device key -> EPC -> last INF receive time
-	forcePolling  bool                             // ignore STATMAP, always poll everything
+	mu           sync.RWMutex
+	metrics      map[string]deviceCache
+	onUpdate     UpdateCallback
+	specsByDev   map[string][]specs.MetricSpec // filtered specs per device key
+	climateByDev map[string]*specs.ClimateSpec // device key -> climate spec if AC
+	lightByDev   map[string]*specs.LightSpec   // device key -> light spec if lighting
+	writableEPCs map[string]map[byte]struct{}  // device key -> set of writable EPCs (from 0x9E)
+	eojByDev     map[string][3]byte            // device key -> EOJ for SET requests
+	notifyEPCs   map[string]map[byte]struct{}  // device key -> set of EPCs the device pushes (from 0x9D)
+	lastPush     map[string]map[byte]time.Time // device key -> EPC -> last INF receive time
+	forcePolling bool                          // ignore STATMAP, always poll everything
 }
 
 type deviceCache struct {
@@ -399,4 +399,3 @@ func (c *Cache) UpdateInfo(dev config.Device, info echonet.DeviceInfo) {
 	dc.info = info
 	c.metrics[key] = dc
 }
-

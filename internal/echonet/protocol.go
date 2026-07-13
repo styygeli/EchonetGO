@@ -251,10 +251,10 @@ func ParseINFFrame(data []byte) (*INFFrame, error) {
 		return nil, err
 	}
 	return &INFFrame{
-		TID:  tid,
-		SEOJ: [3]byte{data[4], data[5], data[6]},
-		DEOJ: [3]byte{data[7], data[8], data[9]},
-		ESV:  esv,
+		TID:   tid,
+		SEOJ:  [3]byte{data[4], data[5], data[6]},
+		DEOJ:  [3]byte{data[7], data[8], data[9]},
+		ESV:   esv,
 		Props: props,
 	}, nil
 }

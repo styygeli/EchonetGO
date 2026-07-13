@@ -52,13 +52,13 @@ func TestFriendlyName(t *testing.T) {
 func TestHaDiscoveryPayload_JSONStructure(t *testing.T) {
 	precision := 1
 	payload := haDiscoveryPayload{
-		Name:                "Instantaneous Power W",
-		UniqueID:             "echonetgo_breaker_box_instantaneous_power_w",
-		StateTopic:           "echonetgo/breaker_box/state",
-		ValueTemplate:        "{{ value_json.instantaneous_power_w | default(None) }}",
-		DeviceClass:          "power",
-		StateClass:           "measurement",
-		UnitOfMeasurement:    "W",
+		Name:                      "Instantaneous Power W",
+		UniqueID:                  "echonetgo_breaker_box_instantaneous_power_w",
+		StateTopic:                "echonetgo/breaker_box/state",
+		ValueTemplate:             "{{ value_json.instantaneous_power_w | default(None) }}",
+		DeviceClass:               "power",
+		StateClass:                "measurement",
+		UnitOfMeasurement:         "W",
 		AvailabilityTopic:         "echonetgo/breaker_box/availability",
 		ExpireAfter:               300,
 		ForceUpdate:               true,
@@ -97,16 +97,16 @@ func TestHaDiscoveryPayload_JSONStructure(t *testing.T) {
 
 func TestHaDiscoveryPayload_EnergySensor(t *testing.T) {
 	payload := haDiscoveryPayload{
-		Name:               "Cumulative Generation Kwh",
-		UniqueID:           "echonetgo_panel_solar_cumulative_generation_kwh",
-		StateTopic:         "echonetgo/panel_solar/state",
-		ValueTemplate:      "{{ value_json.cumulative_generation_kwh | default(None) }}",
-		DeviceClass:        "energy",
-		StateClass:         "total_increasing",
-		UnitOfMeasurement:  "kWh",
-		AvailabilityTopic:   "echonetgo/panel_solar/availability",
-		ExpireAfter:        300,
-		ForceUpdate:        true,
+		Name:              "Cumulative Generation Kwh",
+		UniqueID:          "echonetgo_panel_solar_cumulative_generation_kwh",
+		StateTopic:        "echonetgo/panel_solar/state",
+		ValueTemplate:     "{{ value_json.cumulative_generation_kwh | default(None) }}",
+		DeviceClass:       "energy",
+		StateClass:        "total_increasing",
+		UnitOfMeasurement: "kWh",
+		AvailabilityTopic: "echonetgo/panel_solar/availability",
+		ExpireAfter:       300,
+		ForceUpdate:       true,
 		Device: haDevice{
 			Identifiers: []string{"echonetgo_panel_solar"},
 			Name:        "Panel Solar",
@@ -160,8 +160,8 @@ func TestHaDiscoveryPayload_EnumSensor(t *testing.T) {
 
 func TestStatePayloadWithEnumLabels(t *testing.T) {
 	state := map[string]interface{}{
-		"operation_status":    0x30,
-		"operation_status_str": "on",
+		"operation_status":           0x30,
+		"operation_status_str":       "on",
 		"indoor_temperature_celsius": 24.5,
 	}
 	data, err := json.Marshal(state)
@@ -187,17 +187,17 @@ func TestWritableEntityType(t *testing.T) {
 		want string
 	}{
 		{"on/off enum -> switch", specs.MetricSpec{
-			Enum: map[int]string{0x30: "on", 0x31: "off"},
+			Enum:        map[int]string{0x30: "on", 0x31: "off"},
 			ReverseEnum: map[string]int{"on": 0x30, "off": 0x31},
 		}, "switch"},
 		{"multi enum -> select", specs.MetricSpec{
-			Enum: map[int]string{0x41: "auto", 0x42: "cool", 0x43: "heat"},
+			Enum:        map[int]string{0x41: "auto", 0x42: "cool", 0x43: "heat"},
 			ReverseEnum: map[string]int{"auto": 0x41, "cool": 0x42, "heat": 0x43},
 		}, "select"},
 		{"no enum -> number", specs.MetricSpec{Scale: 1, Type: "gauge"}, "number"},
 		{"exclude_set -> empty", specs.MetricSpec{ExcludeSet: true, Enum: map[int]string{0x30: "on", 0x31: "off"}, ReverseEnum: map[string]int{"on": 0x30, "off": 0x31}}, ""},
 		{"two enum but not on/off -> select", specs.MetricSpec{
-			Enum: map[int]string{0x41: "fault", 0x42: "no_fault"},
+			Enum:        map[int]string{0x41: "fault", 0x42: "no_fault"},
 			ReverseEnum: map[string]int{"fault": 0x41, "no_fault": 0x42},
 		}, "select"},
 	}

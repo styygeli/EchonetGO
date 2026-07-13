@@ -15,15 +15,15 @@ type DeviceSpec struct {
 // ClimateSpec defines HA climate entity mapping for a device class (e.g. home_ac).
 // Mode "off" is handled via operation_status (0x80); other modes map to operation_mode (0xB0) raw values.
 type ClimateSpec struct {
-	ModeEPC                 byte
-	TemperatureEPC          byte
-	CurrentTemperatureEPC   byte
-	FanModeEPC              byte   // 0 means not used
-	MinTemp                 float64
-	MaxTemp                 float64
-	TempStep                float64
-	Modes                   map[string]*int // HA mode label -> ECHONET raw value; nil for "off"
-	FanModes                []string        // HA fan mode labels in desired UI order
+	ModeEPC               byte
+	TemperatureEPC        byte
+	CurrentTemperatureEPC byte
+	FanModeEPC            byte // 0 means not used
+	MinTemp               float64
+	MaxTemp               float64
+	TempStep              float64
+	Modes                 map[string]*int // HA mode label -> ECHONET raw value; nil for "off"
+	FanModes              []string        // HA fan mode labels in desired UI order
 }
 
 // LightSpec defines HA light entity mapping for lighting device classes.
@@ -42,7 +42,7 @@ type MetricSpec struct {
 	Name           string
 	Help           string
 	Size           int
-	Offset         int     // byte offset within the EDT before parsing (default 0)
+	Offset         int // byte offset within the EDT before parsing (default 0)
 	Scale          float64
 	Signed         bool
 	Invalid        *int
