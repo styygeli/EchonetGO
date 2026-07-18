@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.47 - 2026-07-18
+- **Go**: Upgraded required Go runtime version to 1.26.5 across the codebase, Docker builder image, and development documentation.
+- **Refactor**: Cleaned up code formatting across the codebase using `gofmt`.
+
 ## 0.9.46 - 2026-07-13
 - **Performance**: Optimized EDT integer parsing and encoding to use standard integer math instead of `math/big` allocation on hot paths.
 - **Poller**: Refactored cache state and extracted the scheduling engine into a dedicated `Scheduler` component.
