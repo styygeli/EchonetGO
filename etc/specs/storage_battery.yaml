@@ -229,3 +229,29 @@ metrics:
       0x04: lithium
       0x05: zinc
       0x06: alkaline
+  - epc: 0xD6
+    name: measured_cumulative_discharging_electric_energy
+    help: "Measured cumulative discharging electric energy in Wh."
+    size: 4
+    type: counter
+    scrape_interval: 5m
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
+  - epc: 0xD8
+    name: measured_cumulative_charging_electric_energy
+    help: "Measured cumulative charging electric energy in Wh."
+    size: 4
+    type: counter
+    scrape_interval: 5m
+    ha_device_class: energy
+    ha_state_class: total_increasing
+    ha_unit: "Wh"
+  - epc: 0xE5
+    name: battery_state_of_health
+    help: "Battery state of health in %."
+    size: 1
+    type: gauge
+    ha_device_class: battery
+    ha_state_class: measurement
+    ha_unit: "%"

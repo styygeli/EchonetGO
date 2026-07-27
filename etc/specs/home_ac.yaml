@@ -65,6 +65,23 @@ metrics:
       0x36: level_6
       0x37: level_7
       0x38: level_8
+  - epc: 0xBA
+    name: measured_value_of_room_relative_humidity
+    help: "Measured value of room relative humidity in %."
+    size: 1
+    type: gauge
+    ha_device_class: humidity
+    ha_state_class: measurement
+    ha_unit: "%"
+  - epc: 0xBE
+    name: measured_outdoor_air_temperature
+    help: "Measured outdoor air temperature in °C."
+    size: 1
+    signed: true
+    type: gauge
+    ha_device_class: temperature
+    ha_state_class: measurement
+    ha_unit: "°C"
 
 # HA climate entity mapping (power/mode/temp/fan via 0x80, 0xB0, 0xB3, 0xBB, 0xA0)
 climate:

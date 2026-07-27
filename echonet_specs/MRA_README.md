@@ -6,16 +6,21 @@ The MRA contains the official, machine-readable definitions of all standard ECHO
 
 Download from: https://echonet.jp/spec_mra_rr3/
 
-Extract to `echonet_specs/MRA_v1.3.1/` (or the appropriate version directory).
+Extract to `echonet_specs/MRA_v1.4.0/` (or the appropriate version directory).
 
 ## Usage
 
-The `mra-reader` skill in `.ai/skills/mra-reader/` provides scripts to query and compare MRA data against the project's YAML specs:
+The `echonet-spec-architect` skill in `.agents/skills/echonet-spec-architect/` provides scripts to query, compare, and generate metric definitions from MRA data against the project's YAML specs:
 
 ```bash
-node .ai/skills/mra-reader/scripts/lookup_device.cjs --list
-node .ai/skills/mra-reader/scripts/lookup_device.cjs 0x0130
-node .ai/skills/mra-reader/scripts/compare_spec.cjs 0x0130 etc/specs/home_ac.yaml
+# List all device classes in MRA v1.4.0
+python3 .agents/skills/echonet-spec-architect/scripts/mra_sync.py --list
+
+# Diff a YAML spec against MRA definition
+python3 .agents/skills/echonet-spec-architect/scripts/mra_sync.py --diff etc/specs/home_ac.yaml
+
+# Generate YAML metric snippets for an EOJ
+python3 .agents/skills/echonet-spec-architect/scripts/mra_sync.py --gen 0x0130 0xBE 0xBA
 ```
 
 ## Note
