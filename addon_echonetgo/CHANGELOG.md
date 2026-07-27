@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.48 - 2026-07-27
+- **Specifications**: Integrated ECHONET Lite Machine Readable Appendix (MRA) v1.4.0 property definitions.
+- **Specifications**: Added new built-in device class specifications for EV Charger and Discharger (`0x027E`) and Washer & Dryer (`0x03D3`).
+- **Specifications**: Enriched Home AC (`home_ac.yaml`) with room humidity (`0xBA`) and outdoor temperature (`0xBE`), and Storage Battery (`storage_battery.yaml`) with cumulative charging/discharging energy (`0xD6`/`0xD8`) and battery SOH (`0xE5`).
+- **Tools**: Added `mra_sync.py` specification management tool to compare device YAML specs against official MRA JSON schemas.
+
 ## 0.9.47 - 2026-07-18
 - **Go**: Upgraded required Go runtime version to 1.26.5 across the codebase, Docker builder image, and development documentation.
 - **Refactor**: Cleaned up code formatting across the codebase using `gofmt`.
