@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.49 - 2026-08-25
+- **Fix**: Prevent MQTT commands from failing entirely when a prerequisite `pre_set` command is rejected by the device (e.g. returning ESV 0x51 because it is already in the requested state).
+
 ## 0.9.48 - 2026-07-27
 - **Specifications**: Integrated ECHONET Lite Machine Readable Appendix (MRA) v1.4.0 property definitions.
 - **Specifications**: Added new built-in device class specifications for EV Charger and Discharger (`0x027E`) and Washer & Dryer (`0x03D3`).
