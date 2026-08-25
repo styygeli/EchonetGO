@@ -244,10 +244,10 @@ func (c *Commander) executeWritableSet(lifetimeCtx context.Context, addr string,
 		}
 		_, err = c.client.SendSet(ctx, addr, eoj, ms.PreSetEPC, preEDT)
 		if err != nil {
-			mqttLog.Warnf("commander: pre-set 0x%02x failed for %s: %v", ms.PreSetEPC, dev.Name, err)
-			return
+			mqttLog.Warnf("commander: pre-set 0x%02x failed for %s: %v (continuing)", ms.PreSetEPC, dev.Name, err)
+		} else {
+			mqttLog.Infof("commander: pre-set %s EPC 0x%02x = 0x%02x", dev.Name, ms.PreSetEPC, ms.PreSetValue)
 		}
-		mqttLog.Infof("commander: pre-set %s EPC 0x%02x = 0x%02x", dev.Name, ms.PreSetEPC, ms.PreSetValue)
 	}
 	var value float64
 	switch entityType {
