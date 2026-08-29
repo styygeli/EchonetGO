@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -88,9 +89,20 @@ func setupEchonetTransport(cfg *config.Config, cache *poller.Cache, log *logging
 	transport := echonet.NewTransport(cfg.StrictSourcePort3610)
 
 	if len(cfg.Devices) > 0 {
-		ipToName := make(map[string]string, len(cfg.Devices))
+		namesByIP := make(map[string][]string)
+		seen := make(map[string]map[string]bool)
 		for _, d := range cfg.Devices {
-			ipToName[d.IP] = d.Name
+			if seen[d.IP] == nil {
+				seen[d.IP] = make(map[string]bool)
+			}
+			if !seen[d.IP][d.Name] {
+				seen[d.IP][d.Name] = true
+				namesByIP[d.IP] = append(namesByIP[d.IP], d.Name)
+			}
+		}
+		ipToName := make(map[string]string, len(namesByIP))
+		for ip, names := range namesByIP {
+			ipToName[ip] = strings.Join(names, "/")
 		}
 		transport.SetNameResolver(func(ip string) string {
 			return ipToName[ip]

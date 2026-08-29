@@ -78,8 +78,21 @@ func (s *Scheduler) Start(ctx context.Context, cfg *config.Config, deviceSpecs m
 		go func(ip string, devices []config.Device) {
 			defer wg.Done()
 			defer pollerLog.RecoverPanic("device init for " + ip)
+
+			type discoveredDevice struct {
+				dev           config.Device
+				activeEOJ     [3]byte
+				activeMetrics []specs.MetricSpec
+				activeSpec    *specs.DeviceSpec
+			}
+			var discovered []discoveredDevice
 			var pairs []deviceWithEOJ
+
+			// Phase 1: Sequential discovery for all devices on this host IP
 			for _, dev := range devices {
+				if ctx.Err() != nil {
+					return
+				}
 				spec := deviceSpecs[dev.Class]
 				if spec == nil {
 					continue
@@ -89,8 +102,22 @@ func (s *Scheduler) Start(ctx context.Context, cfg *config.Config, deviceSpecs m
 					continue
 				}
 				pairs = append(pairs, deviceWithEOJ{dev: dev, eoj: activeEOJ})
-				s.scheduleDeviceScrapers(ctx, client, dev, activeEOJ, activeMetrics, activeSpec)
+				discovered = append(discovered, discoveredDevice{
+					dev:           dev,
+					activeEOJ:     activeEOJ,
+					activeMetrics: activeMetrics,
+					activeSpec:    activeSpec,
+				})
 			}
+
+			// Phase 2: Launch periodic scrapers only after all devices on this host completed discovery
+			if ctx.Err() != nil {
+				return
+			}
+			for devIdx, d := range discovered {
+				s.scheduleDeviceScrapers(ctx, client, d.dev, d.activeEOJ, d.activeMetrics, d.activeSpec, devIdx)
+			}
+
 			hostDevicePairsMu.Lock()
 			hostDevicePairs[ip] = pairs
 			hostDevicePairsMu.Unlock()
@@ -112,11 +139,16 @@ func (s *Scheduler) discoverDeviceState(ctx context.Context, client, probeClient
 	pollerLog.Infof("device %s (%s): using EOJ 0x%02x%02x%02x", dev.Name, dev.IP, activeEOJ[0], activeEOJ[1], activeEOJ[2])
 
 	spec := defaultSpec
-	mfgCode, err := client.GetManufacturerCode(ctx, dev.IP, activeEOJ)
+	info, err := client.GetDeviceInfo(ctx, dev.IP, activeEOJ, dev.Model)
 	if err != nil {
-		pollerLog.Warnf("device %s (%s): manufacturer code read failed, using generic spec: %v", dev.Name, dev.IP, err)
-	} else if mfgCode != "" {
-		vendorKey := dev.Class + "_" + mfgCode
+		pollerLog.Warnf("device %s (%s): device info read failed: %v", dev.Name, dev.IP, err)
+		if mfgCode, mfgErr := client.GetManufacturerCode(ctx, dev.IP, activeEOJ); mfgErr == nil && mfgCode != "" {
+			info.ManufacturerCode = mfgCode
+		}
+	}
+	c.UpdateInfo(dev, info)
+	if info.ManufacturerCode != "" {
+		vendorKey := dev.Class + "_" + info.ManufacturerCode
 		if vendorSpec := deviceSpecs[vendorKey]; vendorSpec != nil {
 			spec = vendorSpec
 			pollerLog.Infof("device %s (%s): using vendor-specific spec %s", dev.Name, dev.IP, vendorKey)
@@ -177,7 +209,9 @@ func (s *Scheduler) discoverDeviceState(ctx context.Context, client, probeClient
 }
 
 // scheduleDeviceScrapers groups metrics by scrape interval and launches a poller per group.
-func (s *Scheduler) scheduleDeviceScrapers(ctx context.Context, client *echonet.Client, dev config.Device, activeEOJ [3]byte, activeMetrics []specs.MetricSpec, spec *specs.DeviceSpec) {
+// For hosts with multiple devices, devIndex staggers the initial delay to keep periodic
+// scraper executions permanently out-of-phase.
+func (s *Scheduler) scheduleDeviceScrapers(ctx context.Context, client *echonet.Client, dev config.Device, activeEOJ [3]byte, activeMetrics []specs.MetricSpec, spec *specs.DeviceSpec, devIndex int) {
 	devDefaultInterval := spec.DefaultScrapeInterval
 	if dev.ScrapeInterval != "" {
 		d, err := time.ParseDuration(dev.ScrapeInterval)
@@ -205,12 +239,18 @@ func (s *Scheduler) scheduleDeviceScrapers(ctx context.Context, client *echonet.
 	for i, interval := range intervals {
 		metrics := byInterval[interval]
 		groupID := interval.String()
-		initialDelay := time.Duration(i) * 500 * time.Millisecond
-		if initialDelay > interval/2 {
-			initialDelay = interval / 2
-		}
+		initialDelay := calculateInitialDelay(interval, i, devIndex)
 		go s.runScraper(ctx, client, dev, activeEOJ, metrics, groupID, interval, initialDelay)
 	}
+}
+
+func calculateInitialDelay(interval time.Duration, groupIndex, devIndex int) time.Duration {
+	deviceOffset := time.Duration(devIndex) * 250 * time.Millisecond
+	initialDelay := deviceOffset + time.Duration(groupIndex)*500*time.Millisecond
+	if initialDelay > interval/2 {
+		initialDelay = interval / 2
+	}
+	return initialDelay
 }
 
 func resolveEOJInstance(ctx context.Context, client *echonet.Client, dev config.Device, configured [3]byte, hostEOJCache *sync.Map) [3]byte {
@@ -352,7 +392,6 @@ func filterMetricsByReadableMap(metrics []specs.MetricSpec, readable map[byte]st
 
 func (s *Scheduler) runDeviceInfoRefresher(ctx context.Context, devices []deviceWithEOJ) {
 	defer pollerLog.RecoverPanic("device info refresher")
-	s.refreshDeviceInfo(ctx, devices)
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 	for {

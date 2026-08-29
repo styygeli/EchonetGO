@@ -72,6 +72,12 @@ func (t *Transport) hostLabel(ip string) string {
 	return ip
 }
 
+// HostLabel returns "name (ip)" if a name resolver is set and knows the IP,
+// otherwise just the IP.
+func (t *Transport) HostLabel(ip string) string {
+	return t.hostLabel(ip)
+}
+
 func (t *Transport) NotificationChan() chan UDPFrame {
 	return t.infChan
 }
