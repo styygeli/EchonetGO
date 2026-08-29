@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.50-dev.3 - 2026-08-29
+- **Architecture**: Consolidated entity classification and property resolution in `internal/specs`. Removed redundant `internal/model` package.
+- **Self-Healing**: Added `CapabilityReconciler` to continuously self-heal device identity and missing capability maps (SETMAP/STATMAP) in the background.
+- **Protocol**: Handled `Get_SNA` (0x52) for unsupported capability maps and disabled notifications to prevent unnecessary polling churn.
+- **MQTT**: Prevented premature state merging during post-command verification to eliminate UI state bounce in Home Assistant.
+
 ## 0.9.49 - 2026-08-25
 - **Fix**: Prevent MQTT commands from failing entirely when a prerequisite `pre_set` command is rejected by the device (e.g. returning ESV 0x51 because it is already in the requested state).
 
