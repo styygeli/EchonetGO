@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.50-dev.4 - 2026-08-29
+- **Poller**: Resolved DeviceInfo upfront in `discoverDeviceState` and populated cache identity before scrapers start, eliminating premature scrape discovery skips and redundant reconciler storms.
+- **Poller**: Implemented host-level two-phase startup barrier and multi-device scraper staggering (`250ms` offset) to eliminate concurrent UDP socket contention on multi-EOJ devices.
+- **Poller**: Removed immediate startup execution of `refreshDeviceInfo`, preventing network-wide stampedes at boot while keeping the 6-hour periodic refresh ticker.
+- **Transport**: Aggregated multi-device names for shared IPs in `SetNameResolver` to prevent device label collisions in low-level transport logs.
+
 ## 0.9.50-dev.3 - 2026-08-29
 - **Architecture**: Consolidated entity classification and property resolution in `internal/specs`. Removed redundant `internal/model` package.
 - **Self-Healing**: Added `CapabilityReconciler` to continuously self-heal device identity and missing capability maps (SETMAP/STATMAP) in the background.
