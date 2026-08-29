@@ -62,7 +62,7 @@ func main() {
 	go scheduler.Start(ctx, cfg, deviceSpecs, transport, func() { readiness.MarkReady("poller") })
 
 	if mqttPub != nil {
-		setupCommander(ctx, cfg, cache, transport, mqttPub, readiness)
+		setupCommander(ctx, cfg, cache, transport, mqttPub, readiness, scheduler.Reconciler())
 	}
 
 	server, errCh := setupHTTPServer(cfg, cache, deviceSpecs, readiness, log)
@@ -156,9 +156,12 @@ func setupNotifications(ctx context.Context, cfg *config.Config, cache *poller.C
 	go notifHandler.Run(ctx)
 }
 
-func setupCommander(ctx context.Context, cfg *config.Config, cache *poller.Cache, transport *echonet.Transport, mqttPub *mqttpub.Publisher, readiness *api.Readiness) {
+func setupCommander(ctx context.Context, cfg *config.Config, cache *poller.Cache, transport *echonet.Transport, mqttPub *mqttpub.Publisher, readiness *api.Readiness, reconciler mqttpub.CapabilityReconciler) {
 	echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
 	commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
+	if reconciler != nil {
+		commander.SetReconciler(reconciler)
+	}
 	go commander.Run(ctx, mqttPub, func() { readiness.MarkReady("commander") })
 }
 

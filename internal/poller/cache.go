@@ -265,16 +265,66 @@ func (c *Cache) snapshotLocked(dev config.Device, key string, dc deviceCache, su
 	for k, v := range dc.metrics {
 		allMetrics[k] = v
 	}
+	var writableCopy map[byte]struct{}
+	if w, ok := c.writableEPCs[key]; ok && w != nil {
+		writableCopy = make(map[byte]struct{}, len(w))
+		for epc := range w {
+			writableCopy[epc] = struct{}{}
+		}
+	}
 	return DeviceState{
 		Device:      dev,
 		Info:        dc.info,
 		Metrics:     allMetrics,
 		MetricSpecs: c.specsByDev[key],
-		Writable:    c.writableEPCs[key],
+		Writable:    writableCopy,
 		Climate:     c.climateByDev[key],
 		Light:       c.lightByDev[key],
 		Success:     success,
 	}, true
+}
+
+// TriggerUpdate fires onUpdate with the current state for a device, e.g. after
+// background capability reconciliation.
+func (c *Cache) TriggerUpdate(dev config.Device) {
+	c.mu.Lock()
+	key := deviceKey(dev)
+	dc := c.metrics[key]
+	cb := c.onUpdate
+	state, ok := c.snapshotLocked(dev, key, dc, true, cb != nil)
+	c.mu.Unlock()
+
+	if cb != nil && ok {
+		cb(state)
+	}
+}
+
+// HasWritableMap returns whether a writable property map (0x9E) has been recorded.
+func (c *Cache) HasWritableMap(dev config.Device) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.writableEPCs[deviceKey(dev)]
+	return ok
+}
+
+// HasNotificationMap returns whether a notification property map (0x9D) has been recorded.
+func (c *Cache) HasNotificationMap(dev config.Device) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	_, ok := c.notifyEPCs[deviceKey(dev)]
+	return ok
+}
+
+// HasDeviceInfo returns whether device identity (manufacturer/UID) is known.
+func (c *Cache) HasDeviceInfo(dev config.Device) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	key := deviceKey(dev)
+	dc, ok := c.metrics[key]
+	if !ok {
+		return false
+	}
+	return dc.info.Manufacturer != "" || dc.info.UID != ""
 }
 
 // SetNotificationEPCs records the notification property map (0x9D / STATMAP) for a device.

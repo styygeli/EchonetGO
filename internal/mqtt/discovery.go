@@ -112,7 +112,11 @@ func (p *Publisher) ensureDiscovery(dev config.Device, info echonet.DeviceInfo, 
 	defer p.mu.Unlock()
 
 	key := dev.Name
-	infoKey := info.Manufacturer + "|" + info.ProductCode
+	writableCount := -1
+	if writable != nil {
+		writableCount = len(writable)
+	}
+	infoKey := fmt.Sprintf("%s|%s|w:%d", info.Manufacturer, info.ProductCode, writableCount)
 	if prev, ok := p.published[key]; ok && prev == infoKey {
 		return
 	}

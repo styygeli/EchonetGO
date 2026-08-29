@@ -26,12 +26,18 @@ const (
 	addrPort = ":3610"
 )
 
+// CapabilityReconciler triggers capability discovery when a command touches an unmapped device.
+type CapabilityReconciler interface {
+	ReconcileDevice(ctx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte)
+}
+
 // Commander subscribes to MQTT command topics and performs ECHONET SET requests.
 type Commander struct {
 	client      *echonet.Client
 	cache       *poller.Cache
 	cfg         *config.Config
 	topicPrefix string
+	reconciler  CapabilityReconciler
 }
 
 // commandTimeout bounds a single synchronous SET command (including any
@@ -46,6 +52,11 @@ func NewCommander(client *echonet.Client, cache *poller.Cache, cfg *config.Confi
 		cfg:         cfg,
 		topicPrefix: topicPrefix,
 	}
+}
+
+// SetReconciler configures an optional capability reconciler to heal missing maps on demand.
+func (c *Commander) SetReconciler(r CapabilityReconciler) {
+	c.reconciler = r
 }
 
 // Run subscribes to command topics and blocks until ctx is cancelled.
@@ -143,7 +154,10 @@ func (c *Commander) handleClimateMessage(lifetimeCtx context.Context, _ pahomqtt
 	}
 	specs, _ := c.cache.GetDeviceSpecs(*dev)
 	climateSpec := c.cache.GetDeviceClimate(*dev)
-	writable, _ := c.cache.GetWritableEPCs(*dev)
+	writable, hasMap := c.cache.GetWritableEPCs(*dev)
+	if !hasMap && c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
+	}
 
 	addr := dev.IP + addrPort
 
@@ -151,11 +165,11 @@ func (c *Commander) handleClimateMessage(lifetimeCtx context.Context, _ pahomqtt
 	case "mode":
 		c.handleClimateMode(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs)
 	case "temperature":
-		c.handleClimateTemperature(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs, writable)
+		c.handleClimateTemperature(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs, writable, hasMap)
 	case "fan_mode":
-		c.handleClimateFanMode(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs, writable)
+		c.handleClimateFanMode(lifetimeCtx, addr, eoj, dev, payload, climateSpec, specs, writable, hasMap)
 	case "power":
-		c.handleClimatePower(lifetimeCtx, addr, eoj, dev, payload, writable)
+		c.handleClimatePower(lifetimeCtx, addr, eoj, dev, payload, writable, hasMap)
 	default:
 		mqttLog.Debugf("commander: ignored climate attribute %q", attr)
 	}
@@ -192,7 +206,7 @@ func (c *Commander) handleWritableMessage(lifetimeCtx context.Context, _ pahomqt
 	if !ok {
 		return
 	}
-	writable, _ := c.cache.GetWritableEPCs(*dev)
+	writable, hasMap := c.cache.GetWritableEPCs(*dev)
 	climateSpec := c.cache.GetDeviceClimate(*dev)
 	lightSpec := c.cache.GetDeviceLight(*dev)
 	ms := metricSpecByName(metricSpecs, metricName)
@@ -200,9 +214,13 @@ func (c *Commander) handleWritableMessage(lifetimeCtx context.Context, _ pahomqt
 		mqttLog.Warnf("commander: unknown metric %q for device %s", metricName, deviceName)
 		return
 	}
-	if _, ok := writable[ms.EPC]; !ok {
-		mqttLog.Warnf("commander: metric %s (EPC 0x%02x) not writable", metricName, ms.EPC)
-		return
+	if hasMap {
+		if _, ok := writable[ms.EPC]; !ok {
+			mqttLog.Warnf("commander: metric %s (EPC 0x%02x) not writable per SETMAP", metricName, ms.EPC)
+			return
+		}
+	} else if c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
 	}
 	if isClimateEPC(ms.EPC, climateSpec) {
 		return
@@ -323,10 +341,14 @@ func (c *Commander) deviceByName(name string) *config.Device {
 	return nil
 }
 
-func (c *Commander) handleClimatePower(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}) {
-	if _, ok := writable[operationStatusEPC]; !ok {
-		mqttLog.Warnf("commander: device %s operation_status (0x80) not writable", dev.Name)
-		return
+func (c *Commander) handleClimatePower(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}, hasMap bool) {
+	if hasMap {
+		if _, ok := writable[operationStatusEPC]; !ok {
+			mqttLog.Warnf("commander: device %s operation_status (0x80) not writable per SETMAP", dev.Name)
+			return
+		}
+	} else if c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
 	}
 	var edt []byte
 	switch strings.ToUpper(payload) {
@@ -402,14 +424,18 @@ func (c *Commander) handleClimateMode(lifetimeCtx context.Context, addr string, 
 	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: []byte{onStatus}}, {epc: epc, edt: edt}})
 }
 
-func (c *Commander) handleClimateTemperature(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleClimateTemperature(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, hasMap bool) {
 	if climateSpec == nil {
 		return
 	}
 	epc := climateSpec.TemperatureEPC
-	if _, ok := writable[epc]; !ok {
-		mqttLog.Warnf("commander: device %s temperature EPC 0x%02x not writable", dev.Name, epc)
-		return
+	if hasMap {
+		if _, ok := writable[epc]; !ok {
+			mqttLog.Warnf("commander: device %s temperature EPC 0x%02x not writable per SETMAP", dev.Name, epc)
+			return
+		}
+	} else if c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
 	}
 	temp, err := strconv.ParseFloat(payload, 64)
 	if err != nil {
@@ -472,14 +498,18 @@ func normalizeClimateSetpoint(req, prev float64, hasPrev bool, ms specs.MetricSp
 	return math.Round(req)
 }
 
-func (c *Commander) handleClimateFanMode(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleClimateFanMode(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, climateSpec *specs.ClimateSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, hasMap bool) {
 	if climateSpec == nil || climateSpec.FanModeEPC == 0 {
 		return
 	}
 	epc := climateSpec.FanModeEPC
-	if _, ok := writable[epc]; !ok {
-		mqttLog.Warnf("commander: device %s fan_mode EPC 0x%02x not writable", dev.Name, epc)
-		return
+	if hasMap {
+		if _, ok := writable[epc]; !ok {
+			mqttLog.Warnf("commander: device %s fan_mode EPC 0x%02x not writable per SETMAP", dev.Name, epc)
+			return
+		}
+	} else if c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
 	}
 	ms := metricSpecByEPC(metricSpecs, epc)
 	if ms == nil || len(ms.ReverseEnum) == 0 {
@@ -539,26 +569,33 @@ func (c *Commander) handleLightMessage(lifetimeCtx context.Context, _ pahomqtt.C
 	}
 	metricSpecs, _ := c.cache.GetDeviceSpecs(*dev)
 	lightSpec := c.cache.GetDeviceLight(*dev)
-	writable, _ := c.cache.GetWritableEPCs(*dev)
+	writable, hasMap := c.cache.GetWritableEPCs(*dev)
+	if !hasMap && c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
+	}
 
 	addr := dev.IP + addrPort
 
 	switch attr {
 	case "power":
-		c.handleLightPower(lifetimeCtx, addr, eoj, dev, payload, writable)
+		c.handleLightPower(lifetimeCtx, addr, eoj, dev, payload, writable, hasMap)
 	case "brightness":
-		c.handleLightBrightness(lifetimeCtx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
+		c.handleLightBrightness(lifetimeCtx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable, hasMap)
 	case "effect":
-		c.handleLightEffect(lifetimeCtx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable)
+		c.handleLightEffect(lifetimeCtx, addr, eoj, dev, payload, lightSpec, metricSpecs, writable, hasMap)
 	default:
 		mqttLog.Debugf("commander: ignored light attribute %q", attr)
 	}
 }
 
-func (c *Commander) handleLightPower(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}) {
-	if _, ok := writable[operationStatusEPC]; !ok {
-		mqttLog.Warnf("commander: device %s operation_status (0x80) not writable", dev.Name)
-		return
+func (c *Commander) handleLightPower(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, writable map[byte]struct{}, hasMap bool) {
+	if hasMap {
+		if _, ok := writable[operationStatusEPC]; !ok {
+			mqttLog.Warnf("commander: device %s operation_status (0x80) not writable per SETMAP", dev.Name)
+			return
+		}
+	} else if c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
 	}
 	var edt []byte
 	switch strings.ToUpper(payload) {
@@ -582,14 +619,18 @@ func (c *Commander) handleLightPower(lifetimeCtx context.Context, addr string, e
 	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: operationStatusEPC, edt: edt}})
 }
 
-func (c *Commander) handleLightBrightness(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleLightBrightness(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, hasMap bool) {
 	if lightSpec == nil || lightSpec.BrightnessEPC == 0 {
 		return
 	}
 	epc := lightSpec.BrightnessEPC
-	if _, ok := writable[epc]; !ok {
-		mqttLog.Warnf("commander: device %s brightness EPC 0x%02x not writable", dev.Name, epc)
-		return
+	if hasMap {
+		if _, ok := writable[epc]; !ok {
+			mqttLog.Warnf("commander: device %s brightness EPC 0x%02x not writable per SETMAP", dev.Name, epc)
+			return
+		}
+	} else if c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
 	}
 	brightness, err := strconv.ParseFloat(payload, 64)
 	if err != nil {
@@ -618,7 +659,7 @@ func (c *Commander) handleLightBrightness(lifetimeCtx context.Context, addr stri
 	c.verifyStateUpdate(lifetimeCtx, dev, eoj, []pendingUpdate{{epc: epc, edt: edt}})
 }
 
-func (c *Commander) handleLightEffect(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}) {
+func (c *Commander) handleLightEffect(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, payload string, lightSpec *specs.LightSpec, metricSpecs []specs.MetricSpec, writable map[byte]struct{}, hasMap bool) {
 	if lightSpec == nil {
 		return
 	}
@@ -649,9 +690,13 @@ func (c *Commander) handleLightEffect(lifetimeCtx context.Context, addr string, 
 		return
 	}
 
-	if _, ok := writable[epc]; !ok {
-		mqttLog.Warnf("commander: device %s effect EPC 0x%02x not writable", dev.Name, epc)
-		return
+	if hasMap {
+		if _, ok := writable[epc]; !ok {
+			mqttLog.Warnf("commander: device %s effect EPC 0x%02x not writable per SETMAP", dev.Name, epc)
+			return
+		}
+	} else if c.reconciler != nil {
+		c.reconciler.ReconcileDevice(lifetimeCtx, c.client, *dev, eoj)
 	}
 	ms := metricSpecByEPC(metricSpecs, epc)
 	if ms == nil {

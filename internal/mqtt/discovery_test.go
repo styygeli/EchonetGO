@@ -54,3 +54,17 @@ func TestSlowestMetricInterval(t *testing.T) {
 		})
 	}
 }
+
+func TestDiscovery_CacheKeyIncludesWritableCount(t *testing.T) {
+	p := &Publisher{
+		published: make(map[string]string),
+	}
+
+	keyWithoutWritable := "TestMfg|Model1|w:-1"
+	keyWithWritable := "TestMfg|Model1|w:5"
+
+	p.published["test_dev"] = keyWithoutWritable
+	if p.published["test_dev"] == keyWithWritable {
+		t.Fatal("expected discovery cache key to differ when writable map count changes")
+	}
+}

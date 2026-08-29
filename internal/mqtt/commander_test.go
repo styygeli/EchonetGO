@@ -1,8 +1,12 @@
 package mqtt
 
 import (
+	"context"
 	"testing"
 
+	"github.com/styygeli/echonetgo/internal/config"
+	"github.com/styygeli/echonetgo/internal/echonet"
+	"github.com/styygeli/echonetgo/internal/poller"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
@@ -51,5 +55,62 @@ func TestNormalizeClimateSetpoint(t *testing.T) {
 					tc.req, tc.prev, tc.hasPrev, tc.ms.Scale, got, tc.want)
 			}
 		})
+	}
+}
+
+type mockReconciler struct {
+	called bool
+	dev    config.Device
+}
+
+func (m *mockReconciler) ReconcileDevice(_ context.Context, _ *echonet.Client, dev config.Device, _ [3]byte) {
+	m.called = true
+	m.dev = dev
+}
+
+func TestCommander_WritableCheck_PermissiveFallback(t *testing.T) {
+	cache := poller.NewCache()
+	dev := config.Device{Name: "ac_test", IP: "192.168.1.50", Class: "home_ac"}
+	cfg := &config.Config{Devices: []config.Device{dev}}
+	cmd := NewCommander(nil, cache, cfg, "test")
+	mockRec := &mockReconciler{}
+	cmd.SetReconciler(mockRec)
+
+	climateSpec := &specs.ClimateSpec{TemperatureEPC: 0xB3}
+	metricSpecs := []specs.MetricSpec{{EPC: 0xB3, Name: "set_temperature_celsius", Size: 1}}
+
+	// When hasMap is false: should trigger reconciler and proceed (not drop before network)
+	// (Note: it will fail on c.client == nil when calling SendSet, but it should NOT return early at the writable check)
+	defer func() {
+		_ = recover() // Catch nil client dereference if it gets past the check
+	}()
+
+	cmd.handleClimateTemperature(context.Background(), "192.168.1.50:3610", [3]byte{1, 0x30, 1}, &dev, "24", climateSpec, metricSpecs, nil, false)
+
+	if !mockRec.called {
+		t.Fatal("expected reconciler to be called when hasMap is false")
+	}
+	if mockRec.dev.Name != "ac_test" {
+		t.Fatalf("reconciler called with dev %q, want ac_test", mockRec.dev.Name)
+	}
+}
+
+func TestCommander_WritableCheck_EnforcesWhenMapPresent(t *testing.T) {
+	cache := poller.NewCache()
+	dev := config.Device{Name: "ac_test", IP: "192.168.1.50", Class: "home_ac"}
+	cfg := &config.Config{Devices: []config.Device{dev}}
+	cmd := NewCommander(nil, cache, cfg, "test")
+	mockRec := &mockReconciler{}
+	cmd.SetReconciler(mockRec)
+
+	climateSpec := &specs.ClimateSpec{TemperatureEPC: 0xB3}
+	metricSpecs := []specs.MetricSpec{{EPC: 0xB3, Name: "set_temperature_celsius", Size: 1}}
+	writable := map[byte]struct{}{0x80: {}} // 0xB3 is NOT writable
+
+	// When hasMap is true and 0xB3 not in writable: must return early WITHOUT calling client or reconciler
+	cmd.handleClimateTemperature(context.Background(), "192.168.1.50:3610", [3]byte{1, 0x30, 1}, &dev, "24", climateSpec, metricSpecs, writable, true)
+
+	if mockRec.called {
+		t.Fatal("reconciler should NOT be called when hasMap is true")
 	}
 }

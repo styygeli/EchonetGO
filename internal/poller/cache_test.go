@@ -201,3 +201,58 @@ func TestMergeMetrics_NoSyntheticGroup(t *testing.T) {
 		t.Fatal("groups contains synthetic set_update entry")
 	}
 }
+
+func TestCache_CapabilityHelpersAndTriggerUpdate(t *testing.T) {
+	c := NewCache()
+	dev := config.Device{Name: "ac_test", IP: "192.168.3.10", Class: "home_ac"}
+
+	if c.HasWritableMap(dev) {
+		t.Fatal("HasWritableMap = true, want false initially")
+	}
+	if c.HasNotificationMap(dev) {
+		t.Fatal("HasNotificationMap = true, want false initially")
+	}
+	if c.HasDeviceInfo(dev) {
+		t.Fatal("HasDeviceInfo = true, want false initially")
+	}
+
+	c.SetWritableEPCs(dev, map[byte]struct{}{0x80: {}, 0xB3: {}})
+	if !c.HasWritableMap(dev) {
+		t.Fatal("HasWritableMap = false, want true after SetWritableEPCs")
+	}
+
+	c.SetNotificationEPCs(dev, map[byte]struct{}{0x80: {}})
+	if !c.HasNotificationMap(dev) {
+		t.Fatal("HasNotificationMap = false, want true after SetNotificationEPCs")
+	}
+
+	c.UpdateInfo(dev, echonet.DeviceInfo{Manufacturer: "TestMfg", ProductCode: "Model1"})
+	if !c.HasDeviceInfo(dev) {
+		t.Fatal("HasDeviceInfo = false, want true after UpdateInfo")
+	}
+
+	var updatedState DeviceState
+	var called bool
+	c.SetOnUpdate(func(st DeviceState) {
+		called = true
+		updatedState = st
+	})
+
+	c.TriggerUpdate(dev)
+	if !called {
+		t.Fatal("TriggerUpdate did not invoke onUpdate callback")
+	}
+	if updatedState.Device.Name != "ac_test" {
+		t.Fatalf("updatedState device name = %q, want ac_test", updatedState.Device.Name)
+	}
+	if len(updatedState.Writable) != 2 {
+		t.Fatalf("updatedState.Writable count = %d, want 2", len(updatedState.Writable))
+	}
+
+	// Verify defensive copy: modifying returned state does not affect cache
+	delete(updatedState.Writable, 0x80)
+	cachedMap, ok := c.GetWritableEPCs(dev)
+	if !ok || len(cachedMap) != 2 {
+		t.Fatalf("cached Writable was mutated by caller! len=%d, want 2", len(cachedMap))
+	}
+}

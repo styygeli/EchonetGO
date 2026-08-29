@@ -25,12 +25,21 @@ type deviceWithEOJ struct {
 // per-interval scrapers, and periodic device-info refresh. Results are written
 // into the Cache it holds a reference to.
 type Scheduler struct {
-	cache *Cache
+	cache      *Cache
+	reconciler *CapabilityReconciler
 }
 
 // NewScheduler creates a Scheduler that publishes state into the given Cache.
 func NewScheduler(cache *Cache) *Scheduler {
-	return &Scheduler{cache: cache}
+	return &Scheduler{
+		cache:      cache,
+		reconciler: NewCapabilityReconciler(cache),
+	}
+}
+
+// Reconciler returns the capability reconciler.
+func (s *Scheduler) Reconciler() *CapabilityReconciler {
+	return s.reconciler
 }
 
 // Start begins background scrapers for all configured devices. Call with a context
@@ -355,6 +364,9 @@ func (s *Scheduler) refreshDeviceInfo(ctx context.Context, client *echonet.Clien
 			continue
 		}
 		s.cache.UpdateInfo(d.dev, info)
+		if s.reconciler != nil && s.reconciler.NeedsReconciliation(d.dev) {
+			s.reconciler.ReconcileDevice(ctx, client, d.dev, d.eoj)
+		}
 	}
 }
 
@@ -432,6 +444,9 @@ func (s *Scheduler) scrapeOnce(ctx context.Context, client *echonet.Client, dev 
 			dev.Name, dev.IP, len(out), len(polledMetrics), groupID, missingMetricNames(polledMetrics, out))
 	}
 	s.cache.Update(dev, groupID, interval, true, durationSec, out, "")
+	if s.reconciler != nil && s.reconciler.NeedsReconciliation(dev) {
+		s.reconciler.ReconcileDevice(ctx, client, dev, eoj)
+	}
 }
 
 func missingMetricNames(metrics []specs.MetricSpec, out map[string]echonet.MetricValue) []string {
