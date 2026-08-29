@@ -13,6 +13,7 @@ Originally inspired by [echonetlite_homeassistant](https://github.com/scottyphil
 - **Smart poll optimization:** Reads each device's STATMAP (EPC 0x9D) at init to learn which properties the device pushes. Polling is automatically skipped for recently-pushed EPCs, reducing redundant UDP traffic while maintaining a verification fallback.
 - **Multi-interface multicast:** Joins the ECHONET Lite multicast group (224.0.23.0) on all suitable IPv4 interfaces by default, or on a configured subset. Supports multi-VLAN setups.
 - **Bidirectional control:** Support for SET commands across climate, light, switches, selects, and numbers. Writable properties are auto-detected (EPC 0x9E).
+- **Self-healing capability discovery:** Automatically queries and refreshes device identity and capability maps (SETMAP 0x9E and STATMAP 0x9D) periodically and on-demand, self-healing seamlessly if devices are slow or offline during startup.
 - **Protocol-level validation:** SET commands are explicitly validated against device responses (Set_Res vs SetC_SNA).
 - **Multi-stage state verification:** To ensure UI consistency without "optimistic lies", EchonetGO verifies that the device registers reflect the requested value after a successful command acknowledgment. It polls at 1s, 4s, and 7s intervals; if the state matches at any point, the update is published and the loop ends. If the device silently ignores the command, the UI is eventually synced to the actual (unchanged) device state.
 - **MQTT auto-discovery:** Publishes fully configured Home Assistant entities with `device_class`, `state_class`, and enum mapping. Lighting devices appear as native `light` entities with brightness and effect controls.
@@ -49,10 +50,9 @@ By default the service reads `etc/config.yaml` (or `ECHONET_CONFIG`), loads devi
 |------|---------|
 | `cmd/echonetgo/main.go` | Entrypoint: config load, specs load, poller start, MQTT publisher init, HTTP server with graceful shutdown |
 | `internal/config/` | Config from `etc/config.yaml` and env (`ECHONET_CONFIG`, `ECHONET_DEVICES`, `MQTT_BROKER`, etc.) |
-| `internal/specs/` | Device class specs (EOJ, metrics with EPC/name/help/interval/HA metadata); loaders for `etc/specs/*.yaml` |
-| `internal/model/` | ECHONET Get_Res property types (EPC, PDC, EDT) |
-| `internal/echonet/` | ECHONET Lite client split across focused files: `client.go` (high-level API), `transport.go` (UDP connection pool, port fallback, per-host locking, multicast join), `protocol.go` (frame parsing/building), `notification.go` (INF/INFC handler), `encoder.go` (EDT value encoding/decoding), `manufacturers.go` (manufacturer code lookup) |
-| `internal/poller/` | Cache and scheduler: per-device/per-interval scrapers, parallel init per host IP, startup stagger, update callbacks |
+| `internal/specs/` | Device class specs (EOJ, metrics with EPC/name/help/interval/HA metadata), entity classification, property lookup; loaders for `etc/specs/*.yaml` |
+| `internal/echonet/` | ECHONET Lite client split across focused files: `client.go` (high-level API), `transport.go` (UDP connection pool, port fallback, per-host locking, multicast join), `protocol.go` (frame parsing/building, `Property` definition), `notification.go` (INF/INFC handler), `encoder.go` (EDT value encoding/decoding), `manufacturers.go` (manufacturer code lookup) |
+| `internal/poller/` | Cache, scheduler, and capability reconciler: per-device/per-interval scrapers, self-healing capability maps, parallel init per host IP, startup stagger, update callbacks |
 | `internal/mqtt/` | `publisher.go` (MQTT connection, state publishing), `discovery.go` (HA auto-discovery for sensor/climate/light/switch/select/number entities), `commander.go` (subscribes to command topics, routes SET requests to the ECHONET client) |
 | `internal/metrics/` | Prometheus collector: reads from poller cache, emits device metrics, enum one-hot gauges, scrape stats, device info |
 | `internal/api/` | HTTP mux: `/health`, `/metrics`, `/` |

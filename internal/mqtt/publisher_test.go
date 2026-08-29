@@ -203,9 +203,9 @@ func TestWritableEntityType(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := writableEntityType(tt.ms)
+			got := specs.WritableEntityType(tt.ms)
 			if got != tt.want {
-				t.Fatalf("writableEntityType() = %q, want %q", got, tt.want)
+				t.Fatalf("WritableEntityType() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -227,9 +227,9 @@ func TestIsClimateEPC(t *testing.T) {
 		{0x80, nil, false},
 	}
 	for _, tt := range tests {
-		got := isClimateEPC(tt.epc, tt.cl)
+		got := tt.cl.HandlesEPC(tt.epc)
 		if got != tt.want {
-			t.Errorf("isClimateEPC(0x%02x, cl) = %v, want %v", tt.epc, got, tt.want)
+			t.Errorf("cl.HandlesEPC(0x%02x) = %v, want %v", tt.epc, got, tt.want)
 		}
 	}
 }
@@ -249,20 +249,20 @@ func TestIsLightEPC(t *testing.T) {
 		{0x80, nil, false},
 	}
 	for _, tt := range tests {
-		got := isLightEPC(tt.epc, tt.lt)
+		got := tt.lt.HandlesEPC(tt.epc)
 		if got != tt.want {
-			t.Errorf("isLightEPC(0x%02x, lt) = %v, want %v", tt.epc, got, tt.want)
+			t.Errorf("lt.HandlesEPC(0x%02x) = %v, want %v", tt.epc, got, tt.want)
 		}
 	}
 }
 
 func TestIsLightEPC_WithScenes(t *testing.T) {
 	lt := &specs.LightSpec{BrightnessEPC: 0xB0, SceneEPC: 0xC0, MaxScenes: 16}
-	if !isLightEPC(0xC0, lt) {
-		t.Error("isLightEPC(0xC0, lt) = false, want true for SceneEPC")
+	if !lt.HandlesEPC(0xC0) {
+		t.Error("lt.HandlesEPC(0xC0) = false, want true for SceneEPC")
 	}
-	if isLightEPC(0xC1, lt) {
-		t.Error("isLightEPC(0xC1, lt) = true, want false (max_scene is read-only, not claimed)")
+	if lt.HandlesEPC(0xC1) {
+		t.Error("lt.HandlesEPC(0xC1) = true, want false (max_scene is read-only, not claimed)")
 	}
 }
 

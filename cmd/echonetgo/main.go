@@ -17,7 +17,6 @@ import (
 	"github.com/styygeli/echonetgo/internal/echonet"
 	"github.com/styygeli/echonetgo/internal/logging"
 	echonetmetrics "github.com/styygeli/echonetgo/internal/metrics"
-	"github.com/styygeli/echonetgo/internal/model"
 	mqttpub "github.com/styygeli/echonetgo/internal/mqtt"
 	"github.com/styygeli/echonetgo/internal/poller"
 	"github.com/styygeli/echonetgo/internal/specs"
@@ -120,35 +119,8 @@ func setupNotifications(ctx context.Context, cfg *config.Config, cache *poller.C
 		return
 	}
 	notifHandler := echonet.NewNotificationHandler(transport.NotificationChan(), transport,
-		func(ip string, seoj [3]byte, props []model.GetResProperty) {
-			dev, ok := cache.FindDeviceByIPAndEOJ(ip, seoj, cfg.Devices)
-			if !ok {
-				return
-			}
-			devSpecs, ok := cache.GetDeviceSpecs(dev)
-			if !ok {
-				return
-			}
-			epcs := make([]byte, 0, len(props))
-			for _, p := range props {
-				epcs = append(epcs, p.EPC)
-			}
-			cache.RecordPush(dev, epcs)
-			infEPCs := make(map[byte]struct{}, len(props))
-			for _, p := range props {
-				infEPCs[p.EPC] = struct{}{}
-			}
-			var relevantSpecs []specs.MetricSpec
-			for _, s := range devSpecs {
-				if _, ok := infEPCs[s.EPC]; ok {
-					relevantSpecs = append(relevantSpecs, s)
-				}
-			}
-			metrics := echonet.ParsePropsToMetrics(props, relevantSpecs)
-			if len(metrics) == 0 {
-				return
-			}
-			cache.UpdateFromINF(dev, metrics)
+		func(ip string, seoj [3]byte, props []echonet.Property) {
+			cache.IngestNotification(ip, seoj, props, cfg.Devices)
 		})
 	for _, dev := range cfg.Devices {
 		notifHandler.RegisterDevice(dev.IP)
@@ -158,6 +130,9 @@ func setupNotifications(ctx context.Context, cfg *config.Config, cache *poller.C
 
 func setupCommander(ctx context.Context, cfg *config.Config, cache *poller.Cache, transport *echonet.Transport, mqttPub *mqttpub.Publisher, readiness *api.Readiness, reconciler mqttpub.CapabilityReconciler) {
 	echonetClient := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
+	if rec, ok := reconciler.(*poller.CapabilityReconciler); ok && rec != nil {
+		rec.SetClient(echonetClient)
+	}
 	commander := mqttpub.NewCommander(echonetClient, cache, cfg, cfg.MQTT.TopicPrefix)
 	if reconciler != nil {
 		commander.SetReconciler(reconciler)

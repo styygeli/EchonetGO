@@ -10,20 +10,6 @@ import (
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
-func TestMetricSpecByName(t *testing.T) {
-	metricSpecs := []specs.MetricSpec{
-		{EPC: 0x80, Name: "operation_status"},
-		{EPC: 0xB0, Name: "operation_mode"},
-		{EPC: 0xB3, Name: "set_temperature_celsius"},
-	}
-	if got := metricSpecByName(metricSpecs, "operation_mode"); got == nil || got.EPC != 0xB0 {
-		t.Fatalf("metricSpecByName(operation_mode) = %v, want EPC 0xB0", got)
-	}
-	if got := metricSpecByName(metricSpecs, "missing"); got != nil {
-		t.Fatalf("metricSpecByName(missing) = %v, want nil", got)
-	}
-}
-
 func TestNormalizeClimateSetpoint(t *testing.T) {
 	intMs := specs.MetricSpec{Scale: 1}
 	autoMs := specs.MetricSpec{Scale: 0}
@@ -63,7 +49,7 @@ type mockReconciler struct {
 	dev    config.Device
 }
 
-func (m *mockReconciler) ReconcileDevice(_ context.Context, _ *echonet.Client, dev config.Device, _ [3]byte) {
+func (m *mockReconciler) ReconcileDevice(_ context.Context, dev config.Device, _ [3]byte) {
 	m.called = true
 	m.dev = dev
 }
@@ -112,5 +98,61 @@ func TestCommander_WritableCheck_EnforcesWhenMapPresent(t *testing.T) {
 
 	if mockRec.called {
 		t.Fatal("reconciler should NOT be called when hasMap is true")
+	}
+}
+
+func TestCommander_HandleClimateMode_WritableCheck(t *testing.T) {
+	cache := poller.NewCache()
+	dev := config.Device{Name: "ac_test", IP: "192.168.1.50", Class: "home_ac"}
+	cfg := &config.Config{Devices: []config.Device{dev}}
+	cmd := NewCommander(nil, cache, cfg, "test")
+	mockRec := &mockReconciler{}
+	cmd.SetReconciler(mockRec)
+
+	valCool := 0x42
+	climateSpec := &specs.ClimateSpec{ModeEPC: 0xB0, Modes: map[string]*int{"cool": &valCool}}
+	metricSpecs := []specs.MetricSpec{
+		{EPC: 0x80, Name: "operation_status", Size: 1},
+		{EPC: 0xB0, Name: "operation_mode", Size: 1},
+	}
+
+	// 1. When hasMap is true but 0xB0 is not writable: returns early
+	writable := map[byte]struct{}{0x80: {}}
+	cmd.handleClimateMode(context.Background(), "192.168.1.50:3610", [3]byte{1, 0x30, 1}, &dev, "cool", climateSpec, metricSpecs, writable, true)
+	if mockRec.called {
+		t.Fatal("reconciler should NOT be called when hasMap is true")
+	}
+
+	// 2. When hasMap is false: triggers reconciler
+	defer func() { _ = recover() }()
+	cmd.handleClimateMode(context.Background(), "192.168.1.50:3610", [3]byte{1, 0x30, 1}, &dev, "cool", climateSpec, metricSpecs, nil, false)
+	if !mockRec.called {
+		t.Fatal("expected reconciler to be called when hasMap is false")
+	}
+}
+
+func TestCommander_MergePropsToCache(t *testing.T) {
+	cache := poller.NewCache()
+	dev := config.Device{Name: "ac_test", IP: "192.168.1.50", Class: "home_ac"}
+	cache.SetDeviceSpecs(dev, []specs.MetricSpec{
+		{EPC: 0x80, Name: "operation_status", Size: 1, Scale: 1, Type: "gauge"},
+		{EPC: 0xB3, Name: "set_temperature_celsius", Size: 1, Scale: 1, Type: "gauge"},
+	})
+	cmd := NewCommander(nil, cache, &config.Config{}, "test")
+
+	// Merge only 0x80
+	props := []echonet.Property{
+		{EPC: 0x80, PDC: 1, EDT: []byte{0x30}},
+		{EPC: 0xB3, PDC: 1, EDT: []byte{0x18}}, // 24 deg
+	}
+	cmd.mergePropsToCache(&dev, props, []byte{0x80})
+
+	_, _, _, metrics := cache.Get(dev)
+	if metrics["operation_status"].Value != 0x30 {
+		t.Fatalf("operation_status = %v, want 0x30", metrics["operation_status"].Value)
+	}
+	// 0xB3 was not in requested epcs, so it should not be merged
+	if _, ok := metrics["set_temperature_celsius"]; ok {
+		t.Fatal("set_temperature_celsius should not be merged when not requested")
 	}
 }

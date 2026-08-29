@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/styygeli/echonetgo/internal/model"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
@@ -342,7 +341,7 @@ func TestDecodePropertyMap(t *testing.T) {
 }
 
 func TestParsePropsToMetrics(t *testing.T) {
-	props := []model.GetResProperty{
+	props := []Property{
 		{EPC: 0xE0, PDC: 2, EDT: []byte{0x00, 0x64}},
 	}
 	metrics := []specs.MetricSpec{
@@ -370,7 +369,7 @@ func TestParsePropsToMetrics(t *testing.T) {
 }
 
 func TestParsePropsToMetrics_EnumLabel(t *testing.T) {
-	props := []model.GetResProperty{
+	props := []Property{
 		{EPC: 0x80, PDC: 1, EDT: []byte{0x30}}, // 0x30 = ON
 		{EPC: 0xB0, PDC: 1, EDT: []byte{0x42}}, // 0x42 = cool
 	}

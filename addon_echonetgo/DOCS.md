@@ -58,6 +58,7 @@ The service exposes two HTTP endpoints for orchestration and load balancers:
 - **MQTT not connecting** — Check add-on logs for MQTT errors. If your config file already has an `mqtt.broker` setting, the Supervisor API is skipped entirely. Otherwise the add-on queries the Supervisor for MQTT credentials on startup.
 - **Stale entities after spec changes** — If you remove metrics from a spec, the old HA entities persist as retained MQTT messages. Publish an empty payload (with retain) to `homeassistant/sensor/{entity_id}/config` to remove them, or delete via the HA MQTT integration's "Publish a packet" feature.
 - **Unknown manufacturer/model** — Some devices don't respond to identity EPCs. Add `manufacturer` and `model` fields to the device config as fallbacks.
+- **Self-healing capabilities** — If a device was powered off or unreachable when EchonetGO started, its writable property map (0x9E), notification map (0x9D), and identity are automatically self-healed in the background once the device comes online.
 
 ## Customizing Device Behavior
 

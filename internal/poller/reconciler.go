@@ -25,6 +25,8 @@ const (
 // is responsive but has incomplete capabilities in the cache.
 type CapabilityReconciler struct {
 	cache       *Cache
+	clientMu    sync.RWMutex
+	client      *echonet.Client
 	sf          singleflight.Group
 	cooldownMu  sync.Mutex
 	lastAttempt map[string]time.Time
@@ -38,6 +40,19 @@ func NewCapabilityReconciler(cache *Cache) *CapabilityReconciler {
 	}
 }
 
+// SetClient configures the ECHONET client used for capability queries.
+func (r *CapabilityReconciler) SetClient(client *echonet.Client) {
+	r.clientMu.Lock()
+	defer r.clientMu.Unlock()
+	r.client = client
+}
+
+func (r *CapabilityReconciler) getClient() *echonet.Client {
+	r.clientMu.RLock()
+	defer r.clientMu.RUnlock()
+	return r.client
+}
+
 // NeedsReconciliation returns true if any mandatory capability map or identity is missing.
 func (r *CapabilityReconciler) NeedsReconciliation(dev config.Device) bool {
 	return !r.cache.HasWritableMap(dev) || !r.cache.HasNotificationMap(dev) || !r.cache.HasDeviceInfo(dev)
@@ -45,8 +60,8 @@ func (r *CapabilityReconciler) NeedsReconciliation(dev config.Device) bool {
 
 // ReconcileDevice asynchronously probes missing capabilities for dev if needed,
 // enforcing single-flight deduplication and a per-device cooldown.
-func (r *CapabilityReconciler) ReconcileDevice(lifetimeCtx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte) {
-	if client == nil || r == nil {
+func (r *CapabilityReconciler) ReconcileDevice(lifetimeCtx context.Context, dev config.Device, eoj [3]byte) {
+	if r == nil || r.getClient() == nil {
 		return
 	}
 	if !r.NeedsReconciliation(dev) {
@@ -67,13 +82,46 @@ func (r *CapabilityReconciler) ReconcileDevice(lifetimeCtx context.Context, clie
 	go func() {
 		defer pollerLog.RecoverPanic("capability reconcile for " + dev.Name)
 		_, _, _ = r.sf.Do(key, func() (any, error) {
-			r.doReconcile(lifetimeCtx, client, dev, eoj)
+			r.doReconcile(lifetimeCtx, dev, eoj)
 			return nil, nil
 		})
 	}()
 }
 
-func (r *CapabilityReconciler) doReconcile(lifetimeCtx context.Context, client *echonet.Client, dev config.Device, eoj [3]byte) {
+// RefreshDevice updates device identity (0x8A/0x83/0x8C) and reconciles any missing maps,
+// using singleflight to prevent collisions with concurrent scrapes or commands.
+func (r *CapabilityReconciler) RefreshDevice(ctx context.Context, dev config.Device, eoj [3]byte) {
+	client := r.getClient()
+	if r == nil || client == nil {
+		return
+	}
+	key := deviceKey(dev)
+
+	r.cooldownMu.Lock()
+	r.lastAttempt[key] = time.Now()
+	r.cooldownMu.Unlock()
+
+	_, _, _ = r.sf.Do(key, func() (any, error) {
+		queryCtx, cancel := context.WithTimeout(ctx, reconcilePerQueryTimeout)
+		info, err := client.GetDeviceInfo(queryCtx, dev.IP, eoj, dev.Model)
+		cancel()
+		if err != nil {
+			pollerLog.Warnf("device %s (%s): device info read failed: %v", dev.Name, dev.IP, err)
+		} else {
+			r.cache.UpdateInfo(dev, info)
+		}
+		if r.NeedsReconciliation(dev) {
+			r.doReconcile(ctx, dev, eoj)
+		}
+		return nil, nil
+	})
+}
+
+func (r *CapabilityReconciler) doReconcile(lifetimeCtx context.Context, dev config.Device, eoj [3]byte) {
+	client := r.getClient()
+	if client == nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, reconcileTotalTimeout)
 	defer cancel()
 
@@ -86,6 +134,10 @@ func (r *CapabilityReconciler) doReconcile(lifetimeCtx context.Context, client *
 		queryCancel()
 		if err != nil {
 			pollerLog.Debugf("device %s (%s): reconciler read SETMAP (0x9E) failed: %v", dev.Name, dev.IP, err)
+			if echonet.IsGetSNA(err) {
+				r.cache.SetWritableEPCs(dev, map[byte]struct{}{})
+				updated = true
+			}
 		} else {
 			r.cache.SetWritableEPCs(dev, writable)
 			updated = true
@@ -100,6 +152,10 @@ func (r *CapabilityReconciler) doReconcile(lifetimeCtx context.Context, client *
 		queryCancel()
 		if err != nil {
 			pollerLog.Debugf("device %s (%s): reconciler read STATMAP (0x9D) failed: %v", dev.Name, dev.IP, err)
+			if echonet.IsGetSNA(err) {
+				r.cache.SetNotificationEPCs(dev, map[byte]struct{}{})
+				updated = true
+			}
 		} else {
 			r.cache.SetNotificationEPCs(dev, notify)
 			updated = true

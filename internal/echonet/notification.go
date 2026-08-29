@@ -7,13 +7,12 @@ import (
 	"sync"
 
 	"github.com/styygeli/echonetgo/internal/logging"
-	"github.com/styygeli/echonetgo/internal/model"
 )
 
 var notifLog = logging.New("notification")
 
 // NotificationCallback is called when an INF/INFC frame is received from a known device.
-type NotificationCallback func(ip string, seoj [3]byte, props []model.GetResProperty)
+type NotificationCallback func(ip string, seoj [3]byte, props []Property)
 
 // NotificationHandler processes unsolicited ECHONET Lite INF/INFC frames
 // received on the shared port-3610 socket.

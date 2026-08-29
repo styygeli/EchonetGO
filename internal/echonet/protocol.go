@@ -7,9 +7,17 @@ import (
 	"fmt"
 	"net"
 	"strings"
-
-	"github.com/styygeli/echonetgo/internal/model"
 )
+
+// Property represents an ECHONET Lite property (EPC + PDC + EDT).
+type Property struct {
+	EPC byte
+	PDC byte
+	EDT []byte
+}
+
+// GetResProperty is retained as an alias for backwards compatibility.
+type GetResProperty = Property
 
 const (
 	echonetPort    = 3610
@@ -92,7 +100,7 @@ func SetRequest(tid uint16, eoj [3]byte, epc byte, edt []byte) []byte {
 }
 
 // ParseGetRes parses an ECHONET Lite frame and returns properties if it is a Get_Res.
-func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err error) {
+func ParseGetRes(data []byte) (tid uint16, props []Property, err error) {
 	tid, esv, props, err := parseFrame(data)
 	if err != nil {
 		return 0, nil, err
@@ -105,7 +113,7 @@ func ParseGetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 
 // ParseSetRes parses an ECHONET Lite frame and returns properties if it is a Set_Res.
 // Note: Set_Res frames typically have PDC=0 for the properties, but we parse them anyway.
-func ParseSetRes(data []byte) (tid uint16, props []model.GetResProperty, err error) {
+func ParseSetRes(data []byte) (tid uint16, props []Property, err error) {
 	tid, esv, props, err := parseFrame(data)
 	if err != nil {
 		return 0, nil, err
@@ -116,7 +124,7 @@ func ParseSetRes(data []byte) (tid uint16, props []model.GetResProperty, err err
 	return tid, props, nil
 }
 
-func parseFrame(data []byte) (tid uint16, esv byte, props []model.GetResProperty, err error) {
+func parseFrame(data []byte) (tid uint16, esv byte, props []Property, err error) {
 	if len(data) < minResponseLen {
 		return 0, 0, nil, fmt.Errorf("response too short: %d", len(data))
 	}
@@ -139,7 +147,7 @@ func parseFrame(data []byte) (tid uint16, esv byte, props []model.GetResProperty
 		edt := make([]byte, edtLen)
 		copy(edt, data[pos:pos+edtLen])
 		pos += edtLen
-		props = append(props, model.GetResProperty{EPC: epc, PDC: pdc, EDT: edt})
+		props = append(props, Property{EPC: epc, PDC: pdc, EDT: edt})
 	}
 	return tid, esv, props, nil
 }
@@ -187,13 +195,19 @@ func decodeProductCode(edt []byte) string {
 	return strings.TrimSpace(strings.TrimRight(string(edt), "\x00"))
 }
 
-func prop(props []model.GetResProperty, epc byte) ([]byte, bool) {
+func prop(props []Property, epc byte) ([]byte, bool) {
 	for _, p := range props {
 		if p.EPC == epc && len(p.EDT) > 0 {
 			return p.EDT, true
 		}
 	}
 	return nil, false
+}
+
+// IsGetSNA reports whether err is an ECHONET Lite Get_SNA (0x52) response error,
+// indicating that the requested property is not supported by the device.
+func IsGetSNA(err error) bool {
+	return isGetSNA(err)
 }
 
 func isGetSNA(err error) bool {
@@ -235,7 +249,7 @@ type INFFrame struct {
 	SEOJ  [3]byte
 	DEOJ  [3]byte
 	ESV   byte
-	Props []model.GetResProperty
+	Props []Property
 }
 
 // IsNotification returns true if the ESV is INF, INFC, or INF_SNA.

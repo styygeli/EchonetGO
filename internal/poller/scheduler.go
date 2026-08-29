@@ -47,6 +47,9 @@ func (s *Scheduler) Reconciler() *CapabilityReconciler {
 // If readyFunc is non-nil, it is called once init is complete and scrapers are launched.
 func (s *Scheduler) Start(ctx context.Context, cfg *config.Config, deviceSpecs map[string]*specs.DeviceSpec, transport *echonet.Transport, readyFunc func()) {
 	client := echonet.NewClient(transport, cfg.ScrapeTimeoutSec)
+	if s.reconciler != nil {
+		s.reconciler.SetClient(client)
+	}
 	probeTimeoutSec := cfg.ScrapeTimeoutSec
 	if probeTimeoutSec > 3 {
 		probeTimeoutSec = 3
@@ -99,7 +102,7 @@ func (s *Scheduler) Start(ctx context.Context, cfg *config.Config, deviceSpecs m
 		readyFunc()
 	}
 	for _, pairs := range hostDevicePairs {
-		go s.runDeviceInfoRefresher(ctx, client, pairs)
+		go s.runDeviceInfoRefresher(ctx, pairs)
 	}
 }
 
@@ -136,6 +139,9 @@ func (s *Scheduler) discoverDeviceState(ctx context.Context, client, probeClient
 	writable, err := client.GetWritablePropertyMap(ctx, dev.IP, activeEOJ)
 	if err != nil {
 		pollerLog.Warnf("device %s (%s): failed to read writable property map (0x9E): %v", dev.Name, dev.IP, err)
+		if echonet.IsGetSNA(err) {
+			c.SetWritableEPCs(dev, map[byte]struct{}{})
+		}
 	} else {
 		c.SetWritableEPCs(dev, writable)
 	}
@@ -143,6 +149,9 @@ func (s *Scheduler) discoverDeviceState(ctx context.Context, client, probeClient
 		notify, err := client.GetNotificationPropertyMap(ctx, dev.IP, activeEOJ)
 		if err != nil {
 			pollerLog.Warnf("device %s (%s): failed to read STATMAP (0x9D): %v", dev.Name, dev.IP, err)
+			if echonet.IsGetSNA(err) {
+				c.SetNotificationEPCs(dev, map[byte]struct{}{})
+			}
 		} else {
 			c.SetNotificationEPCs(dev, notify)
 			epcs := make([]byte, 0, len(notify))
@@ -152,6 +161,9 @@ func (s *Scheduler) discoverDeviceState(ctx context.Context, client, probeClient
 			pollerLog.Infof("device %s (%s): STATMAP has %d notification EPCs: %s",
 				dev.Name, dev.IP, len(notify), echonet.FormatEPCList(epcs))
 		}
+	} else {
+		// Notifications disabled globally; record empty map so reconciler does not repeatedly query STATMAP.
+		c.SetNotificationEPCs(dev, map[byte]struct{}{})
 	}
 	if len(activeMetrics) == 0 {
 		pollerLog.Errorf("device %s (%s): no readable configured EPCs after GETMAP filter, skipping", dev.Name, dev.IP)
@@ -338,9 +350,9 @@ func filterMetricsByReadableMap(metrics []specs.MetricSpec, readable map[byte]st
 	return filtered, unsupported
 }
 
-func (s *Scheduler) runDeviceInfoRefresher(ctx context.Context, client *echonet.Client, devices []deviceWithEOJ) {
+func (s *Scheduler) runDeviceInfoRefresher(ctx context.Context, devices []deviceWithEOJ) {
 	defer pollerLog.RecoverPanic("device info refresher")
-	s.refreshDeviceInfo(ctx, client, devices)
+	s.refreshDeviceInfo(ctx, devices)
 	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 	for {
@@ -348,24 +360,18 @@ func (s *Scheduler) runDeviceInfoRefresher(ctx context.Context, client *echonet.
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.refreshDeviceInfo(ctx, client, devices)
+			s.refreshDeviceInfo(ctx, devices)
 		}
 	}
 }
 
-func (s *Scheduler) refreshDeviceInfo(ctx context.Context, client *echonet.Client, devices []deviceWithEOJ) {
+func (s *Scheduler) refreshDeviceInfo(ctx context.Context, devices []deviceWithEOJ) {
 	for _, d := range devices {
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		info, err := client.GetDeviceInfo(ctx, d.dev.IP, d.eoj, d.dev.Model)
-		if err != nil {
-			pollerLog.Warnf("device %s (%s): device info read failed: %v", d.dev.Name, d.dev.IP, err)
-			continue
-		}
-		s.cache.UpdateInfo(d.dev, info)
-		if s.reconciler != nil && s.reconciler.NeedsReconciliation(d.dev) {
-			s.reconciler.ReconcileDevice(ctx, client, d.dev, d.eoj)
+		if s.reconciler != nil {
+			s.reconciler.RefreshDevice(ctx, d.dev, d.eoj)
 		}
 	}
 }
@@ -445,7 +451,7 @@ func (s *Scheduler) scrapeOnce(ctx context.Context, client *echonet.Client, dev 
 	}
 	s.cache.Update(dev, groupID, interval, true, durationSec, out, "")
 	if s.reconciler != nil && s.reconciler.NeedsReconciliation(dev) {
-		s.reconciler.ReconcileDevice(ctx, client, dev, eoj)
+		s.reconciler.ReconcileDevice(ctx, dev, eoj)
 	}
 }
 

@@ -407,6 +407,36 @@ func (c *Cache) MergeMetrics(dev config.Device, metrics map[string]echonet.Metri
 	}
 }
 
+// IngestNotification processes an incoming unsolicited notification from a device:
+// records push times for STATMAP skipping, parses metrics, and merges them into the cache.
+func (c *Cache) IngestNotification(ip string, seoj [3]byte, props []echonet.Property, devices []config.Device) {
+	dev, ok := c.FindDeviceByIPAndEOJ(ip, seoj, devices)
+	if !ok {
+		return
+	}
+	devSpecs, ok := c.GetDeviceSpecs(dev)
+	if !ok {
+		return
+	}
+	epcs := make([]byte, 0, len(props))
+	infEPCs := make(map[byte]struct{}, len(props))
+	for _, p := range props {
+		epcs = append(epcs, p.EPC)
+		infEPCs[p.EPC] = struct{}{}
+	}
+	c.RecordPush(dev, epcs)
+	var relevantSpecs []specs.MetricSpec
+	for _, s := range devSpecs {
+		if _, ok := infEPCs[s.EPC]; ok {
+			relevantSpecs = append(relevantSpecs, s)
+		}
+	}
+	metrics := echonet.ParsePropsToMetrics(props, relevantSpecs)
+	if len(metrics) > 0 {
+		c.MergeMetrics(dev, metrics)
+	}
+}
+
 // UpdateFromINF merges properties from an INF notification (no scrape group).
 func (c *Cache) UpdateFromINF(dev config.Device, metrics map[string]echonet.MetricValue) {
 	c.MergeMetrics(dev, metrics)

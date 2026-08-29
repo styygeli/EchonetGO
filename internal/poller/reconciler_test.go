@@ -35,6 +35,21 @@ func TestReconciler_NeedsReconciliation(t *testing.T) {
 	}
 }
 
+func TestReconciler_NeedsReconciliation_EmptyMapsSatisfy(t *testing.T) {
+	c := NewCache()
+	r := NewCapabilityReconciler(c)
+	dev := config.Device{Name: "sensor_test", IP: "192.168.3.20", Class: "temperature_sensor"}
+
+	// Empty maps (e.g. read-only device with no 0x9E or device with no 0x9D notifications)
+	c.SetWritableEPCs(dev, map[byte]struct{}{})
+	c.SetNotificationEPCs(dev, map[byte]struct{}{})
+	c.UpdateInfo(dev, echonet.DeviceInfo{Manufacturer: "Omron"})
+
+	if r.NeedsReconciliation(dev) {
+		t.Fatal("NeedsReconciliation should be false when empty maps are explicitly recorded")
+	}
+}
+
 func TestReconciler_CooldownAndSingleflight(t *testing.T) {
 	c := NewCache()
 	r := NewCapabilityReconciler(c)
@@ -81,5 +96,21 @@ func TestReconciler_SingleflightConcurrency(t *testing.T) {
 
 	if got := probeCount.Load(); got != 1 {
 		t.Fatalf("singleflight executed %d times, want exactly 1", got)
+	}
+}
+
+func TestReconciler_SetClientAndNilSafety(t *testing.T) {
+	c := NewCache()
+	r := NewCapabilityReconciler(c)
+	dev := config.Device{Name: "ac_test", IP: "192.168.3.10", Class: "home_ac"}
+
+	// When client is nil, ReconcileDevice and RefreshDevice must not panic
+	r.ReconcileDevice(nil, dev, [3]byte{1, 2, 3})
+	r.RefreshDevice(nil, dev, [3]byte{1, 2, 3})
+
+	// SetClient should safely set client
+	r.SetClient(nil)
+	if r.getClient() != nil {
+		t.Fatal("expected nil client")
 	}
 }

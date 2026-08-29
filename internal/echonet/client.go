@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/styygeli/echonetgo/internal/logging"
-	"github.com/styygeli/echonetgo/internal/model"
 	"github.com/styygeli/echonetgo/internal/specs"
 )
 
@@ -82,11 +81,11 @@ func (c *Client) SendSetI(ctx context.Context, addr string, eoj [3]byte, epc byt
 }
 
 // GetProps fetches requested EPCs and adaptively splits when devices return partial responses.
-func (c *Client) GetProps(ctx context.Context, addr string, eoj [3]byte, epcs []byte) ([]model.GetResProperty, error) {
+func (c *Client) GetProps(ctx context.Context, addr string, eoj [3]byte, epcs []byte) ([]Property, error) {
 	return c.getPropsAdaptive(ctx, addr, eoj, epcs, 0)
 }
 
-func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte, epcs []byte, depth int) ([]model.GetResProperty, error) {
+func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte, epcs []byte, depth int) ([]Property, error) {
 	raw, err := c.SendGet(ctx, addr, eoj, epcs)
 	if err != nil {
 		return nil, err
@@ -96,7 +95,7 @@ func (c *Client) getPropsAdaptive(ctx context.Context, addr string, eoj [3]byte,
 		return nil, err
 	}
 	if isGetSNA(err) {
-		var validProps []model.GetResProperty
+		var validProps []Property
 		for _, p := range props {
 			if p.PDC > 0 {
 				validProps = append(validProps, p)
@@ -287,7 +286,7 @@ func (c *Client) GetDeviceInfo(ctx context.Context, addr string, eoj [3]byte, kn
 }
 
 // ParsePropsToMetrics converts Get_Res properties into metrics using the given metric specs.
-func ParsePropsToMetrics(props []model.GetResProperty, metrics []specs.MetricSpec) map[string]MetricValue {
+func ParsePropsToMetrics(props []Property, metrics []specs.MetricSpec) map[string]MetricValue {
 	out := make(map[string]MetricValue)
 	for _, m := range metrics {
 		edt, ok := prop(props, m.EPC)
@@ -327,7 +326,7 @@ func ParsePropsToMetrics(props []model.GetResProperty, metrics []specs.MetricSpe
 	return out
 }
 
-func missingEPCs(requested []byte, props []model.GetResProperty) []byte {
+func missingEPCs(requested []byte, props []Property) []byte {
 	seen := make(map[byte]struct{}, len(props))
 	for _, p := range props {
 		seen[p.EPC] = struct{}{}
@@ -367,8 +366,8 @@ func containsAny(candidates []byte, set []byte) bool {
 	return false
 }
 
-func propsToMap(props []model.GetResProperty) map[byte]model.GetResProperty {
-	out := make(map[byte]model.GetResProperty, len(props))
+func propsToMap(props []Property) map[byte]Property {
+	out := make(map[byte]Property, len(props))
 	for _, p := range props {
 		existing, ok := out[p.EPC]
 		if !ok || (len(existing.EDT) == 0 && len(p.EDT) > 0) {
@@ -378,7 +377,7 @@ func propsToMap(props []model.GetResProperty) map[byte]model.GetResProperty {
 	return out
 }
 
-func mergeProps(dst map[byte]model.GetResProperty, src []model.GetResProperty) {
+func mergeProps(dst map[byte]Property, src []Property) {
 	for _, p := range src {
 		existing, ok := dst[p.EPC]
 		if !ok || (len(existing.EDT) == 0 && len(p.EDT) > 0) {
@@ -387,13 +386,13 @@ func mergeProps(dst map[byte]model.GetResProperty, src []model.GetResProperty) {
 	}
 }
 
-func mapToProps(props map[byte]model.GetResProperty) []model.GetResProperty {
+func mapToProps(props map[byte]Property) []Property {
 	keys := make([]int, 0, len(props))
 	for epc := range props {
 		keys = append(keys, int(epc))
 	}
 	sort.Ints(keys)
-	out := make([]model.GetResProperty, 0, len(keys))
+	out := make([]Property, 0, len(keys))
 	for _, k := range keys {
 		out = append(out, props[byte(k)])
 	}

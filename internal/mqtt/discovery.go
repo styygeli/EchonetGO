@@ -274,13 +274,13 @@ func (p *Publisher) publishWritableDiscovery(dev config.Device, device haDevice,
 		if _, ok := writable[ms.EPC]; !ok {
 			continue
 		}
-		if isClimateEPC(ms.EPC, climateSpec) {
+		if climateSpec.HandlesEPC(ms.EPC) {
 			continue
 		}
-		if isLightEPC(ms.EPC, lightSpec) {
+		if lightSpec.HandlesEPC(ms.EPC) {
 			continue
 		}
-		entityType := writableEntityType(ms)
+		entityType := specs.WritableEntityType(ms)
 		if entityType == "" {
 			continue
 		}
@@ -534,18 +534,6 @@ func climateModesList(modes map[string]*int) []string {
 	return out
 }
 
-func metricNameForEPC(specs []specs.MetricSpec, epc byte) string {
-	if epc == 0 {
-		return ""
-	}
-	for _, m := range specs {
-		if m.EPC == epc {
-			return m.Name
-		}
-	}
-	return ""
-}
-
 // slowestMetricInterval returns the largest ScrapeInterval among the metrics
 // matching epcs (skipping 0/unmatched), used to size expire_after for multi-EPC
 // entities like climate and light. Returns 0 if none match.
@@ -617,66 +605,4 @@ func (p *Publisher) publishLightDiscovery(dev config.Device, device haDevice, av
 		return
 	}
 	mqttLog.Infof("published light discovery for %s", dev.Name)
-}
-
-func isLightEPC(epc byte, lt *specs.LightSpec) bool {
-	if lt == nil {
-		return false
-	}
-	if epc == 0x80 {
-		return true
-	}
-	if epc == lt.BrightnessEPC || epc == lt.ColorSettingEPC || epc == lt.SceneEPC {
-		return true
-	}
-	return false
-}
-
-func isClimateEPC(epc byte, cl *specs.ClimateSpec) bool {
-	if cl == nil {
-		return false
-	}
-	if epc == 0x80 {
-		return true
-	}
-	if epc == cl.ModeEPC || epc == cl.TemperatureEPC || epc == cl.CurrentTemperatureEPC || epc == cl.FanModeEPC {
-		return true
-	}
-	return false
-}
-
-// writableEntityType returns "switch", "select", or "number" for a writable metric; "" if not applicable.
-//
-// NOTE: this is a heuristic on enum cardinality (2 on/off labels → switch,
-// other 2 → select, >2 → select, 0 → number) plus the exclude_set escape hatch.
-// It misclassifies e.g. a 2-value enum that is not on/off but is semantically a
-// toggle, or a numeric with an Invalid sentinel. The intended replacement
-// (TODO P2) is a decision matrix driven by the advertised get/set property maps
-// rather than label count; until then, specs lean on Enum shape and exclude_set.
-func writableEntityType(ms specs.MetricSpec) string {
-	if ms.ExcludeSet {
-		return ""
-	}
-	if len(ms.Enum) == 2 {
-		var hasOn, hasOff bool
-		for _, label := range ms.Enum {
-			switch strings.ToLower(label) {
-			case "on":
-				hasOn = true
-			case "off":
-				hasOff = true
-			}
-		}
-		if hasOn && hasOff {
-			return "switch"
-		}
-		return "select"
-	}
-	if len(ms.Enum) > 2 {
-		return "select"
-	}
-	if len(ms.Enum) == 0 {
-		return "number"
-	}
-	return ""
 }

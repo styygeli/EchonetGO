@@ -225,12 +225,12 @@ func (p *Publisher) PublishDeviceState(st poller.DeviceState) {
 
 func (p *Publisher) publishClimateState(dev config.Device, metrics map[string]echonet.MetricValue, metricSpecs []specs.MetricSpec, cl *specs.ClimateSpec) {
 	base := fmt.Sprintf("%s/%s/climate", p.topicPrefix, dev.Name)
-	modeName := metricNameForEPC(metricSpecs, cl.ModeEPC)
-	tempName := metricNameForEPC(metricSpecs, cl.TemperatureEPC)
-	currentName := metricNameForEPC(metricSpecs, cl.CurrentTemperatureEPC)
-	fanName := metricNameForEPC(metricSpecs, cl.FanModeEPC)
+	modeName := specs.MetricNameForEPC(metricSpecs, cl.ModeEPC)
+	tempName := specs.MetricNameForEPC(metricSpecs, cl.TemperatureEPC)
+	currentName := specs.MetricNameForEPC(metricSpecs, cl.CurrentTemperatureEPC)
+	fanName := specs.MetricNameForEPC(metricSpecs, cl.FanModeEPC)
 
-	operationStatusName := metricNameForEPC(metricSpecs, 0x80)
+	operationStatusName := specs.MetricNameForEPC(metricSpecs, 0x80)
 	var modeStr string
 	if operationStatusName != "" {
 		if mv, ok := metrics[operationStatusName]; ok {
@@ -277,7 +277,7 @@ func (p *Publisher) publishLightState(dev config.Device, metrics map[string]echo
 	base := fmt.Sprintf("%s/%s/light", p.topicPrefix, dev.Name)
 
 	// Power state from operation_status (0x80).
-	opName := metricNameForEPC(metricSpecs, 0x80)
+	opName := specs.MetricNameForEPC(metricSpecs, 0x80)
 	if opName != "" {
 		if mv, ok := metrics[opName]; ok {
 			if int(mv.Value) == 0x30 {
@@ -290,7 +290,7 @@ func (p *Publisher) publishLightState(dev config.Device, metrics map[string]echo
 
 	// Brightness state.
 	if lt.BrightnessEPC != 0 {
-		brightnessName := metricNameForEPC(metricSpecs, lt.BrightnessEPC)
+		brightnessName := specs.MetricNameForEPC(metricSpecs, lt.BrightnessEPC)
 		if brightnessName != "" {
 			if mv, ok := metrics[brightnessName]; ok {
 				p.client.Publish(base+"/brightness/state", qos, false, fmt.Sprintf("%.0f", mv.Value))
@@ -300,7 +300,7 @@ func (p *Publisher) publishLightState(dev config.Device, metrics map[string]echo
 
 	// Effect state from color setting or scene.
 	if lt.ColorSettingEPC != 0 {
-		colorName := metricNameForEPC(metricSpecs, lt.ColorSettingEPC)
+		colorName := specs.MetricNameForEPC(metricSpecs, lt.ColorSettingEPC)
 		if colorName != "" {
 			if mv, ok := metrics[colorName]; ok && mv.EnumLabel != "" {
 				// Only publish if the label is in our color_settings map.
@@ -310,7 +310,7 @@ func (p *Publisher) publishLightState(dev config.Device, metrics map[string]echo
 			}
 		}
 	} else if lt.SceneEPC != 0 {
-		sceneName := metricNameForEPC(metricSpecs, lt.SceneEPC)
+		sceneName := specs.MetricNameForEPC(metricSpecs, lt.SceneEPC)
 		if sceneName != "" {
 			if mv, ok := metrics[sceneName]; ok && mv.Value >= 1 {
 				p.client.Publish(base+"/effect/state", qos, false, fmt.Sprintf("scene_%.0f", mv.Value))
@@ -324,13 +324,13 @@ func (p *Publisher) publishWritableState(dev config.Device, metrics map[string]e
 		if _, ok := writable[ms.EPC]; !ok {
 			continue
 		}
-		if isClimateEPC(ms.EPC, climateSpec) {
+		if climateSpec.HandlesEPC(ms.EPC) {
 			continue
 		}
-		if isLightEPC(ms.EPC, lightSpec) {
+		if lightSpec.HandlesEPC(ms.EPC) {
 			continue
 		}
-		entityType := writableEntityType(ms)
+		entityType := specs.WritableEntityType(ms)
 		if entityType == "" {
 			continue
 		}

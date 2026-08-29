@@ -2,8 +2,6 @@ package echonet
 
 import (
 	"testing"
-
-	"github.com/styygeli/echonetgo/internal/model"
 )
 
 func TestParseINFFrame_ValidINF(t *testing.T) {
@@ -120,7 +118,7 @@ func TestBuildINFCRes(t *testing.T) {
 		TID:  0x0042,
 		SEOJ: [3]byte{0x01, 0x30, 0x01},
 		ESV:  esvINFC,
-		Props: []model.GetResProperty{
+		Props: []Property{
 			{EPC: 0x80, PDC: 1, EDT: []byte{0x30}},
 		},
 	}

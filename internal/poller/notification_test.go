@@ -118,6 +118,40 @@ func TestUpdateFromINF_MergesAndCallsCallback(t *testing.T) {
 	}
 }
 
+func TestIngestNotification_E2E(t *testing.T) {
+	c := NewCache()
+	dev := config.Device{Name: "ecocute", IP: "192.168.3.248", Class: "ecocute"}
+	c.SetDeviceEOJ(dev, [3]byte{0x02, 0x6B, 0x01})
+	c.SetNotificationEPCs(dev, map[byte]struct{}{0xC3: {}})
+	c.SetDeviceSpecs(dev, []specs.MetricSpec{
+		{EPC: 0xC3, Name: "hot_water_supply_status", Size: 1, Scale: 1, Type: "gauge"},
+	})
+
+	var called bool
+	var state DeviceState
+	c.SetOnUpdate(func(st DeviceState) {
+		called = true
+		state = st
+	})
+
+	props := []echonet.Property{
+		{EPC: 0xC3, PDC: 1, EDT: []byte{0x41}},
+	}
+	devices := []config.Device{dev}
+	c.IngestNotification("192.168.3.248", [3]byte{0x02, 0x6B, 0x01}, props, devices)
+
+	if !called {
+		t.Fatal("IngestNotification did not trigger update callback")
+	}
+	if state.Metrics["hot_water_supply_status"].Value != 0x41 {
+		t.Fatalf("metric value = %v, want 0x41", state.Metrics["hot_water_supply_status"].Value)
+	}
+	// Check that push was recorded for STATMAP freshness
+	if !c.ShouldSkipPoll(dev, 0xC3, time.Minute) {
+		t.Fatal("expected 0xC3 to be skipped after notification push")
+	}
+}
+
 func TestFindDeviceByIPAndEOJ(t *testing.T) {
 	c := NewCache()
 	dev1 := config.Device{Name: "ac_house", IP: "192.168.0.249", Class: "home_ac"}
