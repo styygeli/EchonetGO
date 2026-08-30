@@ -114,3 +114,31 @@ func TestReconciler_SetClientAndNilSafety(t *testing.T) {
 		t.Fatal("expected nil client")
 	}
 }
+
+func TestReconciler_SingleflightSharedFlag(t *testing.T) {
+	c := NewCache()
+	r := NewCapabilityReconciler(c)
+	key := "shared-key"
+
+	var sharedCount atomic.Int32
+	var wg sync.WaitGroup
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _, shared := r.sf.Do(key, func() (any, error) {
+				time.Sleep(50 * time.Millisecond)
+				return nil, nil
+			})
+			if shared {
+				sharedCount.Add(1)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if sharedCount.Load() == 0 {
+		t.Errorf("expected at least 1 shared call, got 0")
+	}
+}

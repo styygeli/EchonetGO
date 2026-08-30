@@ -81,10 +81,15 @@ func (r *CapabilityReconciler) ReconcileDevice(lifetimeCtx context.Context, dev 
 
 	go func() {
 		defer pollerLog.RecoverPanic("capability reconcile for " + dev.Name)
-		_, _, _ = r.sf.Do(key, func() (any, error) {
-			r.doReconcile(lifetimeCtx, dev, eoj)
+		recCtx := echonet.ContextWithCaller(lifetimeCtx, dev.Name+":reconciler")
+		_, _, shared := r.sf.Do(key, func() (any, error) {
+			r.doReconcile(recCtx, dev, eoj)
 			return nil, nil
 		})
+		if shared {
+			pollerLog.Debugf("device %s (%s): coalesced concurrent reconciliation into in-flight task (group=%s)",
+				dev.Name, dev.IP, key)
+		}
 	}()
 }
 
@@ -101,8 +106,9 @@ func (r *CapabilityReconciler) RefreshDevice(ctx context.Context, dev config.Dev
 	r.lastAttempt[key] = time.Now()
 	r.cooldownMu.Unlock()
 
-	_, _, _ = r.sf.Do(key, func() (any, error) {
-		queryCtx, cancel := context.WithTimeout(ctx, reconcilePerQueryTimeout)
+	refCtx := echonet.ContextWithCaller(ctx, dev.Name+":refresh")
+	_, _, shared := r.sf.Do(key, func() (any, error) {
+		queryCtx, cancel := context.WithTimeout(refCtx, reconcilePerQueryTimeout)
 		info, err := client.GetDeviceInfo(queryCtx, dev.IP, eoj, dev.Model)
 		cancel()
 		if err != nil {
@@ -111,10 +117,14 @@ func (r *CapabilityReconciler) RefreshDevice(ctx context.Context, dev config.Dev
 			r.cache.UpdateInfo(dev, info)
 		}
 		if r.NeedsReconciliation(dev) {
-			r.doReconcile(ctx, dev, eoj)
+			r.doReconcile(refCtx, dev, eoj)
 		}
 		return nil, nil
 	})
+	if shared {
+		pollerLog.Debugf("device %s (%s): coalesced concurrent refresh into in-flight task (group=%s)",
+			dev.Name, dev.IP, key)
+	}
 }
 
 func (r *CapabilityReconciler) doReconcile(lifetimeCtx context.Context, dev config.Device, eoj [3]byte) {

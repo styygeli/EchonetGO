@@ -1,9 +1,11 @@
 package echonet
 
 import (
+	"context"
 	"errors"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestNormalizeHost(t *testing.T) {
@@ -67,5 +69,60 @@ func TestNextTIDWraps(t *testing.T) {
 			t.Fatalf("NextTID not sequential: %d then %d", prev, cur)
 		}
 		prev = cur
+	}
+}
+
+func TestCallerContext(t *testing.T) {
+	ctx := context.Background()
+	if got := CallerFromContext(ctx); got != "" {
+		t.Errorf("expected empty caller for default context, got %q", got)
+	}
+
+	tagged := ContextWithCaller(ctx, "epcube:scraper:10s")
+	if got := CallerFromContext(tagged); got != "epcube:scraper:10s" {
+		t.Errorf("expected caller 'epcube:scraper:10s', got %q", got)
+	}
+}
+
+func TestInFlightCounter(t *testing.T) {
+	tr := NewTransport(false)
+	if got := tr.InFlight(); got != 0 {
+		t.Fatalf("expected 0 in-flight ops initially, got %d", got)
+	}
+	tr.inFlight.Add(2)
+	if got := tr.InFlight(); got != 2 {
+		t.Fatalf("expected 2 in-flight ops, got %d", got)
+	}
+	tr.inFlight.Add(-2)
+	if got := tr.InFlight(); got != 0 {
+		t.Fatalf("expected 0 in-flight ops after decrement, got %d", got)
+	}
+}
+
+func TestExpiredWaiters(t *testing.T) {
+	tr := NewTransport(false)
+	key := "192.168.3.249:0042"
+
+	// Pop non-existent key
+	if _, ok := tr.checkAndPopExpiredWaiter(key); ok {
+		t.Fatal("expected ok=false for non-existent expired waiter")
+	}
+
+	// Record and pop
+	tr.recordExpiredWaiter(key, "epcube:reconciler")
+	exp, ok := tr.checkAndPopExpiredWaiter(key)
+	if !ok {
+		t.Fatal("expected ok=true for recorded expired waiter")
+	}
+	if exp.caller != "epcube:reconciler" {
+		t.Errorf("expected caller 'epcube:reconciler', got %q", exp.caller)
+	}
+	if time.Since(exp.expiredAt) > 5*time.Second {
+		t.Errorf("unexpected expiredAt timestamp %v", exp.expiredAt)
+	}
+
+	// Second pop should return false (already popped)
+	if _, ok := tr.checkAndPopExpiredWaiter(key); ok {
+		t.Fatal("expected ok=false after waiter was already popped")
 	}
 }

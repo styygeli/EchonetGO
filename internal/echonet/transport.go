@@ -21,16 +21,28 @@ const maxSendAttempts = 2
 // It owns the port-3610 socket, per-host serialization locks, and the TID
 // counter. Create one Transport and share it across all Client instances.
 type Transport struct {
-	tidCounter   atomic.Uint32
-	hostLockMu   sync.Mutex
-	hostLocks    map[string]*sync.Mutex
-	fixedConnMu  sync.Mutex
-	fixedConn    *net.UDPConn
-	waitersMu    sync.Mutex
-	waiters      map[string]chan UDPFrame
-	strictSource bool
-	infChan      chan UDPFrame
-	nameResolver func(ip string) string // optional: IP -> device name
+	tidCounter     atomic.Uint32
+	inFlight       atomic.Int32
+	hostLockMu     sync.Mutex
+	hostLocks      map[string]*sync.Mutex
+	fixedConnMu    sync.Mutex
+	fixedConn      *net.UDPConn
+	waitersMu      sync.Mutex
+	waiters        map[string]chan UDPFrame
+	expiredWaiters map[string]expiredWaiter
+	strictSource   bool
+	infChan        chan UDPFrame
+	nameResolver   func(ip string) string // optional: IP -> device name
+}
+
+type expiredWaiter struct {
+	expiredAt time.Time
+	caller    string
+}
+
+// InFlight returns the number of currently active Send / SendFireAndForget operations.
+func (t *Transport) InFlight() int32 {
+	return t.inFlight.Load()
 }
 
 // UDPFrame holds a raw UDP datagram and its source address.
@@ -43,9 +55,10 @@ type UDPFrame struct {
 // must originate from local UDP port 3610 with no fallback to an ephemeral port.
 func NewTransport(strictSourcePort3610 bool) *Transport {
 	return &Transport{
-		hostLocks:    make(map[string]*sync.Mutex),
-		waiters:      make(map[string]chan UDPFrame),
-		strictSource: strictSourcePort3610,
+		hostLocks:      make(map[string]*sync.Mutex),
+		waiters:        make(map[string]chan UDPFrame),
+		expiredWaiters: make(map[string]expiredWaiter),
+		strictSource:   strictSourcePort3610,
 	}
 }
 
@@ -80,6 +93,21 @@ func (t *Transport) HostLabel(ip string) string {
 
 func (t *Transport) NotificationChan() chan UDPFrame {
 	return t.infChan
+}
+
+type callerContextKey struct{}
+
+// ContextWithCaller attaches a caller subsystem tag to ctx (e.g. "epcube:scraper:10s", "ac_house:reconciler").
+func ContextWithCaller(ctx context.Context, caller string) context.Context {
+	return context.WithValue(ctx, callerContextKey{}, caller)
+}
+
+// CallerFromContext retrieves the caller subsystem tag from ctx, or returns "" if unset.
+func CallerFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(callerContextKey{}).(string); ok {
+		return v
+	}
+	return ""
 }
 
 // JoinMulticast joins the ECHONET Lite multicast group (224.0.23.0) on
@@ -211,10 +239,28 @@ func (t *Transport) NextTID() uint16 {
 // Host-level serialization, connection pooling, retry on timeout, and
 // ephemeral-port fallback are handled transparently.
 func (t *Transport) Send(ctx context.Context, addr string, req []byte, tid uint16, timeout time.Duration) ([]byte, error) {
+	t.inFlight.Add(1)
+	defer t.inFlight.Add(-1)
+
+	caller := CallerFromContext(ctx)
 	hostKey := normalizeHost(addr)
 	hostLock := t.lockForHost(hostKey)
+
+	lockStart := time.Now()
 	hostLock.Lock()
+	lockWait := time.Since(lockStart)
 	defer hostLock.Unlock()
+
+	if lockWait > 100*time.Millisecond {
+		callerStr := ""
+		if caller != "" {
+			callerStr = fmt.Sprintf(" (caller=%q, in_flight=%d)", caller, t.InFlight())
+		} else {
+			callerStr = fmt.Sprintf(" (in_flight=%d)", t.InFlight())
+		}
+		clientLog.Debugf("host lock contention on %s: waited %v to acquire lock%s",
+			t.hostLabel(hostKey), lockWait.Round(time.Millisecond), callerStr)
+	}
 
 	host := addr
 	if _, _, err := net.SplitHostPort(addr); err != nil {
@@ -248,10 +294,28 @@ func (t *Transport) SendFireAndForget(ctx context.Context, addr string, req []by
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	t.inFlight.Add(1)
+	defer t.inFlight.Add(-1)
+
+	caller := CallerFromContext(ctx)
 	hostKey := normalizeHost(addr)
 	hostLock := t.lockForHost(hostKey)
+
+	lockStart := time.Now()
 	hostLock.Lock()
+	lockWait := time.Since(lockStart)
 	defer hostLock.Unlock()
+
+	if lockWait > 100*time.Millisecond {
+		callerStr := ""
+		if caller != "" {
+			callerStr = fmt.Sprintf(" (caller=%q, in_flight=%d)", caller, t.InFlight())
+		} else {
+			callerStr = fmt.Sprintf(" (in_flight=%d)", t.InFlight())
+		}
+		clientLog.Debugf("host lock contention on %s: waited %v to acquire lock%s",
+			t.hostLabel(hostKey), lockWait.Round(time.Millisecond), callerStr)
+	}
 
 	host := addr
 	if _, _, err := net.SplitHostPort(addr); err != nil {
@@ -283,8 +347,14 @@ func (t *Transport) sendWithRetry(ctx context.Context, host string, req []byte, 
 		if !isTimeoutError(err) || attempt == maxSendAttempts {
 			return nil, err
 		}
-		clientLog.Warnf("timeout waiting for response from %s via local UDP port %d (attempt %d/%d), retrying",
-			t.hostLabel(hostKey), localPort, attempt, maxSendAttempts)
+		callerStr := ""
+		if caller := CallerFromContext(ctx); caller != "" {
+			callerStr = fmt.Sprintf(" (caller=%q, in_flight=%d)", caller, t.InFlight())
+		} else {
+			callerStr = fmt.Sprintf(" (in_flight=%d)", t.InFlight())
+		}
+		clientLog.Warnf("timeout waiting for response from %s via local UDP port %d (attempt %d/%d)%s, retrying",
+			t.hostLabel(hostKey), localPort, attempt, maxSendAttempts, callerStr)
 	}
 	return nil, lastErr
 }
@@ -339,8 +409,10 @@ func (t *Transport) sendViaSharedFixedPort(ctx context.Context, remoteAddr *net.
 		}
 		return frame.Data, nil
 	case <-timer.C:
+		t.recordExpiredWaiter(key, CallerFromContext(ctx))
 		return nil, fmt.Errorf("read udp %s->%s:%d: i/o timeout", conn.LocalAddr().String(), remoteAddr.IP.String(), remoteAddr.Port)
 	case <-ctx.Done():
+		t.recordExpiredWaiter(key, CallerFromContext(ctx))
 		return nil, ctx.Err()
 	}
 }
@@ -389,7 +461,18 @@ func (t *Transport) startFixedConnReceiver(conn *net.UDPConn) {
 		ch := t.waiters[key]
 		t.waitersMu.Unlock()
 		if ch == nil {
+			if exp, ok := t.checkAndPopExpiredWaiter(key); ok {
+				callerStr := ""
+				if exp.caller != "" {
+					callerStr = fmt.Sprintf(" (caller=%q)", exp.caller)
+				}
+				clientLog.Debugf("late response from %s: tid=0x%04x arrived %v after timeout%s",
+					t.hostLabel(addr.IP.String()), tid, time.Since(exp.expiredAt).Round(time.Millisecond), callerStr)
+			}
 			if t.infChan != nil {
+				if cap(t.infChan) > 0 && len(t.infChan) >= cap(t.infChan)*80/100 {
+					clientLog.Warnf("notification channel near capacity: %d/%d frames", len(t.infChan), cap(t.infChan))
+				}
 				frame := UDPFrame{
 					From: addr,
 					Data: append([]byte(nil), buf[:n]...),
@@ -445,6 +528,40 @@ func (t *Transport) removeWaiter(key string) {
 	t.waitersMu.Lock()
 	delete(t.waiters, key)
 	t.waitersMu.Unlock()
+}
+
+const maxExpiredWaiters = 128
+const expiredWaitersTTL = 30 * time.Second
+
+func (t *Transport) recordExpiredWaiter(key, caller string) {
+	t.waitersMu.Lock()
+	defer t.waitersMu.Unlock()
+
+	now := time.Now()
+	if len(t.expiredWaiters) >= maxExpiredWaiters {
+		for k, v := range t.expiredWaiters {
+			if now.Sub(v.expiredAt) > expiredWaitersTTL {
+				delete(t.expiredWaiters, k)
+			}
+		}
+		if len(t.expiredWaiters) >= maxExpiredWaiters {
+			t.expiredWaiters = make(map[string]expiredWaiter)
+		}
+	}
+	t.expiredWaiters[key] = expiredWaiter{
+		expiredAt: now,
+		caller:    caller,
+	}
+}
+
+func (t *Transport) checkAndPopExpiredWaiter(key string) (expiredWaiter, bool) {
+	t.waitersMu.Lock()
+	defer t.waitersMu.Unlock()
+	entry, ok := t.expiredWaiters[key]
+	if ok {
+		delete(t.expiredWaiters, key)
+	}
+	return entry, ok
 }
 
 func writeAndRead(ctx context.Context, conn *net.UDPConn, remoteAddr *net.UDPAddr, req []byte, tid uint16, hostKey string, timeout time.Duration) ([]byte, error) {

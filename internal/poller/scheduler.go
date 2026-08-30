@@ -97,7 +97,8 @@ func (s *Scheduler) Start(ctx context.Context, cfg *config.Config, deviceSpecs m
 				if spec == nil {
 					continue
 				}
-				activeEOJ, activeMetrics, activeSpec := s.discoverDeviceState(ctx, client, probeClient, dev, spec, deviceSpecs, &hostEOJCache, cfg.NotificationsEnabled)
+				discCtx := echonet.ContextWithCaller(ctx, dev.Name+":discovery")
+				activeEOJ, activeMetrics, activeSpec := s.discoverDeviceState(discCtx, client, probeClient, dev, spec, deviceSpecs, &hostEOJCache, cfg.NotificationsEnabled)
 				if len(activeMetrics) == 0 {
 					continue
 				}
@@ -410,7 +411,8 @@ func (s *Scheduler) refreshDeviceInfo(ctx context.Context, devices []deviceWithE
 			return
 		}
 		if s.reconciler != nil {
-			s.reconciler.RefreshDevice(ctx, d.dev, d.eoj)
+			refCtx := echonet.ContextWithCaller(ctx, d.dev.Name+":info-refresher")
+			s.reconciler.RefreshDevice(refCtx, d.dev, d.eoj)
 		}
 	}
 }
@@ -424,7 +426,21 @@ func (s *Scheduler) runScraper(ctx context.Context, client *echonet.Client, dev 
 		case <-time.After(initialDelay):
 		}
 	}
-	s.scrapeOnce(ctx, client, dev, eoj, metrics, groupID, interval)
+
+	caller := fmt.Sprintf("%s:scraper:%s", dev.Name, groupID)
+	scrapeCtx := echonet.ContextWithCaller(ctx, caller)
+
+	runScrape := func() {
+		start := time.Now()
+		s.scrapeOnce(scrapeCtx, client, dev, eoj, metrics, groupID, interval)
+		elapsed := time.Since(start)
+		if interval > 0 && elapsed >= time.Duration(float64(interval)*0.7) && elapsed > 500*time.Millisecond {
+			pollerLog.Debugf("device %s (%s): scrape duration %v consumed %.0f%% of %v interval budget (group=%s)",
+				dev.Name, dev.IP, elapsed.Round(time.Millisecond), float64(elapsed)/float64(interval)*100, interval, groupID)
+		}
+	}
+
+	runScrape()
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -432,7 +448,7 @@ func (s *Scheduler) runScraper(ctx context.Context, client *echonet.Client, dev 
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			s.scrapeOnce(ctx, client, dev, eoj, metrics, groupID, interval)
+			runScrape()
 		}
 	}
 }

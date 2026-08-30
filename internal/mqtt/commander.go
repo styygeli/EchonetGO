@@ -244,6 +244,7 @@ func (c *Commander) handleWritableMessage(lifetimeCtx context.Context, _ pahomqt
 func (c *Commander) executeWritableSet(lifetimeCtx context.Context, addr string, eoj [3]byte, dev *config.Device, ms *specs.MetricSpec, metricSpecs []specs.MetricSpec, entityType, payload string) {
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	var preEDT []byte
 	if ms.PreSetEPC != 0 {
 		preMs := specs.FindMetricSpecByEPC(metricSpecs, ms.PreSetEPC)
@@ -354,6 +355,7 @@ func (c *Commander) handleClimatePower(lifetimeCtx context.Context, addr string,
 	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set 0x80 failed for %s: %v", dev.Name, err)
@@ -376,6 +378,7 @@ func (c *Commander) handleClimateMode(lifetimeCtx context.Context, addr string, 
 		}
 		ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 		defer cancel()
+		ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 		_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, []byte{offStatus})
 		if err != nil {
 			mqttLog.Warnf("commander: Set 0x80=off failed for %s: %v", dev.Name, err)
@@ -394,6 +397,7 @@ func (c *Commander) handleClimateMode(lifetimeCtx context.Context, addr string, 
 	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	// Turn on first, then set operation mode
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, []byte{onStatus})
 	if err != nil {
@@ -458,6 +462,7 @@ func (c *Commander) handleClimateTemperature(lifetimeCtx context.Context, addr s
 	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set temperature failed for %s: %v", dev.Name, err)
@@ -521,6 +526,7 @@ func (c *Commander) handleClimateFanMode(lifetimeCtx context.Context, addr strin
 	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set fan_mode failed for %s: %v", dev.Name, err)
@@ -594,6 +600,7 @@ func (c *Commander) handleLightPower(lifetimeCtx context.Context, addr string, e
 	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	_, err := c.client.SendSet(ctx, addr, eoj, operationStatusEPC, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set 0x80 failed for %s: %v", dev.Name, err)
@@ -629,6 +636,7 @@ func (c *Commander) handleLightBrightness(lifetimeCtx context.Context, addr stri
 	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set brightness failed for %s: %v", dev.Name, err)
@@ -685,6 +693,7 @@ func (c *Commander) handleLightEffect(lifetimeCtx context.Context, addr string, 
 	}
 	ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 	defer cancel()
+	ctx = echonet.ContextWithCaller(ctx, dev.Name+":mqtt-command")
 	_, err = c.client.SendSet(ctx, addr, eoj, epc, edt)
 	if err != nil {
 		mqttLog.Warnf("commander: Set effect failed for %s: %v", dev.Name, err)
@@ -749,6 +758,7 @@ func (c *Commander) verifyStateUpdate(lifetimeCtx context.Context, dev *config.D
 			}
 
 			ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
+			ctx = echonet.ContextWithCaller(ctx, dev.Name+":command-verify")
 			props, err := c.client.GetProps(ctx, dev.IP, eoj, epcs)
 			cancel()
 
@@ -802,6 +812,7 @@ func (c *Commander) triggerStateUpdate(lifetimeCtx context.Context, dev *config.
 		}
 		ctx, cancel := context.WithTimeout(lifetimeCtx, commandTimeout)
 		defer cancel()
+		ctx = echonet.ContextWithCaller(ctx, dev.Name+":command-verify")
 
 		if _, err := c.readAndMergeProps(ctx, dev, eoj, epcs); err != nil {
 			mqttLog.Warnf("commander: failed delayed read for %s: %v", dev.Name, err)
