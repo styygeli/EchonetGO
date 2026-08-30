@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.50-dev.5 - 2026-08-30
+- **Observability**: Added host lock wait duration tracking and contention debug logs (`> 100ms`) on per-host serialization queues.
+- **Observability**: Added caller subsystem context tagging across discovery, scrapers, reconciler, and MQTT commands to pinpoint network operations and timeouts in logs.
+- **Observability**: Added late response detection via bounded expired TID cache to distinguish slow physical devices from lost UDP packets.
+- **Observability**: Added polling interval budget warning when scrape execution consumes > 70% of interval time.
+- **Observability**: Added singleflight deduplication logging when concurrent capability queries coalesce into an in-flight execution.
+- **Observability**: Added in-flight UDP operations counter and notification channel capacity warning.
+
 ## 0.9.50-dev.4 - 2026-08-29
 - **Poller**: Resolved DeviceInfo upfront in `discoverDeviceState` and populated cache identity before scrapers start, eliminating premature scrape discovery skips and redundant reconciler storms.
 - **Poller**: Implemented host-level two-phase startup barrier and multi-device scraper staggering (`250ms` offset) to eliminate concurrent UDP socket contention on multi-EOJ devices.
