@@ -1,24 +1,11 @@
 # Changelog
 
-## 0.9.50-dev.5 - 2026-08-30
-- **Observability**: Added host lock wait duration tracking and contention debug logs (`> 100ms`) on per-host serialization queues.
-- **Observability**: Added caller subsystem context tagging across discovery, scrapers, reconciler, and MQTT commands to pinpoint network operations and timeouts in logs.
-- **Observability**: Added late response detection via bounded expired TID cache to distinguish slow physical devices from lost UDP packets.
-- **Observability**: Added polling interval budget warning when scrape execution consumes > 70% of interval time.
-- **Observability**: Added singleflight deduplication logging when concurrent capability queries coalesce into an in-flight execution.
-- **Observability**: Added in-flight UDP operations counter and notification channel capacity warning.
-
-## 0.9.50-dev.4 - 2026-08-29
-- **Poller**: Resolved DeviceInfo upfront in `discoverDeviceState` and populated cache identity before scrapers start, eliminating premature scrape discovery skips and redundant reconciler storms.
-- **Poller**: Implemented host-level two-phase startup barrier and multi-device scraper staggering (`250ms` offset) to eliminate concurrent UDP socket contention on multi-EOJ devices.
-- **Poller**: Removed immediate startup execution of `refreshDeviceInfo`, preventing network-wide stampedes at boot while keeping the 6-hour periodic refresh ticker.
-- **Transport**: Aggregated multi-device names for shared IPs in `SetNameResolver` to prevent device label collisions in low-level transport logs.
-
-## 0.9.50-dev.3 - 2026-08-29
-- **Architecture**: Consolidated entity classification and property resolution in `internal/specs`. Removed redundant `internal/model` package.
-- **Self-Healing**: Added `CapabilityReconciler` to continuously self-heal device identity and missing capability maps (SETMAP/STATMAP) in the background.
-- **Protocol**: Handled `Get_SNA` (0x52) for unsupported capability maps and disabled notifications to prevent unnecessary polling churn.
-- **MQTT**: Prevented premature state merging during post-command verification to eliminate UI state bounce in Home Assistant.
+## 0.9.50 - 2026-09-04
+- **Self-Healing Capabilities**: Added background `CapabilityReconciler` to continuously self-heal missing property maps (SETMAP/STATMAP) and device identity when devices reboot or come online after startup.
+- **Permissive Command Fallback**: Commands are no longer dropped when SETMAP is pending; the commander allows the command through and triggers background capability recovery. Eliminated UI state bounce during post-command verification.
+- **Startup Concurrency & Staggering**: Implemented a two-phase per-host discovery barrier and staggered scrapers (`250ms` offset per device) to eliminate UDP socket contention on multi-EOJ devices (e.g. EP Cube battery + solar). Resolved DeviceInfo upfront.
+- **Telemetry & Contention Tracking**: Added host lock wait duration tracking (`> 100ms`), caller subsystem tagging across all network operations, late response detection via TID cache, scrape interval budget warnings, and in-flight UDP operation counters.
+- **Architecture & Specifications**: Consolidated property resolution and entity classification into `internal/specs`, eliminating redundant models. Handled `Get_SNA` (0x52) for unsupported capability maps.
 
 ## 0.9.49 - 2026-08-25
 - **Fix**: Prevent MQTT commands from failing entirely when a prerequisite `pre_set` command is rejected by the device (e.g. returning ESV 0x51 because it is already in the requested state).
